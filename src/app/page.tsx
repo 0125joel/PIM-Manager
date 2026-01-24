@@ -332,6 +332,9 @@ function PermissionsAccordion() {
                 <PermissionItem perm="RoleEligibilitySchedule.Read.Directory" desc="Read eligible assignments" />
                 <PermissionItem perm="RoleManagementPolicy.Read.Directory" desc="Read PIM policies" />
                 <PermissionItem perm="User.Read.All" desc="Read user names" />
+                <PermissionItem perm="Group.Read.All" desc="Read group names" />
+                <PermissionItem perm="AdministrativeUnit.Read.All" desc="Read admin units" />
+                <PermissionItem perm="Application.Read.All" desc="Read applications" />
                 <PermissionItem perm="Policy.Read.ConditionalAccess" desc="Read Auth Contexts" />
               </div>
             </div>
@@ -357,16 +360,16 @@ function PermissionsAccordion() {
                 {/* PIM for Groups Group */}
                 <div className="border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl p-4 relative bg-zinc-50/50 dark:bg-zinc-800/50">
                   <span className="absolute -top-2.5 left-4 bg-white dark:bg-zinc-800 px-2 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-                    Groups & PIM for Groups
+                    PIM for Groups
                   </span>
                   <div className="space-y-3">
                     <PermissionItem
                       perm="PrivilegedAccess.Read.AzureADGroup"
-                      desc="Required for PIM Groups visibility"
+                      desc="Read PIM Groups assignments"
                     />
                     <PermissionItem
-                      perm="Group.Read.All"
-                      desc="Read group names & assignable groups"
+                      perm="RoleManagementPolicy.Read.AzureADGroup"
+                      desc="Read PIM Groups policies"
                     />
                   </div>
                 </div>

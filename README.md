@@ -5,7 +5,9 @@
 
   [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
   [![Built with Next.js](https://img.shields.io/badge/Built_with-Next.js-black)](https://nextjs.org)
-  [![Microsoft Entra ID](https://img.shields.io/badge/Microsoft-Entra_ID-blue)](https://entra.microsoft.com)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![Microsoft Entra ID](https://img.shields.io/badge/Microsoft%20Entra-ID-0072C6?logo=microsoftazure&logoColor=white)](https://entra.microsoft.com)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
   <p>
     <a href="#about">About</a> •
@@ -44,6 +46,10 @@ Managing Privileged Access in complex environments is challenging.
 *   **Security & Trust**: Open Source and client-side executed for maximum transparency and trust.
 
 
+## What's New
+
+See [**CHANGELOG.md**](CHANGELOG.md) for the latest features, improvements, and security updates.
+
 ## Documentation
 
 Comprehensive documentation is available in the [`docs/`](docs/) directory.
@@ -63,3 +69,15 @@ For details on how we process data, see [Data Flow](docs/en/03-data-flow.md).
 
 This project is licensed under the **GNU General Public License v3.0**.
 See the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <h3>Visitor Statistics</h3>
+  <p><strong>Page Views:</strong></p>
+  <img src="https://hits.sh/github.com/0125joel/PIM-manager.svg?style=flat-square&label=hits&color=48c5fa" alt="Hits"/>
+  <br/>
+  <br/>
+  <p><strong>Unique Visitors:</strong></p>
+  <img src="https://count.getloli.com/get/@pim-manager?theme=nixietube-1" alt="Counter" />
+</div>
