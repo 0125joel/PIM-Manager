@@ -6,15 +6,16 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 
 | Document | Description |
 |----------|-------------|
-| [Introduction](./01-introduction.md) | What is PIM Configurator and what problems does it solve? |
+| [Introduction](./01-introduction.md) | What is PIM Manager and what problems does it solve? |
 | [Folder Structure](./02-folder-structure.md) | Overview of the codebase organization |
 | [Data Flow](./03-data-flow.md) | How data is fetched and processed |
 | [Graph API Calls](./04-graph-api-calls.md) | Which Microsoft Graph APIs are used |
 | [Key Concepts](./05-key-concepts.md) | Important technical concepts explained |
-| [Report Page](./06-report-page.md) | Features and functionality of the Report page |
-| [Configure Page](./07-configure-page.md) | Configure page features (In Development) |
-| [Deployment](./08-deployment.md) | Hosting on Cloudflare Pages |
-| [Settings](./09-settings.md) | Workloads and Consent Framework |
+| [Dashboard Page](./06-dashboard-page.md) | Visual overview and security insights |
+| [Report Page](./07-report-page.md) | Detailed role configuration view |
+| [Configure Page](./08-configure-page.md) | Planned write capabilities |
+| [Deployment](./09-deployment.md) | Hosting on Cloudflare Pages |
+| [Settings](./10-settings.md) | Workloads and consent framework |
 
 ---
 
@@ -22,7 +23,7 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 
 1. Clone the repository
 2. Run `npm install`
-3. Configure Azure AD app registration (see [Introduction](./01-introduction.md))
+3. Configure Microsoft Entra ID app registration (see [Introduction](./01-introduction.md))
 4. Run `npm run dev` for development
 
 ---

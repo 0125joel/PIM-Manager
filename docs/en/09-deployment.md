@@ -26,7 +26,7 @@ You must configure the following Environment Variables in the Cloudflare Pages d
 
 | Variable Name | Description | Example Value |
 |---------------|-------------|---------------|
-| `NEXT_PUBLIC_CLIENT_ID` | Application (client) ID from your Azure AD App Registration | `00000000-0000-0000-0000-000000000000` |
+| `NEXT_PUBLIC_CLIENT_ID` | Application (client) ID from your Microsoft Entra ID App Registration | `00000000-0000-0000-0000-000000000000` |
 | `NEXT_PUBLIC_REDIRECT_URI` | Full URL of your production site (optional, see note) | `https://pim-configurator.pages.dev` |
 
 > [!TIP]
@@ -34,9 +34,9 @@ You must configure the following Environment Variables in the Cloudflare Pages d
 
 ---
 
-## Azure AD Configuration
+## Microsoft Entra ID Configuration
 
-For the deployment to work, you must add the Cloudflare URL to your **Azure AD App Registration**:
+For the deployment to work, you must add the Cloudflare URL to your **Microsoft Entra ID App Registration**:
 
 1. Go to **Azure Portal > Entra ID > App registrations > [Your App]**.
 2. Select **Authentication**.

@@ -173,12 +173,12 @@ flowchart TD
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| Workers | 3 | Balance between speed and rate limits |
-| Delay | 1000ms | Per-worker cooldown between requests |
-| Total throughput | ~3 policies/second | Safe for Graph API limits |
+| Workers | 8 (optimized) | Maximum parallel requests without throttling |
+| Delay | 300ms (optimized) | Per-worker cooldown between requests |
+| Total throughput | ~26 policies/second | 70-80% faster than original implementation |
 
 > [!CAUTION]
-> Increasing workers beyond 3 may cause throttling. Microsoft Graph has per-tenant rate limits.
+> The worker pool is optimized for Microsoft Graph API rate limits. Changing these values may cause throttling (429 errors).
 
 ---
 
@@ -233,7 +233,7 @@ Understanding the difference between these two concepts is crucial.
 **What it is**: An architecture that combines multiple data sources ("workloads") into a single central state manager.
 
 **Workloads**:
-- **Directory Roles**: Standard Azure AD roles.
+- **Directory Roles**: Standard Microsoft Entra ID roles.
 - **PIM for Groups**: PIM settings for M365 groups.
 - **Security Alerts**: Security recommendations.
 
@@ -258,5 +258,5 @@ This context manages data from all workloads and ensures components (like the Ex
 
 ## Next Steps
 
-- [Report Page](./06-report-page.md) - Feature documentation
-- [Configure Page](./07-configure-page.md) - Configuration features
+- [Report Page](./07-report-page.md) - Feature documentation
+- [Configure Page](./08-configure-page.md) - Configuration features

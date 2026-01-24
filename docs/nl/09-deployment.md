@@ -26,7 +26,7 @@ Configureer de volgende variabelen in het Cloudflare Pages dashboard (**Settings
 
 | Variabele Naam | Beschrijving | Voorbeeld Waarde |
 |---------------|-------------|-----------------|
-| `NEXT_PUBLIC_CLIENT_ID` | Application (client) ID van je Azure AD App Registratie | `00000000-0000-0000-0000-000000000000` |
+| `NEXT_PUBLIC_CLIENT_ID` | Application (client) ID van je Microsoft Entra ID App Registratie | `00000000-0000-0000-0000-000000000000` |
 | `NEXT_PUBLIC_REDIRECT_URI` | Volledige URL van je productieomgeving (optioneel, zie tip) | `https://pim-configurator.pages.dev` |
 
 > [!TIP]
@@ -34,9 +34,9 @@ Configureer de volgende variabelen in het Cloudflare Pages dashboard (**Settings
 
 ---
 
-## Azure AD Configuratie
+## Microsoft Entra ID Configuratie
 
-Om de deployment te laten werken, moet je de Cloudflare URL toevoegen aan je **Azure AD App Registratie**:
+Om de deployment te laten werken, moet je de Cloudflare URL toevoegen aan je **Microsoft Entra ID App Registratie**:
 
 1. Ga naar **Azure Portal > Entra ID > App registrations > [Jouw App]**.
 2. Selecteer **Authentication**.

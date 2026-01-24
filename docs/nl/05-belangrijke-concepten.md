@@ -107,12 +107,12 @@ const { rolesData, loading, fetchPolicyForRole } = usePimData();
 
 | Instelling | Waarde | Reden |
 |------------|--------|-------|
-| Workers | 3 | Balans tussen snelheid en rate limits |
-| Vertraging | 1000ms | Per-worker cooldown tussen requests |
-| Totale doorvoer | ~3 policies/seconde | Veilig voor Graph API limieten |
+| Workers | 8 (geoptimaliseerd) | Maximaal parallelle requests zonder throttling |
+| Vertraging | 300ms (geoptimaliseerd) | Per-worker cooldown tussen requests |
+| Totale doorvoer | ~26 policies/seconde | 70-80% sneller dan originele implementatie |
 
 > [!CAUTION]
-> Het verhogen van workers boven 3 kan throttling veroorzaken. Microsoft Graph heeft per-tenant rate limits.
+> De worker pool is geoptimaliseerd voor Microsoft Graph API rate limits. Het wijzigen van deze waarden kan throttling (429 errors) veroorzaken.
 
 ---
 
@@ -167,7 +167,7 @@ Het begrijpen van het verschil tussen deze twee concepten is cruciaal.
 **Wat het is**: Een architectuur die meerdere databronnen ("workloads") combineert in één centrale state manager.
 
 **Workloads**:
-- **Directory Roles**: De standaard Azure AD rollen.
+- **Directory Roles**: De standaard Microsoft Entra ID rollen.
 - **PIM for Groups**: PIM-instellingen voor M365 groepen.
 - **Security Alerts**: Beveiligingsaanbevelingen.
 

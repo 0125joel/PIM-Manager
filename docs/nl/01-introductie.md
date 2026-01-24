@@ -98,7 +98,7 @@ Elke moderne browser (Chrome, Edge, Firefox, Safari) met JavaScript ingeschakeld
 │  └── Configuratie Pagina                                │
 ├─────────────────────────────────────────────────────────┤
 │  PimDataContext (Gedeelde State)                        │
-│  └── roleDataService (Data Ophalen)                     │
+│  └── directoryRoleService (Data Ophalen)                │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
 └─────────────────────────────────────────────────────────┘

@@ -25,7 +25,7 @@ sequenceDiagram
     participant U as Gebruiker
     participant P as Rapportpagina
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
 
     U->>P: Opent Rapportpagina
@@ -50,7 +50,7 @@ sequenceDiagram
 ### Wat Wordt Opgehaald
 
 1. **Roldefinities** (sequentieel, eerst vereist)
-   - Alle Azure AD rollen (ingebouwd + custom)
+   - Alle Microsoft Entra ID rollen (ingebouwd + custom)
    - ~130 rollen in een typische tenant
 
 2. **Toewijzingen** (parallel, sneller)
@@ -70,7 +70,7 @@ Na Fase 1 laden policies **op de achtergrond** terwijl je werkt:
 ```mermaid
 sequenceDiagram
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
     participant U as UI
 
@@ -114,7 +114,7 @@ sequenceDiagram
     participant U as Gebruiker
     participant P as Rapportpagina
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
 
     U->>P: Klikt op "Global Admin" rol
@@ -161,6 +161,90 @@ graph LR
     B --> D[Haal Policies]
     B --> E[Haal Members]
 ```
+
+### 3. Unmanaged Groups Detectie
+
+Na het ophalen van PIM-onboarded groepen identificeert het systeem beveiligingslekken:
+
+```mermaid
+sequenceDiagram
+    participant S as pimGroupService
+    participant G as Graph API
+    participant A as Aggregator
+
+    S->>G: GET /groups?$filter=isAssignableToRole eq true
+    G-->>S: Alle role-assignable groepen
+    S->>A: Vergelijk met PIM-onboarded groepen
+    A->>A: Identificeer groepen zonder PIM policies
+    A-->>S: Unmanaged groepen lijst
+```
+
+**Detectielogica:**
+- Haal alle groepen op met `isAssignableToRole: true`
+- Vergelijk met PIM-onboarded groepen uit Fase 1
+- Groepen met toewijzingscapaciteit maar zonder PIM-beleid = **Unmanaged**
+- **Worker Pool**: 5 workers, 200ms vertraging
+- **Doel**: Identificeer privilege escalatierisico's
+
+**Beveiligingsimpact:**
+Unmanaged groepen kunnen geprivilegieerde rollen toewijzen zonder PIM-controles:
+- Geen tijdgebonden activaties
+- Geen MFA-vereisten
+- Geen goedkeuringsworkflows
+- Geen audittrail
+
+---
+
+## Security Alerts Data Flow
+
+Security Alerts worden apart opgehaald als een optionele feature:
+
+```mermaid
+sequenceDiagram
+    participant C as PimDataContext
+    participant A as alertsApi
+    participant G as Graph API
+    participant U as UI
+
+    C->>A: fetchAlerts()
+    A->>G: GET /roleManagementAlerts/alerts
+
+    alt Toestemming verleend
+        G-->>A: Alert data met severity
+        A->>A: Sorteer op severity (hoog → laag)
+        A-->>C: Alerts array
+        C->>U: Toon in Dashboard
+    else 403 Forbidden
+        G-->>A: Toestemming geweigerd
+        A-->>C: null (graceful degradation)
+        C->>U: Verberg alerts panel
+    end
+```
+
+### Ophaaltrategie
+
+- **Endpoint**: `/identityGovernance/roleManagementAlerts/alerts`
+- **Filter**: `scopeId eq '/' and scopeType eq 'DirectoryRole'`
+- **Permission**: `RoleManagementAlert.Read.Directory` (optioneel)
+- **Timing**: Opgehaald met Directory Roles data
+- **API Version**: beta
+
+### Graceful Degradation
+
+- **403 Forbidden** → Feature verborgen in UI
+- Geen foutmelding getoond aan gebruiker
+- App blijft normaal werken zonder alerts
+- Optioneel permissiemodel
+
+### Weergave
+
+- Gesorteerd op severity: **High** → **Medium** → **Low** → **Informational**
+- Getoond in Dashboard Security Alerts panel
+- Elke alert toont:
+  - Severity level met kleurcodering
+  - Alert beschrijving
+  - Aantal incidenten
+  - Beïnvloede rollen/principals
 
 ---
 

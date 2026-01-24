@@ -47,13 +47,13 @@ This application is designed for:
 - View scope information (Tenant-wide, App-scoped, RMAU)
 - Authentication Context display for roles requiring specific access
 
-### ⚙️ Configure Page (Coming Soon)
-- Select multiple roles to configure at once
+### ⚙️ Configure Page (Planned Feature)
+- Bulk modification of PIM settings across multiple roles
 - Apply consistent activation settings (MFA, approval, max duration)
-- Create new role assignments (eligible or active)
+- Create new role assignments at scale
 
 > [!NOTE]
-> The Configure page is currently in active development and not yet available for general use. The focus is currently on **insights and reporting**.
+> **Read-Only Application**: PIM Manager is currently focused on visibility and reporting. Configuration capabilities are planned but not yet exposed in the UI. All current features use read-only permissions.
 
 ---
 
@@ -77,6 +77,14 @@ The application requires a Microsoft Entra app registration with the following *
 | `AdministrativeUnit.Read.All` | Read administrative unit names |
 | `Application.Read.All` | Read application names |
 
+**Optional Permissions** (features gracefully degrade if not granted):
+
+| Permission | Feature Enabled | Fallback Behavior |
+|------------|-----------------|-------------------|
+| `RoleManagementAlert.Read.Directory` | Security Alerts panel | Panel hidden if permission denied (403) |
+| `PrivilegedAccess.Read.AzureADGroup` | PIM for Groups workload | Workload not shown in settings |
+| `RoleManagementPolicy.Read.AzureADGroup` | PIM Groups policies | Groups data incomplete without this |
+
 > [!TIP]
 > The application follows the **least privilege principle** by using **Read-only** permissions. No **write permissions** are required for reporting features.
 
@@ -95,12 +103,21 @@ Any modern browser (Chrome, Edge, Firefox, Safari) with JavaScript enabled.
 │                    User's Browser                       │
 ├─────────────────────────────────────────────────────────┤
 │  Next.js React Application                              │
-│  ├── Dashboard Page                                     │
-│  ├── Report Page                                        │
-│  └── Configure Page                                     │
+│  ├── Dashboard Page (Analytics & Insights)              │
+│  ├── Report Page (Detailed Configuration View)          │
+│  └── Configure Page (Planned)                           │
 ├─────────────────────────────────────────────────────────┤
-│  PimDataContext (Shared State)                          │
-│  └── roleDataService (Data Fetching)                    │
+│  State Management Layer                                 │
+│  ├── UnifiedPimContext (Workload Orchestration)         │
+│  ├── DirectoryRoleContext (Directory Roles)             │
+│  ├── ViewModeContext (UI Preferences)                   │
+│  └── Delta Sync Service (Smart Refresh)                 │
+├─────────────────────────────────────────────────────────┤
+│  Data Services                                          │
+│  ├── directoryRoleService (Roles & Policies)            │
+│  ├── pimGroupService (PIM Groups)                       │
+│  ├── deltaService (Incremental Updates)                 │
+│  └── SessionStorage (5-minute cache)                    │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
 └─────────────────────────────────────────────────────────┘
@@ -120,6 +137,28 @@ All data fetching happens **client-side** in the user's browser. The application
 
 > [!NOTE]
 > There is no backend server. All sensitive operations use the user's own permissions.
+
+### Performance & Advanced Features
+
+**Smart Refresh (Delta Sync):**
+- Only fetches changes since last sync where supported
+- Reduces data transfer by 70-80% compared to full refresh
+- Automatic fallback to full fetch if delta token expires
+
+**SessionStorage Caching:**
+- Data persists across page navigation
+- 5-minute freshness check before re-fetching
+- Reduces unnecessary API calls
+
+**Workload Management:**
+- Enable/disable specific workloads (Directory Roles, PIM Groups)
+- Permission-based feature visibility
+- Per-workload sync status tracking
+
+**Graceful Degradation:**
+- Optional features (Security Alerts, PIM Groups) hide if permissions missing
+- No breaking errors for missing optional permissions
+- Clear indicators when features are unavailable
 
 ---
 

@@ -25,7 +25,7 @@ sequenceDiagram
     participant U as User
     participant P as Report Page
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
 
     U->>P: Opens Report page
@@ -50,7 +50,7 @@ sequenceDiagram
 ### What Gets Fetched
 
 1. **Role Definitions** (sequential, required first)
-   - All Azure AD roles (built-in + custom)
+   - All Microsoft Entra ID roles (built-in + custom)
    - ~130 roles in a typical tenant
 
 2. **Assignments** (parallel, faster)
@@ -70,7 +70,7 @@ After Phase 1 completes, policies load **in the background** while you work:
 ```mermaid
 sequenceDiagram
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
     participant U as UI
 
@@ -114,7 +114,7 @@ sequenceDiagram
     participant U as User
     participant P as Report Page
     participant C as PimDataContext
-    participant S as roleDataService
+    participant S as directoryRoleService
     participant G as Graph API
 
     U->>P: Clicks on "Global Admin" role
@@ -161,6 +161,90 @@ graph LR
     B --> D[Fetch Policies]
     B --> E[Fetch Members]
 ```
+
+### 3. Unmanaged Groups Detection
+
+After fetching PIM-onboarded groups, the system identifies security gaps:
+
+```mermaid
+sequenceDiagram
+    participant S as pimGroupService
+    participant G as Graph API
+    participant A as Aggregator
+
+    S->>G: GET /groups?$filter=isAssignableToRole eq true
+    G-->>S: All role-assignable groups
+    S->>A: Compare with PIM-onboarded groups
+    A->>A: Identify groups without PIM policies
+    A-->>S: Unmanaged groups list
+```
+
+**Detection Logic:**
+- Fetch all groups with `isAssignableToRole: true`
+- Compare with PIM-onboarded groups from Phase 1
+- Groups with assignment capability but no PIM policy = **Unmanaged**
+- **Worker Pool**: 5 workers, 200ms delay
+- **Purpose**: Identify privilege escalation risks
+
+**Security Impact:**
+Unmanaged groups can assign privileged roles without PIM controls:
+- No time-bound activations
+- No MFA requirements
+- No approval workflows
+- No audit trail
+
+---
+
+## Security Alerts Data Flow
+
+Security Alerts are fetched separately as an optional feature:
+
+```mermaid
+sequenceDiagram
+    participant C as PimDataContext
+    participant A as alertsApi
+    participant G as Graph API
+    participant U as UI
+
+    C->>A: fetchAlerts()
+    A->>G: GET /roleManagementAlerts/alerts
+
+    alt Permission granted
+        G-->>A: Alert data with severity
+        A->>A: Sort by severity (high → low)
+        A-->>C: Alerts array
+        C->>U: Display in Dashboard
+    else 403 Forbidden
+        G-->>A: Permission denied
+        A-->>C: null (graceful degradation)
+        C->>U: Hide alerts panel
+    end
+```
+
+### Fetch Strategy
+
+- **Endpoint**: `/identityGovernance/roleManagementAlerts/alerts`
+- **Filter**: `scopeId eq '/' and scopeType eq 'DirectoryRole'`
+- **Permission**: `RoleManagementAlert.Read.Directory` (optional)
+- **Timing**: Fetched with Directory Roles data
+- **API Version**: beta
+
+### Graceful Degradation
+
+- **403 Forbidden** → Feature hidden in UI
+- No error shown to user
+- App continues normally without alerts
+- Optional permission model
+
+### Display
+
+- Sorted by severity: **High** → **Medium** → **Low** → **Informational**
+- Shown in Dashboard Security Alerts panel
+- Each alert shows:
+  - Severity level with color coding
+  - Alert description
+  - Number of incidents
+  - Affected roles/principals
 
 ---
 

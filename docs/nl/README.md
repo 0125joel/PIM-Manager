@@ -6,15 +6,16 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 
 | Document | Beschrijving |
 |----------|--------------|
-| [Introductie](./01-introductie.md) | Wat is PIM Configurator en welke problemen lost het op? |
+| [Introductie](./01-introductie.md) | Wat is PIM Manager en welke problemen lost het op? |
 | [Mappenstructuur](./02-mappenstructuur.md) | Overzicht van de code-organisatie |
 | [Dataflow](./03-dataflow.md) | Hoe data wordt opgehaald en verwerkt |
 | [Graph API Calls](./04-graph-api-calls.md) | Welke Microsoft Graph APIs worden gebruikt |
 | [Belangrijke Concepten](./05-belangrijke-concepten.md) | Uitleg van technische concepten |
-| [Rapportpagina](./06-rapportpagina.md) | Functies van de Rapportpagina |
-| [Configuratiepagina](./07-configuratiepagina.md) | Functies van de Configuratiepagina (In Ontwikkeling) |
-| [Deployment](./08-deployment.md) | Hosting op Cloudflare Pages |
-| [Instellingen](./09-settings.md) | Workloads en Consent Framework |
+| [Dashboard Pagina](./06-dashboard-pagina.md) | Visueel overzicht en beveiligingsinzichten |
+| [Rapport Pagina](./07-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
+| [Configuratie Pagina](./08-configuratie-pagina.md) | Geplande schrijfcapaciteiten |
+| [Deployment](./09-deployment.md) | Hosting op Cloudflare Pages |
+| [Instellingen](./10-settings.md) | Workloads en consent framework |
 
 ---
 
@@ -22,7 +23,7 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 
 1. Clone de repository
 2. Voer `npm install` uit
-3. Configureer de Azure AD app-registratie (zie [Introductie](./01-introductie.md))
+3. Configureer de Microsoft Entra ID app-registratie (zie [Introductie](./01-introductie.md))
 4. Voer `npm run dev` uit voor ontwikkeling
 
 ---

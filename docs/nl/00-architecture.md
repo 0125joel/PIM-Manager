@@ -803,7 +803,7 @@ Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./08-deplo
 
 | Variable | Doel |
 |----------|------|
-| `NEXT_PUBLIC_CLIENT_ID` | Azure AD App Registration Client ID |
+| `NEXT_PUBLIC_CLIENT_ID` | Microsoft Entra ID App Registration Client ID |
 | `NEXT_PUBLIC_REDIRECT_URI` | OAuth redirect (auto-detected if empty) |
 
 ---

@@ -6,6 +6,8 @@ This document details all Microsoft Graph API endpoints used by PIM Configurator
 
 ## API Overview
 
+### Directory Roles
+
 | Phase | Endpoint | Purpose | Permissions Required |
 |-------|----------|---------|---------------------|
 | 1 | roleDefinitions | Get all roles | RoleManagement.Read.Directory |
@@ -13,6 +15,22 @@ This document details all Microsoft Graph API endpoints used by PIM Configurator
 | 1 | roleEligibilitySchedules | Get eligible assignments | RoleEligibilitySchedule.Read.Directory |
 | 1 | roleAssignmentSchedules | Get active assignments | RoleAssignmentSchedule.Read.Directory |
 | 2 | roleManagementPolicyAssignments | Get PIM policies | RoleManagementPolicy.Read.Directory |
+
+### PIM for Groups (Optional)
+
+| Endpoint | Purpose | Permissions Required |
+|----------|---------|---------------------|
+| privilegedAccess/group/resources | Get PIM-onboarded groups | PrivilegedAccess.Read.AzureADGroup |
+| groups (role-assignable filter) | Detect unmanaged groups | Group.Read.All |
+| group/eligibilityScheduleInstances | Get group eligible assignments | PrivilegedAccess.Read.AzureADGroup |
+| group/assignmentScheduleInstances | Get group active assignments | PrivilegedAccess.Read.AzureADGroup |
+| roleManagementPolicyAssignments (Groups) | Get group PIM policies | RoleManagementPolicy.Read.AzureADGroup |
+
+### Security Alerts (Optional)
+
+| Endpoint | Purpose | Permissions Required |
+|----------|---------|---------------------|
+| roleManagementAlerts/alerts | Get security alerts | RoleManagementAlert.Read.Directory |
 
 ---
 
@@ -266,9 +284,154 @@ Retry-After: 30
 
 ---
 
+## PIM for Groups API Calls
 
+PIM Manager supports Microsoft Entra PIM for Groups, allowing you to manage privileged access through group membership with separate policies for Members and Owners.
+
+### 1. Get PIM-Onboarded Groups
+
+```http
+GET /identityGovernance/privilegedAccess/group/resources
+```
+
+**API Version**: `beta`
+
+**Permission**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Purpose**: Discover which groups are enrolled in PIM (have PIM policies configured).
+
+**Response**: Returns groups with `id`, `displayName`, and resource metadata.
+
+---
+
+### 2. Get Role-Assignable Groups
+
+```http
+GET /groups?$filter=isAssignableToRole eq true
+```
+
+**API Version**: `v1.0`
+
+**Permission**: `Group.Read.All`
+
+**Purpose**: Fetch all role-assignable groups to identify unmanaged groups (those with `isAssignableToRole: true` but no PIM policy).
+
+**Use Case**: Security gap detection - groups that can assign roles but aren't managed by PIM.
+
+---
+
+### 3. Get Group Details
+
+```http
+GET /groups/{id}
+```
+
+**API Version**: `v1.0`
+
+**Permission**: `Group.Read.All`
+
+**Purpose**: Fetch group metadata (display name, description) for groups discovered via PIM resources endpoint.
+
+---
+
+### 4. Get Group Eligibility Schedules
+
+```http
+GET /identityGovernance/privilegedAccess/group/eligibilityScheduleInstances
+  ?$filter=groupId eq '{groupId}'
+  &$expand=principal,group
+```
+
+**API Version**: `v1.0`
+
+**Permission**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Purpose**: Fetch eligible assignments for a specific group (who can activate membership/ownership).
+
+**Key Fields**:
+- `accessId`: `member` or `owner`
+- `principal`: User or group assigned
+- `startDateTime`, `endDateTime`: Assignment validity period
+
+---
+
+### 5. Get Group Assignment Schedules
+
+```http
+GET /identityGovernance/privilegedAccess/group/assignmentScheduleInstances
+  ?$filter=groupId eq '{groupId}'
+  &$expand=principal,group
+```
+
+**API Version**: `v1.0`
+
+**Permission**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Purpose**: Fetch active assignments (permanently assigned or currently activated).
+
+---
+
+### 6. Get Group PIM Policies
+
+```http
+GET /policies/roleManagementPolicyAssignments
+  ?$filter=scopeId eq '{groupId}' and scopeType eq 'Group'
+  &$expand=policy($expand=rules)
+```
+
+**API Version**: `beta`
+
+**Permission**: `RoleManagementPolicy.Read.AzureADGroup`
+
+**Purpose**: Fetch PIM policy configuration for a group. Returns **two** policies per group:
+- **Member policy** (`roleDefinitionId` ends with `_member`)
+- **Owner policy** (`roleDefinitionId` ends with `_owner`)
+
+**Policy Rules Include**:
+- Maximum activation duration
+- MFA requirement on activation
+- Approval workflow
+- Justification requirement
+- Authentication context (Conditional Access integration)
+- Notification settings
+
+**Note**: Member and Owner policies are completely independent and can have different configurations.
+
+---
+
+## Security Alerts API Calls
+
+PIM Manager integrates with Microsoft Entra ID Security Alerts to surface PIM-related security risks.
+
+### Get Security Alerts
+
+```http
+GET /identityGovernance/roleManagementAlerts/alerts
+  ?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole'
+  &$expand=alertDefinition,alertConfiguration
+```
+
+**API Version**: `beta`
+
+**Permission**: `RoleManagementAlert.Read.Directory`
+
+**Purpose**: Fetch active security alerts for Directory Roles (e.g., too many global admins, roles assigned outside PIM, stale eligible assignments).
+
+**Key Fields**:
+- `alertDefinition.severityLevel`: `high`, `medium`, `low`, `informational`
+- `alertDefinition.description`: Human-readable explanation
+- `incidentCount`: Number of affected items
+- `isActive`: Whether alert is currently triggered
+
+**Graceful Degradation**: If the permission is not granted (403 Forbidden), the feature is hidden without breaking the app.
+
+**Display**: Security alerts appear in the Dashboard's Security Alerts panel, sorted by severity.
+
+---
 
 ## Permission Summary
+
+### Core Permissions (Directory Roles)
 
 | Permission | Scope | Used For |
 |------------|-------|----------|
@@ -276,12 +439,20 @@ Retry-After: 30
 | `RoleManagement.Read.Directory` | Delegated | Read role definitions |
 | `RoleAssignmentSchedule.Read.Directory` | Delegated | Read active PIM assignments |
 | `RoleEligibilitySchedule.Read.Directory` | Delegated | Read eligible PIM assignments |
-| `RoleManagementPolicy.Read.Directory` | Delegated | Read PIM policies |
+| `RoleManagementPolicy.Read.Directory` | Delegated | Read PIM policies for roles |
 | `Policy.Read.ConditionalAccess` | Delegated | Read authentication contexts |
 | `User.Read.All` | Delegated | Resolve user display names |
-| `Group.Read.All` | Delegated | Resolve group display names |
+| `Group.Read.All` | Delegated | Resolve group display names & role-assignable groups |
 | `AdministrativeUnit.Read.All` | Delegated | Read administrative unit names |
 | `Application.Read.All` | Delegated | Read application names |
+
+### Optional Permissions (PIM Groups & Security Alerts)
+
+| Permission | Scope | Used For |
+|------------|-------|----------|
+| `PrivilegedAccess.Read.AzureADGroup` | Delegated | Read PIM Groups assignments and resources |
+| `RoleManagementPolicy.Read.AzureADGroup` | Delegated | Read PIM policies for groups (Member/Owner) |
+| `RoleManagementAlert.Read.Directory` | Delegated | Read security alerts for roles |
 
 > [!TIP]
 > The application follows the **least privilege principle** by using granular permissions instead of broad permissions like `Directory.Read.All` or `Policy.Read.All`. Admin consent can be granted in the Microsoft Entra Admin Center.
@@ -294,4 +465,4 @@ Retry-After: 30
 ## Next Steps
 
 - [Key Concepts](./05-key-concepts.md) - Technical concepts explained
-- [Report Page](./06-report-page.md) - How the Report page works
+- [Report Page](./07-report-page.md) - How the Report page works

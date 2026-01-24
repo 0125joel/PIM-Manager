@@ -97,7 +97,7 @@ Kernlogica voor interactie met Microsoft Graph API.
 
 | Bestand | Doel |
 |---------|------|
-| `roleDataService.ts` | **Alle data-ophaal logica** |
+| `directoryRoleService.ts` | **Alle data-ophaal logica voor Directory Roles** |
 
 Dit bestand bevat:
 - `getRoleDefinitions()` - Ophalen van roldefinities
@@ -120,7 +120,7 @@ TypeScript interfaces die datastructuren beschrijven.
 | `index.ts` | Exports voor makkelijk importeren |
 
 Belangrijke types:
-- `RoleDefinition` - Een Azure AD rol
+- `RoleDefinition` - Een Microsoft Entra ID rol
 - `RoleAssignment` - Een permanente toewijzing
 - `PimEligibilitySchedule` - Een eligible toewijzing
 - `PimPolicy` - PIM-configuratie voor een rol
@@ -146,7 +146,7 @@ Applicatie configuratie constanten.
 
 | Bestand | Doel |
 |---------|------|
-| `authConfig.ts` | Azure AD authenticatie configuratie |
+| `authConfig.ts` | Microsoft Entra ID authenticatie configuratie |
 | `constants.ts` | Applicatie-brede constanten |
 | `pdfExportConfig.ts` | **PDF Export configuratie** - single source of truth voor export secties en statistieken |
 
@@ -154,7 +154,26 @@ Applicatie configuratie constanten.
 > Om een nieuwe statistiek toe te voegen aan de PDF export, voeg simpelweg een entry toe aan de `OVERVIEW_STATS` array in `pdfExportConfig.ts`. Het verschijnt automatisch in de export modal en PDF.
 
 > [!CAUTION]
-> Het `authConfig.ts` bestand bevat je **Azure AD client ID**. Zorg ervoor dat dit overeenkomt met je app-registratie.
+> Het `authConfig.ts` bestand bevat je **Microsoft Entra ID client ID**. Zorg ervoor dat dit overeenkomt met je app-registratie.
+
+---
+
+### 📁 `src/contexts/` - React Context Providers
+
+Globale state management met React Context API.
+
+| Bestand | Doel |
+|---------|------|
+| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM Groups, etc.) met unified refresh logica |
+| `DirectoryRoleContext.tsx` | **Directory Roles State**: Beheert rol data, policies, toewijzingen met delta sync ondersteuning |
+| `ViewModeContext.tsx` | **UI Voorkeuren**: Beheert Basic/Advanced view mode toggle met localStorage persistentie |
+| `MobileMenuContext.tsx` | **Mobile UI State**: Controleert mobile menu open/close state |
+
+**Belangrijke Context Relaties:**
+- `UnifiedPimContext` orkestreert meerdere workloads
+- `DirectoryRoleContext` levert directory rol-specifieke data
+- Dashboard en Report pagina's consumeren beide contexts
+- Delta sync gebeurt transparant door contexts
 
 ---
 
@@ -167,6 +186,9 @@ Herbruikbare React hooks.
 | `usePimData.ts` | **Hoofd data hook** - biedt toegang tot PimDataContext |
 | `useRoleFilters.ts` | Filter state management voor de Rapportpagina |
 | `useRoleSettings.ts` | Hook voor het beheren van rolinstellingen state |
+| `useAggregatedData.ts` | Aggregeert data van alle actieve workloads |
+| `useConsentedWorkloads.ts` | Consent checking logica voor workloads |
+| `useIncrementalConsent.ts` | MSAL consent + localStorage persistentie |
 
 ---
 
@@ -177,26 +199,46 @@ flowchart TD
     subgraph "Pagina's"
         A[Dashboard]
         B[Report]
-        C[Configure]
+        C[Configure - Gepland]
     end
 
-    subgraph "Gedeeld"
-        D[PimDataContext]
+    subgraph "Contexts"
+        D[UnifiedPimContext]
+        E[DirectoryRoleContext]
+        F[ViewModeContext]
     end
 
     subgraph "Services"
-        E[roleDataService]
+        G[directoryRoleService]
+        H[pimGroupService]
+        I[deltaService]
+    end
+
+    subgraph "Utils"
+        J[workerPool]
+        K[alertsApi]
     end
 
     subgraph "Extern"
-        F[Microsoft Graph API]
+        L[Microsoft Graph API]
     end
 
     A --> D
+    A --> E
+    A --> F
     B --> D
+    B --> E
     C --> D
     D --> E
-    E --> F
+    D --> H
+    E --> G
+    E --> I
+    G --> J
+    G --> L
+    H --> J
+    H --> L
+    I --> L
+    K --> L
 ```
 
 ---

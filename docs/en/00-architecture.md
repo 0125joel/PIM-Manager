@@ -19,7 +19,6 @@ This document describes the complete architecture and design decisions of the PI
 14. [Security Architecture](#security-architecture)
 15. [Error Handling](#error-handling)
 16. [Deployment Architecture](#deployment-architecture)
-17. [Test Strategy](#test-strategy)
 
 ---
 
@@ -775,7 +774,7 @@ Key architectural decisions documented for future reference:
 
 ## Deployment Architecture
 
-For detailed deployment instructions, see: **[08-deployment.md](./08-deployment.md)**
+For detailed deployment instructions, see: **[09-deployment.md](./09-deployment.md)**
 
 ### Overview
 
@@ -804,52 +803,8 @@ For detailed deployment instructions, see: **[08-deployment.md](./08-deployment.
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_CLIENT_ID` | Azure AD App Registration Client ID |
+| `NEXT_PUBLIC_CLIENT_ID` | Microsoft Entra ID App Registration Client ID |
 | `NEXT_PUBLIC_REDIRECT_URI` | OAuth redirect (auto-detected if empty) |
-
----
-
-## Test Strategy
-
-### Test Pyramid
-
-```
-         ┌─────────────────┐
-         │     E2E         │  ← Manual testing, Playwright (future)
-         │   (few tests)   │
-         └───────┬─────────┘
-                 │
-         ┌───────┴─────────┐
-         │  Integration    │  ← Critical user flows
-         │  (some tests)   │
-         └───────┬─────────┘
-                 │
-         ┌───────┴─────────┐
-         │     Unit        │  ← Utilities, hooks, services
-         │  (many tests)   │
-         └─────────────────┘
-```
-
-### Priorities
-
-| Component | Test Type | Priority | Reason |
-|-----------|-----------|----------|--------|
-| `workerPool.ts` | Unit | 🔴 High | Critical utility for all fetching |
-| `useAggregatedData.ts` | Unit | 🔴 High | Data aggregation logic |
-| `pimApi.ts` | Unit | 🟡 Medium | Policy parsing functions |
-| Dashboard flow | E2E | 🟡 Medium | Happy path validation |
-| Error handling | Integration | 🟡 Medium | 429 throttling scenario |
-
-### Test Tools (Recommended)
-
-| Tool | Purpose |
-|------|---------|
-| **Jest** | Unit test runner |
-| **React Testing Library** | Component tests |
-| **Playwright** | E2E browser tests |
-| **MSW** | Mock Graph API responses |
-
-> **Note**: Test infrastructure is not yet implemented. This section serves as a roadmap.
 
 ---
 

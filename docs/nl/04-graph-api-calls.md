@@ -6,6 +6,8 @@ Dit document beschrijft alle Microsoft Graph API endpoints die PIM Configurator 
 
 ## API Overzicht
 
+### Directory Roles
+
 | Fase | Endpoint | Doel | Vereiste Machtigingen |
 |------|----------|------|----------------------|
 | 1 | roleDefinitions | Alle rollen ophalen | RoleManagement.Read.Directory |
@@ -13,6 +15,22 @@ Dit document beschrijft alle Microsoft Graph API endpoints die PIM Configurator 
 | 1 | roleEligibilitySchedules | Eligible toewijzingen ophalen | RoleEligibilitySchedule.Read.Directory |
 | 1 | roleAssignmentSchedules | Actieve toewijzingen ophalen | RoleAssignmentSchedule.Read.Directory |
 | 2 | roleManagementPolicyAssignments | PIM-beleid ophalen | RoleManagementPolicy.Read.Directory |
+
+### PIM for Groups (Optioneel)
+
+| Endpoint | Doel | Vereiste Machtigingen |
+|----------|------|----------------------|
+| privilegedAccess/group/resources | PIM-onboarded groepen ophalen | PrivilegedAccess.Read.AzureADGroup |
+| groups (role-assignable filter) | Unmanaged groepen detecteren | Group.Read.All |
+| group/eligibilityScheduleInstances | Groeps eligible toewijzingen ophalen | PrivilegedAccess.Read.AzureADGroup |
+| group/assignmentScheduleInstances | Groeps actieve toewijzingen ophalen | PrivilegedAccess.Read.AzureADGroup |
+| roleManagementPolicyAssignments (Groups) | Groeps PIM-beleid ophalen | RoleManagementPolicy.Read.AzureADGroup |
+
+### Security Alerts (Optioneel)
+
+| Endpoint | Doel | Vereiste Machtigingen |
+|----------|------|----------------------|
+| roleManagementAlerts/alerts | Beveiligingswaarschuwingen ophalen | RoleManagementAlert.Read.Directory |
 
 ---
 
@@ -217,9 +235,154 @@ Retry-After: 30
 
 ---
 
+## PIM for Groups API Calls
 
+PIM Manager ondersteunt Microsoft Entra PIM for Groups, waarmee je privileged access kunt beheren via groepslidmaatschap met aparte beleidsregels voor Members en Owners.
+
+### 1. PIM-Onboarded Groepen Ophalen
+
+```http
+GET /identityGovernance/privilegedAccess/group/resources
+```
+
+**API Versie**: `beta`
+
+**Machtiging**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Doel**: Ontdek welke groepen zijn ingeschreven in PIM (PIM-beleid hebben geconfigureerd).
+
+**Response**: Retourneert groepen met `id`, `displayName`, en resource metadata.
+
+---
+
+### 2. Role-Assignable Groepen Ophalen
+
+```http
+GET /groups?$filter=isAssignableToRole eq true
+```
+
+**API Versie**: `v1.0`
+
+**Machtiging**: `Group.Read.All`
+
+**Doel**: Haal alle role-assignable groepen op om unmanaged groepen te identificeren (groepen met `isAssignableToRole: true` maar zonder PIM-beleid).
+
+**Use Case**: Security gap detectie - groepen die rollen kunnen toewijzen maar niet beheerd worden door PIM.
+
+---
+
+### 3. Groepsdetails Ophalen
+
+```http
+GET /groups/{id}
+```
+
+**API Versie**: `v1.0`
+
+**Machtiging**: `Group.Read.All`
+
+**Doel**: Haal groepsmetadata op (weergavenaam, beschrijving) voor groepen gevonden via PIM resources endpoint.
+
+---
+
+### 4. Groeps Eligibility Schedules Ophalen
+
+```http
+GET /identityGovernance/privilegedAccess/group/eligibilityScheduleInstances
+  ?$filter=groupId eq '{groupId}'
+  &$expand=principal,group
+```
+
+**API Versie**: `v1.0`
+
+**Machtiging**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Doel**: Haal eligible toewijzingen op voor een specifieke groep (wie kan membership/ownership activeren).
+
+**Belangrijke Velden**:
+- `accessId`: `member` of `owner`
+- `principal`: Toegewezen gebruiker of groep
+- `startDateTime`, `endDateTime`: Toewijzingsgeldigheidsperiode
+
+---
+
+### 5. Groeps Assignment Schedules Ophalen
+
+```http
+GET /identityGovernance/privilegedAccess/group/assignmentScheduleInstances
+  ?$filter=groupId eq '{groupId}'
+  &$expand=principal,group
+```
+
+**API Versie**: `v1.0`
+
+**Machtiging**: `PrivilegedAccess.Read.AzureADGroup`
+
+**Doel**: Haal actieve toewijzingen op (permanent toegewezen of momenteel geactiveerd).
+
+---
+
+### 6. Groeps PIM-Beleid Ophalen
+
+```http
+GET /policies/roleManagementPolicyAssignments
+  ?$filter=scopeId eq '{groupId}' and scopeType eq 'Group'
+  &$expand=policy($expand=rules)
+```
+
+**API Versie**: `beta`
+
+**Machtiging**: `RoleManagementPolicy.Read.AzureADGroup`
+
+**Doel**: Haal PIM-beleidsconfiguratie op voor een groep. Retourneert **twee** beleidsregels per groep:
+- **Member beleid** (`roleDefinitionId` eindigt op `_member`)
+- **Owner beleid** (`roleDefinitionId` eindigt op `_owner`)
+
+**Beleidsregels Omvatten**:
+- Maximale activeringsduur
+- MFA-vereiste bij activering
+- Goedkeuringsworkflow
+- Justificatie-vereiste
+- Authenticatiecontext (Conditional Access integratie)
+- Meldingsinstellingen
+
+**Opmerking**: Member en Owner beleidsregels zijn volledig onafhankelijk en kunnen verschillende configuraties hebben.
+
+---
+
+## Security Alerts API Calls
+
+PIM Manager integreert met Microsoft Entra ID Security Alerts om PIM-gerelateerde beveiligingsrisico's zichtbaar te maken.
+
+### Security Alerts Ophalen
+
+```http
+GET /identityGovernance/roleManagementAlerts/alerts
+  ?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole'
+  &$expand=alertDefinition,alertConfiguration
+```
+
+**API Versie**: `beta`
+
+**Machtiging**: `RoleManagementAlert.Read.Directory`
+
+**Doel**: Haal actieve beveiligingswaarschuwingen op voor Directory Roles (bijv. te veel global admins, rollen toegewezen buiten PIM, verouderde eligible toewijzingen).
+
+**Belangrijke Velden**:
+- `alertDefinition.severityLevel`: `high`, `medium`, `low`, `informational`
+- `alertDefinition.description`: Leesbare uitleg
+- `incidentCount`: Aantal getroffen items
+- `isActive`: Of waarschuwing momenteel actief is
+
+**Graceful Degradation**: Als de machtiging niet is verleend (403 Forbidden), wordt de functie verborgen zonder de app te breken.
+
+**Weergave**: Security alerts verschijnen in het Security Alerts panel van het Dashboard, gesorteerd op ernst.
+
+---
 
 ## Machtigingen Samenvatting
+
+### Kern Machtigingen (Directory Roles)
 
 | Machtiging | Scope | Gebruikt Voor |
 |------------|-------|---------------|
@@ -227,18 +390,26 @@ Retry-After: 30
 | `RoleManagement.Read.Directory` | Gedelegeerd | Roldefinities lezen |
 | `RoleAssignmentSchedule.Read.Directory` | Gedelegeerd | Actieve PIM-toewijzingen lezen |
 | `RoleEligibilitySchedule.Read.Directory` | Gedelegeerd | Eligible PIM-toewijzingen lezen |
-| `RoleManagementPolicy.Read.Directory` | Gedelegeerd | PIM-beleid lezen |
+| `RoleManagementPolicy.Read.Directory` | Gedelegeerd | PIM-beleid voor rollen lezen |
 | `Policy.Read.ConditionalAccess` | Gedelegeerd | Authenticatiecontexten lezen |
 | `User.Read.All` | Gedelegeerd | Gebruikersweergavenamen ophalen |
-| `Group.Read.All` | Gedelegeerd | Groepsweergavenamen ophalen |
+| `Group.Read.All` | Gedelegeerd | Groepsweergavenamen & role-assignable groepen ophalen |
 | `AdministrativeUnit.Read.All` | Gedelegeerd | Administrative unit namen ophalen |
 | `Application.Read.All` | Gedelegeerd | Applicatienamen ophalen |
+
+### Optionele Machtigingen (PIM Groups & Security Alerts)
+
+| Machtiging | Scope | Gebruikt Voor |
+|------------|-------|---------------|
+| `PrivilegedAccess.Read.AzureADGroup` | Gedelegeerd | PIM Groups toewijzingen en resources lezen |
+| `RoleManagementPolicy.Read.AzureADGroup` | Gedelegeerd | PIM-beleid voor groepen lezen (Member/Owner) |
+| `RoleManagementAlert.Read.Directory` | Gedelegeerd | Beveiligingswaarschuwingen voor rollen lezen |
 
 > [!TIP]
 > De applicatie volgt het **least privilege principe** door granulaire machtigingen te gebruiken in plaats van brede machtigingen zoals `Directory.Read.All` of `Policy.Read.All`.
 
 > [!IMPORTANT]
-> Alle machtigingen zijn **gedelegeerd**. De app handelt namens de ingelogde gebruiker, met hun machtigingen in Azure AD.
+> Alle machtigingen zijn **gedelegeerd**. De app handelt namens de ingelogde gebruiker, met hun machtigingen in Microsoft Entra ID.
 
 ---
 

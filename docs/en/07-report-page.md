@@ -6,13 +6,17 @@ This document explains the features and functionality of the Report page, the ma
 
 ## Overview
 
-The Report Page provides a comprehensive view of all Microsoft Entra ID roles and their PIM configurations.
+The Report Page provides a comprehensive view of all Microsoft Entra ID roles, PIM Groups, and their PIM configurations. It supports multiple workloads:
+
+- **Directory Roles**: All Entra ID roles (built-in and custom)
+- **PIM Groups (Managed)**: Groups with PIM policies configured
+- **Unmanaged Groups**: Role-assignable groups without PIM protection (security gap indicator)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Report Page                          │
 ├─────────────────────────────────────────────────────────┤
-│ [Filters]  [Search]  [Export (PDF/CSV) ▼]  [Refresh]    │
+│ [Filters]  [Search]  [Export (CSV/JSON) ▼]  [Refresh]   │
 ├─────────────────────────────────────────────────────────┤
 │ Showing 45 of 130 roles                                 │
 │                    Fetching role configuration (15/130) │
@@ -61,21 +65,35 @@ At the top of the page, you can toggle the visibility of different PIM workloads
 
 ### 🏷️ Filters
 
-Filter roles by various criteria:
+Filter roles and groups by various criteria:
+
+**Directory Roles Filters:**
 
 | Filter | Options | Purpose |
 |--------|---------|---------|
 | **Role Type** | Built-in, Custom | Separate Microsoft roles from your custom roles |
-| **Assignment Type** | Has Eligible, Has Active, Has Permanent | Find roles with specific assignment types |
+| **Assignment Type** | Has Eligible, Has Active, Has Permanent, Has Assignments (Any) | Find roles with specific assignment types |
 | **Member Type** | Has Users, Has Groups | Find roles assigned to users vs groups |
-| **Max Duration** | <1h, 1-8h, 8-24h, >24h | Filter by max activation duration |
+| **Max Duration** | <1h, 2-4h, 5-8h, 9-12h, >12h | Filter by max activation duration (granular buckets) |
 | **Privileged** | Privileged Only, Non-Privileged | Focus on high-risk roles |
 | **PIM Status** | Configured, Not Configured | Find roles without PIM policies |
-| **User** | Search by name | Find roles assigned to a specific user or group |
+| **MFA Required** | Yes, No | Find roles requiring Azure MFA or Conditional Access |
+| **Approval Required** | Yes, No | Find roles with approval workflows |
+| **Justification Required** | Yes, No | Find roles requiring activation justification |
+| **User** | Search by name/email | Find roles assigned to a specific user or group |
 | **Scope** | Tenant-wide, App, Admin Unit, RMAU | Filter by assignment scope |
 
+**PIM Groups Filters:**
+
+| Filter | Options | Purpose |
+|--------|---------|---------|
+| **Group Type** | Security, M365, Mail-enabled Security | Filter by Azure AD group type |
+| **Access Type** | Member, Owner | Filter by role in group (Member vs Owner assignments) |
+| **PIM Status** | Managed, Unmanaged | Find groups with/without PIM policies |
+| **Assignment Type** | Has Eligible, Has Active, Has Permanent | Same as roles but for group assignments |
+
 > [!TIP]
-> Combine filters to create powerful queries. For example: "Privileged + Has Permanent" finds high-risk roles with permanent assignments.
+> Combine filters to create powerful queries. For example: "Privileged + Has Permanent" finds high-risk roles with permanent assignments. Or "Unmanaged + Group Type: Security" finds security gaps.
 
 #### Scope Filter
 
@@ -128,35 +146,53 @@ Visual indicators on each role card:
 
 You can export data in multiple formats using the dropdown menu.
 
-#### 📄 Export to PDF
-
-Generate a professional, executive-ready security report.
-
-**Features:**
-- **Customizable:** Choose which sections to include (Overview, Charts, Alerts, Data Tables).
-- **Multi-Workload:** Supports both Directory Roles and PIM Groups.
-- **Visuals:** High-quality charts with organization-aligned colors.
-- **Metadata:** Automatically includes Tenant ID and User UPN for tracking.
-
-**Report Sections:**
-1.  **Executive Summary:** High-level statistics (Total roles, Active sessions, PIM coverage).
-2.  **Security Alerts:** Critical findings with specific affected roles/groups and actionable mitigation advice.
-3.  **Charts & Analysis:** Visual breakdown of assignment types, member types, and duration policies.
-4.  **Data Tables:** Detailed non-visual data supporting the charts.
+> [!NOTE]
+> **PDF Export** is available from the Dashboard page. The Report page provides CSV and JSON exports for detailed data analysis.
 
 #### 📊 Export to CSV
 
 Export raw data for analysis in Excel or other tools.
 
-**Two Options:**
+**Four Export Types:**
 
 | Option | Description | Use Case |
 |--------|-------------|----------|
-| **Role Summary** | One row per role with policy configuration | Overview of role settings |
-| **Assignment Details** | One row per assignment | Detailed audit of who has access |
+| **Role Summary** | One row per role with policy configuration | Overview of Directory Roles settings |
+| **Assignment Details** | One row per assignment | Detailed audit of who has access to roles |
+| **Group Summary** | One row per group with Member/Owner policies | Overview of PIM Groups configuration |
+| **Group Assignments** | One row per group assignment | Audit of group memberships |
+
+**CSV Fields Include:**
+- Role/Group name, type, and scope
+- Assignment types (Eligible, Active, Permanent) with counts
+- Policy settings (MFA, Approval, Max Duration)
+- Principal details (User/Group, UPN, Email)
+- Schedule information (Start, End, Expiration)
+
+#### 📄 Export to JSON
+
+Export combined data in JSON format for programmatic processing.
+
+**Features:**
+- **Combined data:** Roles + Groups in single file
+- **Full detail:** All properties and nested objects preserved
+- **Machine-readable:** Easy parsing for scripts and automation
+
+**JSON Structure:**
+```json
+{
+  "roles": [...],
+  "groups": [...],
+  "metadata": {
+    "exportDate": "2026-01-24T12:00:00Z",
+    "tenantId": "...",
+    "userPrincipalName": "..."
+  }
+}
+```
 
 > [!NOTE]
-> Exports respect your current active filters. If you filter for "Global Administrator", the report will only contain data for that role.
+> Exports respect your current active filters. If you filter for "Global Administrator", the export will only contain data for that role.
 
 ---
 
@@ -229,6 +265,65 @@ When a role is expanded, you can see its PIM settings:
 | Permanent Active Allowed | Can active assignments have no expiry? |
 | Max Active Duration | Maximum duration for active assignments |
 
+### Notification Tab
+
+**For Directory Roles:**
+
+| Setting | Description |
+|---------|-------------|
+| Admin Notifications | Admins notified of eligible assignments, active assignments |
+| End User Notifications | Users notified when roles are activated |
+| Approver Notifications | Approvers notified of activation requests |
+
+Each notification type can have:
+- Default recipients (admins, requestors, approvers)
+- Additional recipients (specific users/groups)
+- Critical notifications only flag
+
+---
+
+## PIM Groups Configuration
+
+PIM Groups have unique characteristics compared to Directory Roles:
+
+### Member vs Owner Policies
+
+Each PIM Group has **two separate policies**:
+- **Member Policy**: Controls group membership assignments
+- **Owner Policy**: Controls group ownership assignments
+
+Both policies have the same three tabs (Activation, Assignment, Notification) but with independent settings.
+
+### Managed vs Unmanaged Groups
+
+**Managed Groups:**
+- Have PIM policies configured
+- Show with purple styling
+- Display "PIM Configured" badge
+- Full policy details available in expanded view
+
+**Unmanaged Groups:**
+- Role-assignable but no PIM policies
+- Show with red warning styling
+- Display "Unmanaged Group" badge
+- Security risk indicator (permanent assignments bypass PIM)
+- Direct link to Entra admin center for review
+
+> [!WARNING]
+> **Security Gap**: Unmanaged groups can assign privileged roles without PIM controls (no MFA, approval, or time limits). Review and onboard these groups to PIM.
+
+### Group Card Components
+
+**Collapsed View:**
+- Group name + type badge (Security, M365, Mail-enabled)
+- Assignment counts: X Eligible Members, Y Active Members, Z Owners
+- "PIM Configured" or "Unmanaged" badge
+- Role-assignable indicator
+
+**Expanded View:**
+- **Group Assignments** section: Lists all members and owners with assignment types
+- **PIM Configuration** section: Two tabs (Member Policy, Owner Policy), each with Activation/Assignment/Notification settings
+
 ---
 
 ## Loading States
@@ -299,5 +394,5 @@ Role exists but has no PIM policy configured.
 
 ## Next Steps
 
-- [Configure Page (Planned)](./07-configure-page.md) - View planned functionality
+- [Configure Page (Planned)](./08-configure-page.md) - View planned functionality
 - [Data Flow](./03-data-flow.md) - Understand how data loads
