@@ -1,6 +1,6 @@
 # Belangrijke Concepten
 
-Dit document legt belangrijke technische concepten uit die in PIM Configurator worden gebruikt.
+Dit document legt belangrijke technische concepten uit die in PIM Manager worden gebruikt.
 
 ---
 
@@ -64,7 +64,7 @@ Dit document legt belangrijke technische concepten uit die in PIM Configurator w
 
 **Wat het is**: Een React pattern voor het delen van state over meerdere componenten zonder "prop drilling".
 
-**In PIM Configurator**: `PimDataContext` biedt gedeelde toegang tot:
+**In PIM Manager**: `PimDataContext` biedt gedeelde toegang tot:
 - Roldata
 - Laadstatussen
 - Ophaalfuncties

@@ -1,6 +1,6 @@
 # Dataflow
 
-Dit document legt uit hoe PIM Configurator data ophaalt en verwerkt. Het begrijpen van deze flow helpt je problemen op te lossen en prestatie-eigenschappen te begrijpen.
+Dit document legt uit hoe PIM Manager data ophaalt en verwerkt. Het begrijpen van deze flow helpt je problemen op te lossen en prestatie-eigenschappen te begrijpen.
 
 ---
 
@@ -292,13 +292,13 @@ Om het opnieuw ophalen van data bij elke pagina-navigatie te voorkomen:
 
 | Sleutel              | Inhoud                  | Vervaldatum |
 | -------------------- | ----------------------- | ----------- |
-| `pim_data_cache`     | Geserialiseerde roldata | 5 minuten   |
+| `pim_data_cache`     | Geserialiseerde roldata | 60 minuten   |
 | `pim_data_timestamp` | Laatste ophaal tijd     | -           |
 
 Wanneer je navigeert tussen pagina's:
 
 1. App controleert of gecachte data bestaat
-2. Als cache vers is (< 5 minuten), gebruik het
+2. Als cache vers is (< 60 minuten), gebruik het
 3. Als cache verlopen is, haal nieuwe data op
 
 ### Vernieuwen Knop
@@ -410,7 +410,7 @@ flowchart TB
 **Oplossing**:
 
 1. Klik de Vernieuwen knop
-2. Of wacht 5 minuten voor automatische cache-vervaldatum
+2. Of wacht 60 minuten voor automatische cache-vervaldatum
 
 ---
 

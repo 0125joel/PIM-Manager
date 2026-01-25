@@ -1,6 +1,6 @@
 # Key Concepts
 
-This document explains important technical concepts used in PIM Configurator. Understanding these helps you navigate the codebase and troubleshoot issues.
+This document explains important technical concepts used in PIM Manager. Understanding these helps you navigate the codebase and troubleshoot issues.
 
 ---
 
@@ -74,7 +74,7 @@ flowchart LR
 
 **What it is**: A React pattern for sharing state across multiple components without "prop drilling".
 
-**In PIM Configurator**: `PimDataContext` provides shared access to:
+**In PIM Manager**: `PimDataContext` provides shared access to:
 - Role data
 - Loading states
 - Fetch functions

@@ -1,6 +1,6 @@
 # Data Flow
 
-This document explains how PIM Configurator fetches and processes data. Understanding this flow helps you troubleshoot issues and understand performance characteristics.
+This document explains how PIM Manager fetches and processes data. Understanding this flow helps you troubleshoot issues and understand performance characteristics.
 
 ---
 
@@ -292,13 +292,13 @@ To avoid re-fetching data on every page navigation:
 
 | Key                  | Content              | Expiry    |
 | -------------------- | -------------------- | --------- |
-| `pim_data_cache`     | Serialized role data | 5 minutes |
+| `pim_data_cache`     | Serialized role data | 60 minutes |
 | `pim_data_timestamp` | Last fetch time      | -         |
 
 When you navigate between pages:
 
 1. App checks if cached data exists
-2. If cache is fresh (< 5 minutes), use it
+2. If cache is fresh (< 60 minutes), use it
 3. If cache is stale, fetch new data
 
 ### Refresh Button
@@ -410,7 +410,7 @@ flowchart TB
 **Solution**:
 
 1. Click the Refresh button
-2. Or wait 5 minutes for automatic cache expiry
+2. Or wait 60 minutes for automatic cache expiry
 
 ---
 

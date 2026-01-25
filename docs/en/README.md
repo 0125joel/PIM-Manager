@@ -15,7 +15,6 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 | [Dashboard Page](./07-dashboard-page.md) | Visual overview and security insights |
 | [Report Page](./08-report-page.md) | Detailed role configuration view |
 | [Configure Page](./09-configure-page.md) | Planned write capabilities |
-| [Deployment](./10-deployment.md) | Hosting on Cloudflare Pages |
 | [Settings](./11-settings.md) | Workloads and consent framework |
 
 ---

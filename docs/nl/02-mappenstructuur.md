@@ -1,6 +1,6 @@
 # Mappenstructuur
 
-Dit document legt de organisatie van de PIM Configurator codebase uit. Het begrijpen van deze structuur helpt je navigeren door de code en specifieke functionaliteit te vinden.
+Dit document legt de organisatie van de PIM Manager codebase uit. Het begrijpen van deze structuur helpt je navigeren door de code en specifieke functionaliteit te vinden.
 
 ---
 

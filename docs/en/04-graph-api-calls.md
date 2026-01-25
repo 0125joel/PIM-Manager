@@ -1,6 +1,6 @@
 # Microsoft Graph API Calls
 
-This document details all Microsoft Graph API endpoints used by PIM Configurator. Understanding these helps with troubleshooting, permission scoping, and security reviews.
+This document details all Microsoft Graph API endpoints used by PIM Manager. Understanding these helps with troubleshooting, permission scoping, and security reviews.
 
 ---
 

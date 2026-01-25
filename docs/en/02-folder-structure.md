@@ -1,6 +1,6 @@
 # Folder Structure
 
-This document explains the organization of the PIM Configurator codebase. Understanding this structure helps you navigate the code and find specific functionality.
+This document explains the organization of the PIM Manager codebase. Understanding this structure helps you navigate the code and find specific functionality.
 
 ---
 

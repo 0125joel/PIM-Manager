@@ -117,7 +117,7 @@ Any modern browser (Chrome, Edge, Firefox, Safari) with JavaScript enabled.
 │  ├── directoryRoleService (Roles & Policies)            │
 │  ├── pimGroupService (PIM Groups)                       │
 │  ├── deltaService (Incremental Updates)                 │
-│  └── SessionStorage (5-minute cache)                    │
+│  └── SessionStorage (60-minute cache)                   │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
 └─────────────────────────────────────────────────────────┘
