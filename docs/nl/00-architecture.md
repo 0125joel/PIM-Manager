@@ -19,7 +19,6 @@ Dit document beschrijft de volledige architectuur en ontwerpbeslissingen van de 
 14. [Security Architectuur](#security-architectuur)
 15. [Foutafhandeling](#foutafhandeling)
 16. [Deployment Architectuur](#deployment-architectuur)
-17. [Test Strategie](#test-strategie)
 
 ---
 
@@ -808,49 +807,6 @@ Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./08-deplo
 
 ---
 
-## Test Strategie
-
-### Test Piramide
-
-```
-         ┌─────────────────┐
-         │     E2E         │  ← Manual testing, Playwright (future)
-         │   (few tests)   │
-         └───────┬─────────┘
-                 │
-         ┌───────┴─────────┐
-         │  Integration    │  ← Critical user flows
-         │  (some tests)   │
-         └───────┬─────────┘
-                 │
-         ┌───────┴─────────┐
-         │     Unit        │  ← Utilities, hooks, services
-         │  (many tests)   │
-         └─────────────────┘
-```
-
-### Prioriteiten
-
-| Component | Test Type | Priority | Reason |
-|-----------|-----------|----------|--------|
-| `workerPool.ts` | Unit | 🔴 High | Kritieke utility voor alle fetching |
-| `useAggregatedData.ts` | Unit | 🔴 High | Data aggregation logic |
-| `pimApi.ts` | Unit | 🟡 Medium | Policy parsing functions |
-| Dashboard flow | E2E | 🟡 Medium | Happy path validation |
-| Error handling | Integration | 🟡 Medium | 429 throttling scenario |
-
-### Test Tools (Recommended)
-
-| Tool | Purpose |
-|------|---------|
-| **Jest** | Unit test runner |
-| **React Testing Library** | Component tests |
-| **Playwright** | E2E browser tests |
-| **MSW** | Mock Graph API responses |
-
-> **Note**: Test infrastructure is not yet implemented. Deze sectie dient als roadmap.
-
----
 
 ## Appendix: Bestanden Structuur
 
@@ -893,5 +849,3 @@ src/
 ```
 
 ---
-
-*Laatste update: 24 december 2024*

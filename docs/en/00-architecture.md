@@ -849,5 +849,3 @@ src/
 ```
 
 ---
-
-*Last updated: December 24, 2024*
