@@ -12,7 +12,7 @@
   <p>
     <a href="#about">About</a> •
     <a href="#key-benefits">Key Benefits</a> •
-    <a href="docs/README.md">Documentation</a> •
+    <a href="docs/en/README.md">Documentation</a> •
     <a href="#transparency">Transparency</a>
   </p>
 </div>
@@ -56,7 +56,8 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory.
 
 *   [**Architecture**](docs/en/00-architecture.md) - Deep dive into the client-side design.
 *   [**Data Flow**](docs/en/03-data-flow.md) - How we fetch and process Graph data.
-*   [**Security Model**](docs/en/05-security.md) - Token handling and consent model.
+*   [**Security Model**](docs/en/05-security.md) - Authentication, authorization, and data protection.
+*   [**Key Concepts**](docs/en/06-key-concepts.md) - PIM terminology and technical concepts.
 
 ## Transparency
 

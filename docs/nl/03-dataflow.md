@@ -8,10 +8,10 @@ Dit document legt uit hoe PIM Configurator data ophaalt en verwerkt. Het begrijp
 
 Data laden gebeurt in **twee fasen** om een snelle gebruikerservaring te bieden:
 
-| Fase | Wat Laadt | Duur | Gebruikerservaring |
-|------|-----------|------|-------------------|
-| **Fase 1** | Roldefinities + toewijzingen | ~10-15 seconden | UI toont direct |
-| **Fase 2** | PIM-configuraties (policies) | ~2-3 minuten | Laadt op achtergrond |
+| Fase       | Wat Laadt                    | Duur            | Gebruikerservaring   |
+| ---------- | ---------------------------- | --------------- | -------------------- |
+| **Fase 1** | Roldefinities + toewijzingen | ~10-15 seconden | UI toont direct      |
+| **Fase 2** | PIM-configuraties (policies) | ~2-3 minuten    | Laadt op achtergrond |
 
 > [!TIP]
 > De twee-fasen aanpak betekent dat gebruikers bijna direct kunnen beginnen met de data, terwijl gedetailleerde PIM-configuraties op de achtergrond blijven laden.
@@ -94,12 +94,12 @@ sequenceDiagram
 
 Om throttling te voorkomen, gebruikt achtergrond laden:
 
-| Beveiliging | Waarde | Doel |
-|-------------|--------|------|
-| **Gelijktijdige workers** | 8 (geoptimaliseerd) | Maximum parallelle requests |
-| **Vertraging tussen requests** | 300ms (geoptimaliseerd) | Per-worker cooldown |
-| **Retry logica** | Ingebouwd | Handelt tijdelijke fouten af |
-| **Quota gebruik** | 10-22% | Conservatief, veilig voor alle tenant groottes |
+| Beveiliging                    | Waarde                  | Doel                                           |
+| ------------------------------ | ----------------------- | ---------------------------------------------- |
+| **Gelijktijdige workers**      | 8 (geoptimaliseerd)     | Maximum parallelle requests                    |
+| **Vertraging tussen requests** | 300ms (geoptimaliseerd) | Per-worker cooldown                            |
+| **Retry logica**               | Ingebouwd               | Handelt tijdelijke fouten af                   |
+| **Quota gebruik**              | 10-22%                  | Conservatief, veilig voor alle tenant groottes |
 
 Dit resulteert in ~26 policies per seconde, voltooiend in **~3-5 seconden voor 50 rollen** (70-80% sneller dan de originele implementatie).
 
@@ -146,12 +146,15 @@ sequenceDiagram
 Voor **PIM voor Groepen** wordt een andere, geoptimaliseerde strategie gebruikt omdat de standaard API's traag kunnen zijn voor groepen.
 
 ### 1. Discovery (Beta Endpoint)
-We gebruiken eerst een speciaal endpoints om *alleen* groepen te vinden die daadwerkelijk PIM aan hebben staan:
+
+We gebruiken eerst een speciaal endpoints om _alleen_ groepen te vinden die daadwerkelijk PIM aan hebben staan:
+
 - **Endpoint**: `/beta/identityGovernance/privilegedAccess/group/resources`
 - **Doel**: Voorkomt het scannen van duizenden groepen die geen PIM gebruiken.
 - **Permission**: `PrivilegedAccess.Read.AzureADGroup`
 
 ### 2. Parallel Laden
+
 Na discovery worden details parallel opgehaald (net als bij rollen):
 
 ```mermaid
@@ -180,6 +183,7 @@ sequenceDiagram
 ```
 
 **Detectielogica:**
+
 - Haal alle groepen op met `isAssignableToRole: true`
 - Vergelijk met PIM-onboarded groepen uit Fase 1
 - Groepen met toewijzingscapaciteit maar zonder PIM-beleid = **Unmanaged**
@@ -188,6 +192,7 @@ sequenceDiagram
 
 **Beveiligingsimpact:**
 Unmanaged groepen kunnen geprivilegieerde rollen toewijzen zonder PIM-controles:
+
 - Geen tijdgebonden activaties
 - Geen MFA-vereisten
 - Geen goedkeuringsworkflows
@@ -253,6 +258,7 @@ sequenceDiagram
 Zodra data is opgehaald uit de Graph API, is het niet direct klaar voor de grafieken en kaarten op het dashboard. Het gaat eerst door de **Aggregator Service**.
 
 ### Van JSON naar Inzichten
+
 De Graph API retourneert ruwe JSON-objecten voor roltoewijzingen, eligibility-schema's en groepslidmaatschappen. De Aggregator-logica (voornamelijk in `useAggregatedData` en service-utilities):
 
 1.  **Normaliseert** de verschillende objectstructuren naar een uniform formaat.
@@ -261,6 +267,7 @@ De Graph API retourneert ruwe JSON-objecten voor roltoewijzingen, eligibility-sc
 
 **Voorbeeld: Een Beveiligingslek Detecteren**
 Een rauw Groep-object uit Graph ziet er zo uit:
+
 ```json
 {
   "id": "group-id-123",
@@ -268,9 +275,11 @@ Een rauw Groep-object uit Graph ziet er zo uit:
   "isRoleAssignable": true
 }
 ```
+
 De Aggregator controleert dit vervolgens tegen de PIM-policies. Als er geen policy overeenkomt met `group-id-123`, markeert de app dit als een **Unmanaged Group**. Zo wordt een simpele JSON-eigenschap getransformeerd naar een beveiligingsinzicht in je dashboard-grafieken.
 
 ### Verwerking in de Browser
+
 Cruciaal is dat al deze logica **volledig in je browser** plaatsvindt. We sturen je tenant-data niet naar een backend voor verwerking. Jouw CPU doet het zware werk van het mappen van duizenden JSON-nodes naar het visuele rapport, waardoor je beveiligingsdata binnen je sessie blijft.
 
 ---
@@ -281,12 +290,13 @@ Om het opnieuw ophalen van data bij elke pagina-navigatie te voorkomen:
 
 ### Session Storage Cache
 
-| Sleutel | Inhoud | Vervaldatum |
-|---------|--------|-------------|
-| `pim_data_cache` | Geserialiseerde roldata | 5 minuten |
-| `pim_data_timestamp` | Laatste ophaal tijd | - |
+| Sleutel              | Inhoud                  | Vervaldatum |
+| -------------------- | ----------------------- | ----------- |
+| `pim_data_cache`     | Geserialiseerde roldata | 5 minuten   |
+| `pim_data_timestamp` | Laatste ophaal tijd     | -           |
 
 Wanneer je navigeert tussen pagina's:
+
 1. App controleert of gecachte data bestaat
 2. Als cache vers is (< 5 minuten), gebruik het
 3. Als cache verlopen is, haal nieuwe data op
@@ -294,6 +304,7 @@ Wanneer je navigeert tussen pagina's:
 ### Vernieuwen Knop
 
 De "Vernieuwen" knop op elke pagina:
+
 - Roept `refreshAllWorkloads()` aan vanuit `UnifiedPimContext`
 - Deze functie **delegeert** naar geregistreerde refresh handlers per workload
 - Elke workload (DirectoryRoles, PIM Groups, etc.) registreert zijn refresh functie via `registerWorkloadRefresh`
@@ -311,7 +322,7 @@ Wanneer je op "Vernieuwen" klikt en er is een eerdere sync geweest:
 3. Als er wijzigingen zijn:
    - Identificeert getroffen rollen
    - Update alleen die specifieke rollen in de lokale state
-   - Haalt policies opnieuw op voor *alleen* de gewijzigde rollen
+   - Haalt policies opnieuw op voor _alleen_ de gewijzigde rollen
 4. Als Delta token verlopen is (410 Gone), valt automatisch terug op volledige verversing
 
 **Voordeel:** Verversen duurt vaak < 1 seconde in plaats van 10+ seconden.
@@ -319,6 +330,7 @@ Wanneer je op "Vernieuwen" klikt en er is een eerdere sync geweest:
 ### Verzoek Annulering (AbortController)
 
 Om race conditions en onnodig netwerkverkeer te voorkomen:
+
 1. **Snel Klikken:** Meerdere keren op "Vernieuwen" klikken annuleert het vorige onvoltooide verzoek voordat een nieuwe start.
 2. **Pagina Navigatie:** Het verlaten van een pagina annuleert automatisch alle lopende achtergrond fetches.
 3. **Consistentie:** Dit geldt voor zowel Directory Roles als PIM Groups workloads.
@@ -368,14 +380,14 @@ flowchart TB
 
 ## Prestatie Kenmerken
 
-| Metriek | Typische Waarde | Opmerkingen |
-|---------|-----------------|-------------|
-| Fase 1 tijd | 10-15 seconden | Afhankelijk van tenant grootte |
-| Fase 2 tijd | ~3-5 seconden (50 rollen) | Geoptimaliseerd met 8 workers, 300ms vertraging |
-| Geheugengebruik | ~5-10 MB | Gecacht in browser |
-| API calls (Fase 1) | 4 | Definities + 3 toewijzingstypes |
-| API calls (Fase 2) | 130 | Één per rol |
-| Doorvoer | ~26 req/sec | 70-80% sneller dan origineel |
+| Metriek            | Typische Waarde           | Opmerkingen                                     |
+| ------------------ | ------------------------- | ----------------------------------------------- |
+| Fase 1 tijd        | 10-15 seconden            | Afhankelijk van tenant grootte                  |
+| Fase 2 tijd        | ~3-5 seconden (50 rollen) | Geoptimaliseerd met 8 workers, 300ms vertraging |
+| Geheugengebruik    | ~5-10 MB                  | Gecacht in browser                              |
+| API calls (Fase 1) | 4                         | Definities + 3 toewijzingstypes                 |
+| API calls (Fase 2) | 130                       | Één per rol                                     |
+| Doorvoer           | ~26 req/sec               | 70-80% sneller dan origineel                    |
 
 ---
 
@@ -386,6 +398,7 @@ flowchart TB
 **Oorzaak**: API throttling of netwerkproblemen
 
 **Oplossing**:
+
 1. Wacht een paar minuten tot throttling verdwijnt
 2. Klik Vernieuwen om opnieuw te starten
 3. Controleer browserconsole op fouten
@@ -395,6 +408,7 @@ flowchart TB
 **Oorzaak**: Cache niet vernieuwd
 
 **Oplossing**:
+
 1. Klik de Vernieuwen knop
 2. Of wacht 5 minuten voor automatische cache-vervaldatum
 

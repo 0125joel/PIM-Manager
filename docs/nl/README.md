@@ -10,12 +10,13 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 | [Mappenstructuur](./02-mappenstructuur.md) | Overzicht van de code-organisatie |
 | [Dataflow](./03-dataflow.md) | Hoe data wordt opgehaald en verwerkt |
 | [Graph API Calls](./04-graph-api-calls.md) | Welke Microsoft Graph APIs worden gebruikt |
-| [Belangrijke Concepten](./05-belangrijke-concepten.md) | Uitleg van technische concepten |
-| [Dashboard Pagina](./06-dashboard-pagina.md) | Visueel overzicht en beveiligingsinzichten |
-| [Rapport Pagina](./07-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
-| [Configuratie Pagina](./08-configuratie-pagina.md) | Geplande schrijfcapaciteiten |
-| [Deployment](./09-deployment.md) | Hosting op Cloudflare Pages |
-| [Instellingen](./10-settings.md) | Workloads en consent framework |
+| [Beveiligingsmodel](./05-beveiliging.md) | Authenticatie, autorisatie en databescherming |
+| [Belangrijke Concepten](./06-belangrijke-concepten.md) | Uitleg van technische concepten |
+| [Dashboard Pagina](./07-dashboard-pagina.md) | Visueel overzicht en beveiligingsinzichten |
+| [Rapport Pagina](./08-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
+| [Configuratie Pagina](./09-configuratie-pagina.md) | Geplande schrijfcapaciteiten |
+| [Deployment](./10-deployment.md) | Hosting op Cloudflare Pages |
+| [Instellingen](./11-settings.md) | Workloads en consent framework |
 
 ---
 
@@ -30,5 +31,6 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 
 ## Hulp Nodig?
 
-- Bekijk [Belangrijke Concepten](./05-belangrijke-concepten.md) voor uitleg van technische termen
+- Bekijk [Belangrijke Concepten](./06-belangrijke-concepten.md) voor uitleg van technische termen
 - Lees [Dataflow](./03-dataflow.md) om te begrijpen hoe de app data ophaalt
+- Lees het [Beveiligingsmodel](./05-beveiliging.md) om authenticatie en databescherming te begrijpen
