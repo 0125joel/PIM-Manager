@@ -5,10 +5,12 @@ import { Users, UserCheck, Clock, ChevronRight, Search, Shield } from "lucide-re
 import Link from "next/link";
 import { PimGroupData, GroupType } from "@/types/pimGroup.types";
 import { getAggregatedGroupStats } from "@/services/pimGroupService";
+import { Badge } from "@/components/ui/Badge";
 
 interface GroupsOverviewProps {
     groupsData: PimGroupData[];
     loading: boolean;
+    viewMode?: "basic" | "advanced";
 }
 
 // ... types and imports remain ...
@@ -20,8 +22,9 @@ import { useWorkloadVisibility } from "@/components/WorkloadChips";
 
 // ... GroupsOverviewProps remain ...
 
-export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
+export function GroupsOverview({ groupsData, loading, viewMode = "basic" }: GroupsOverviewProps) {
     const [searchTerm, setSearchTerm] = useState("");
+    const isBasic = viewMode === "basic";
 
     // Check visibility toggle from WorkloadChips
     const isUnmanagedVisible = useWorkloadVisibility("unmanagedGroups");
@@ -35,6 +38,12 @@ export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
 
     const unmanagedCount = unmanagedGroups.length;
     const managedCount = groupsData.length - unmanagedCount;
+    const hasUnmanagedGroups = unmanagedCount > 0;
+
+    // Calculate item count based on scenario
+    const itemCount = isBasic
+        ? (hasUnmanagedGroups ? 5 : 3)  // Basic: 5 with toggle, 3 without
+        : (hasUnmanagedGroups ? 5 : 8); // Advanced: 5 with toggle, 8 without
 
     // Aggregate stats across ONLY MANAGED groups (Unmanaged have 0 assignments by definition)
     const stats = useMemo(() => getAggregatedGroupStats(groupsData.filter(g => g.isManaged !== false)), [groupsData]);
@@ -63,8 +72,8 @@ export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
 
         return sorted
             .filter(g => g.group.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
-            .slice(0, 5); // Limit to 5 for compact dashboard
-    }, [groupsData, searchTerm, isUnmanagedVisible]);
+            .slice(0, itemCount);
+    }, [groupsData, searchTerm, isUnmanagedVisible, isManagedVisible, itemCount]);
 
     if (loading) {
         // ... loading skeleton ...
@@ -97,8 +106,11 @@ export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
         );
     }
 
+    // Card should be large (h-full) except for basic view without toggle
+    const isLargeCard = !isBasic || hasUnmanagedGroups;
+
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden h-full flex flex-col">
+        <div className={`bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col ${isLargeCard ? "h-full" : "h-[580px]"}`}>
             {/* Header */}
             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -114,10 +126,11 @@ export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
                             )}
                             {/* Only show unmanaged count if visible */}
                             {isUnmanagedVisible && unmanagedCount > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    {unmanagedCount} Unmanaged
-                                </span>
+                                <Badge
+                                    icon={<AlertTriangle className="h-3 w-3" />}
+                                    label={`${unmanagedCount} Unmanaged`}
+                                    variant="error"
+                                />
                             )}
                         </div>
                     </div>
@@ -179,10 +192,12 @@ export function GroupsOverview({ groupsData, loading }: GroupsOverviewProps) {
             </div>
 
             {/* Group List */}
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 flex-1">
-                {filteredGroups.map((groupData) => (
-                    <GroupRow key={groupData.group.id} groupData={groupData} />
-                ))}
+            <div className={`flex-1 min-h-0 ${isLargeCard ? "overflow-y-auto" : ""} ${!isBasic ? 'flex flex-col justify-between' : ''}`}>
+                <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {filteredGroups.map((groupData) => (
+                        <GroupRow key={groupData.group.id} groupData={groupData} />
+                    ))}
+                </div>
             </div>
 
             {/* Footer */}

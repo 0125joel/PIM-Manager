@@ -4,17 +4,24 @@ import { RoleDetailData } from "@/types/directoryRole.types";
 import { useState, useMemo } from "react";
 import { Search, Filter, ChevronRight, Shield, CheckCircle2, AlertTriangle, Users, UserCheck, Clock } from "lucide-react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/Badge";
 
 interface DashboardRoleOverviewProps {
     rolesData: RoleDetailData[];
     loading: boolean;
     viewMode?: "basic" | "advanced";
+    hasUnmanagedGroups?: boolean;
 }
 
-export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced" }: DashboardRoleOverviewProps) {
+export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced", hasUnmanagedGroups = false }: DashboardRoleOverviewProps) {
     const isBasic = viewMode === "basic";
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState<"all" | "privileged" | "pim">("all");
+
+    // Calculate item count based on scenario
+    const itemCount = isBasic
+        ? (hasUnmanagedGroups ? 8 : 5)  // Basic: 8 with toggle, 5 without
+        : 6;                              // Advanced: always 6
 
     const filteredRoles = rolesData.filter(role => {
         const matchesSearch = role.definition.displayName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -25,7 +32,7 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
         if (filterType === "pim") return !!role.policy;
 
         return true;
-    }).slice(0, 5); // Limit to 5 for compact dashboard
+    }).slice(0, itemCount);
 
     // Helper function to get policy requirements
     const getPolicyBadges = (role: RoleDetailData) => {
@@ -76,8 +83,11 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
         );
     }
 
+    // Card should be large (h-full) except for basic view without toggle
+    const isLargeCard = !isBasic || hasUnmanagedGroups;
+
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden h-full flex flex-col">
+        <div className={`bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col ${isLargeCard ? "h-full" : "h-[580px]"}`}>
             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                     Role overview
@@ -106,8 +116,8 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
                 </div>
             </div>
 
-            <div className="divide-y divide-zinc-200 dark:divide-zinc-800 flex-1">
-                {filteredRoles.map((role) => {
+            <div className={`divide-y divide-zinc-200 dark:divide-zinc-800 flex-1 min-h-0 ${isLargeCard ? "overflow-y-auto" : ""}`}>
+                    {filteredRoles.map((role) => {
                     const policyBadges = getPolicyBadges(role);
                     const totalAssignments = role.assignments.permanent.length + role.assignments.eligible.length + role.assignments.active.length;
 
@@ -131,10 +141,11 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
                                         {isBasic ? (
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 {role.policy && (
-                                                    <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                                                        <CheckCircle2 className="h-3 w-3" />
-                                                        PIM configured
-                                                    </span>
+                                                    <Badge
+                                                        icon={<CheckCircle2 className="h-3 w-3" />}
+                                                        label="PIM configured"
+                                                        variant="success"
+                                                    />
                                                 )}
                                                 {totalAssignments > 0 ? (
                                                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -149,22 +160,25 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
                                                 {/* Advanced mode: detailed assignment counts */}
                                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                                                     {role.assignments.permanent.length > 0 && (
-                                                        <span className="inline-flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                                                            <Users className="h-3 w-3" />
-                                                            {role.assignments.permanent.length} Permanent
-                                                        </span>
+                                                        <Badge
+                                                            icon={<Users className="h-3 w-3" />}
+                                                            label={`${role.assignments.permanent.length} Permanent`}
+                                                            variant="amber"
+                                                        />
                                                     )}
                                                     {role.assignments.eligible.length > 0 && (
-                                                        <span className="inline-flex items-center gap-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                                                            <UserCheck className="h-3 w-3" />
-                                                            {role.assignments.eligible.length} Eligible
-                                                        </span>
+                                                        <Badge
+                                                            icon={<UserCheck className="h-3 w-3" />}
+                                                            label={`${role.assignments.eligible.length} Eligible`}
+                                                            variant="green"
+                                                        />
                                                     )}
                                                     {role.assignments.active.length > 0 && (
-                                                        <span className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
-                                                            <Clock className="h-3 w-3" />
-                                                            {role.assignments.active.length} Active
-                                                        </span>
+                                                        <Badge
+                                                            icon={<Clock className="h-3 w-3" />}
+                                                            label={`${role.assignments.active.length} Active`}
+                                                            variant="blue"
+                                                        />
                                                     )}
                                                     {totalAssignments === 0 && (
                                                         <span className="text-xs text-zinc-500">No assignments</span>
@@ -175,35 +189,26 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {role.policy ? (
                                                         <>
-                                                            <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
-                                                                <CheckCircle2 className="h-3 w-3" />
-                                                                PIM
-                                                            </span>
+                                                            <Badge
+                                                                icon={<CheckCircle2 className="h-3 w-3" />}
+                                                                label="PIM"
+                                                                variant="success"
+                                                            />
                                                             {policyBadges?.hasApproval && (
-                                                                <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full">
-                                                                    Approval
-                                                                </span>
+                                                                <Badge label="Approval" variant="purple" />
                                                             )}
                                                             {policyBadges?.hasMfa && (
-                                                                <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
-                                                                    MFA
-                                                                </span>
+                                                                <Badge label="MFA" variant="blue" />
                                                             )}
                                                             {policyBadges?.hasJustification && (
-                                                                <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full">
-                                                                    Justification
-                                                                </span>
+                                                                <Badge label="Justification" variant="indigo" />
                                                             )}
                                                             {policyBadges?.maxDuration && policyBadges.maxDuration !== "N/A" && (
-                                                                <span className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">
-                                                                    Max: {policyBadges.maxDuration}
-                                                                </span>
+                                                                <Badge label={`Max: ${policyBadges.maxDuration}`} variant="orange" />
                                                             )}
                                                         </>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
-                                                            No policy
-                                                        </span>
+                                                        <Badge label="No policy" variant="neutral" />
                                                     )}
                                                 </div>
                                             </>

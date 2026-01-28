@@ -43,6 +43,7 @@ function DashboardContent() {
     const isSecurityAlertsVisible = useWorkloadVisibility("securityAlerts");
     const isDirectoryRolesVisible = useWorkloadVisibility("directoryRoles");
     const isPimGroupsVisible = useWorkloadVisibility("pimGroups");
+    const isUnmanagedGroupsVisible = useWorkloadVisibility("unmanagedGroups");
 
     // Get PIM Groups data and refresh function from UnifiedPimContext
     const { workloads, refreshAllWorkloads } = useUnifiedPimData();
@@ -240,7 +241,7 @@ function DashboardContent() {
 
             {/* Main Content Section - Role & Groups Overview side by side */}
             {(isDirectoryRolesVisible || isPimGroupsVisible) && (
-                <div className={`grid gap-6 mb-8 ${isDirectoryRolesVisible && isPimGroupsVisible
+                <div className={`grid gap-6 mb-8 items-stretch ${isDirectoryRolesVisible && isPimGroupsVisible
                     ? "grid-cols-1 lg:grid-cols-2"
                     : "grid-cols-1"
                     }`}>
@@ -250,6 +251,7 @@ function DashboardContent() {
                             rolesData={rolesData}
                             loading={loading}
                             viewMode={isAdvanced ? "advanced" : "basic"}
+                            hasUnmanagedGroups={isUnmanagedGroupsVisible && pimGroupsData.some(g => g.isManaged === false)}
                         />
                     )}
 
@@ -258,6 +260,7 @@ function DashboardContent() {
                         <GroupsOverview
                             groupsData={pimGroupsData}
                             loading={pimGroupsLoading}
+                            viewMode={isAdvanced ? "advanced" : "basic"}
                         />
                     )}
                 </div>
