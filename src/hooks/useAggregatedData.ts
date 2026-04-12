@@ -137,7 +137,7 @@ function useWorkloadVisibility() {
         window.addEventListener("storage", checkVisibility);
 
         // Poll for same-tab changes (localStorage doesn't fire storage event in same tab)
-        const interval = setInterval(checkVisibility, 500);
+        const interval = setInterval(checkVisibility, 2000);
 
         return () => {
             window.removeEventListener("storage", checkVisibility);

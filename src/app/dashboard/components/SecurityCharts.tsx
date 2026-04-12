@@ -2,7 +2,7 @@
 
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { PimGroupData } from "@/types/pimGroup.types";
-import { RoleFilterState } from "@/types/roleFilters";
+import { RoleFilterState } from '@/types/roleFilters.types';
 import { useMemo, useState, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Loader2 } from "lucide-react";
@@ -72,26 +72,28 @@ export function SecurityCharts({ rolesData, groupsData = [], loading, policiesLo
         setIsMounted(true);
     }, []);
 
-    const chartsData = useMemo(() => {
-        // Calculate group assignments for combined totals
-        const groupStats = {
-            eligible: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
-                sum + g.assignments.filter(a => a.assignmentType === "eligible").length, 0) : 0,
-            active: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
-                sum + g.assignments.filter(a => a.assignmentType === "active").length, 0) : 0,
-            permanent: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
-                sum + g.assignments.filter(a => a.assignmentType === "permanent").length, 0) : 0,
-        };
+    // OPTIMIZATION: Split into smaller memos to reduce recalculation
+    // Step 1: Calculate base stats (only when data or visibility changes)
+    const groupStats = useMemo(() => ({
+        eligible: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
+            sum + g.assignments.filter(a => a.assignmentType === "eligible").length, 0) : 0,
+        active: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
+            sum + g.assignments.filter(a => a.assignmentType === "active").length, 0) : 0,
+        permanent: isPimGroupsVisible ? groupsData.reduce((sum, g) =>
+            sum + g.assignments.filter(a => a.assignmentType === "permanent").length, 0) : 0,
+    }), [groupsData, isPimGroupsVisible]);
 
-        // Calculate role assignments (only if visible)
-        const roleStats = {
-            eligible: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
-                sum + (role.assignments?.eligible?.length || 0), 0) : 0,
-            active: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
-                sum + (role.assignments?.active?.length || 0), 0) : 0,
-            permanent: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
-                sum + (role.assignments?.permanent?.length || 0), 0) : 0,
-        };
+    const roleStats = useMemo(() => ({
+        eligible: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
+            sum + (role.assignments?.eligible?.length || 0), 0) : 0,
+        active: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
+            sum + (role.assignments?.active?.length || 0), 0) : 0,
+        permanent: isDirectoryRolesVisible ? rolesData.reduce((sum, role) =>
+            sum + (role.assignments?.permanent?.length || 0), 0) : 0,
+    }), [rolesData, isDirectoryRolesVisible]);
+
+    // Step 2: Build chart data from stats (depends on stats + chart modes/filters)
+    const chartsData = useMemo(() => {
 
         // Chart 1: Permanent vs Eligible (COMBINED from all enabled workloads)
         let assignmentData: { name: string; value: number; color: string }[];
@@ -393,7 +395,20 @@ export function SecurityCharts({ rolesData, groupsData = [], loading, policiesLo
         });
 
         return { assignmentData, assignmentMethodData, mfaData, approvalData, durationData, managedData, authContextData };
-    }, [rolesData, groupsData, showAllRoles, assignmentChartMode, memberChartMode, activeFilters, isDirectoryRolesVisible, isPimGroupsVisible, isUnmanagedVisible, authenticationContexts]);
+    }, [
+        // Base stats (memoized separately)
+        roleStats, groupStats,
+        // Data dependencies for policy-based charts
+        rolesData, groupsData,
+        // Chart display modes
+        assignmentChartMode, memberChartMode, showAllRoles,
+        // Filters
+        activeFilters,
+        // Visibility flags
+        isDirectoryRolesVisible, isPimGroupsVisible,
+        // Auth contexts for friendly names
+        authenticationContexts
+    ]);
 
     // Expose charts data for PDF export - use ref to prevent infinite loops
     const lastDataHashRef = useRef<string>("");

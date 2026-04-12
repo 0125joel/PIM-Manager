@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, Lock, Check, Loader2, AlertCircle, Shield, Users, AlertTriangle, ChevronDown, ChevronRight, Info, EyeOff, Bug } from "lucide-react";
-import { WorkloadType } from "@/types/workload";
-import { useIncrementalConsent, setWorkloadEnabled, WORKLOAD_SCOPES } from "@/hooks/useIncrementalConsent";
+import { X, Settings, Lock, Check, Loader2, AlertCircle, Shield, Users, AlertTriangle, ChevronDown, ChevronRight, Info, EyeOff, Bug, Wrench, LayoutDashboard, Calendar } from "lucide-react";
+import { format } from "date-fns";
+import { WorkloadType } from '@/types/workload.types';
+import { useIncrementalConsent, setWorkloadEnabled, WORKLOAD_SCOPES, WORKLOAD_WRITE_SCOPES, isWriteConsentGranted, setWriteConsentGranted } from "@/hooks/useIncrementalConsent";
 import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
 import { useMsal } from "@azure/msal-react";
 import { HELP_CONTENT } from "@/config/locales/en";
+import { Logger } from "@/utils/logger";
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -63,6 +65,8 @@ export function setWorkloadVisible(workloadId: string, visible: boolean): void {
     }
 }
 
+
+
 // Workload configuration with sub-features
 const WORKLOAD_CONFIG: WorkloadConfig[] = [
     {
@@ -99,7 +103,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({});
     const [expandedWorkloads, setExpandedWorkloads] = useState<Set<WorkloadType>>(new Set(["directoryRoles"]));
     const [logLevel, setLogLevel] = useState<string>("INFO");
-    const [activeTab, setActiveTab] = useState<"workloads" | "developer">("workloads");
+    const [activeTab, setActiveTab] = useState<"dashboard" | "configure" | "developer">("dashboard");
+    const [writeConsentStates, setWriteConsentStates] = useState<Record<string, boolean>>({});
+    const [loadingWriteConsent, setLoadingWriteConsent] = useState<string | null>(null);
 
     // Load initial log level
     useEffect(() => {
@@ -150,6 +156,33 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         if (isOpen && accounts.length > 0) {
             checkStates();
+        }
+    }, [isOpen, instance, accounts]);
+
+    // Check write consent states
+    useEffect(() => {
+        const checkWriteConsent = async () => {
+            const writeStates: Record<string, boolean> = {};
+            for (const workloadId of ["directoryRoles", "pimGroups"] as WorkloadType[]) {
+                const scopes = WORKLOAD_WRITE_SCOPES[workloadId];
+                if (scopes && scopes.length > 0) {
+                    try {
+                        await instance.acquireTokenSilent({
+                            scopes,
+                            account: accounts[0]
+                        });
+                        writeStates[workloadId] = true;
+                        setWriteConsentGranted(workloadId, true);
+                    } catch {
+                        writeStates[workloadId] = isWriteConsentGranted(workloadId);
+                    }
+                }
+            }
+            setWriteConsentStates(writeStates);
+        };
+
+        if (isOpen && accounts.length > 0) {
+            checkWriteConsent();
         }
     }, [isOpen, instance, accounts]);
 
@@ -206,7 +239,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     // Consent exists, just show
                 } catch {
                     // Consent missing, trigger popup
-                    console.log(`[Settings] Consent missing for ${workload}, triggering popup`);
+                    Logger.debug("Settings", `Consent missing for ${workload}, triggering popup`);
                     await instance.acquireTokenPopup({
                         scopes,
                         account: accounts[0]
@@ -220,7 +253,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             unifiedContext.enableWorkload(workload);
         } catch (err) {
             setError(`Failed to show ${workload}. Consent may have been cancelled.`);
-            console.error(`Show workload error:`, err);
+            Logger.error("SettingsModal", `Show workload error:`, err);
         } finally {
             setLoadingWorkload(null);
         }
@@ -241,7 +274,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             setWorkloadVisible(feature.id, true);
         } catch (err) {
             setError(`Failed to enable ${feature.name}. Please try again.`);
-            console.error(`Feature consent error:`, err);
+            Logger.error("SettingsModal", `Feature consent error:`, err);
         } finally {
             setLoadingFeature(null);
         }
@@ -266,7 +299,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 // Consent exists, just show
             } catch {
                 // Consent missing, trigger popup
-                console.log(`[Settings] Consent missing for ${feature.id}, triggering popup`);
+                Logger.debug("Settings", `Consent missing for ${feature.id}, triggering popup`);
                 await instance.acquireTokenPopup({
                     scopes: [feature.scope],
                     account: accounts[0]
@@ -280,9 +313,33 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             setFeatureEnabled(feature.id, true);
         } catch (err) {
             setError(`Failed to show ${feature.name}. Consent may have been cancelled.`);
-            console.error(`Show feature error:`, err);
+            Logger.error("SettingsModal", `Show feature error:`, err);
         } finally {
             setLoadingFeature(null);
+        }
+    };
+
+    const handleConsentWrite = async (workloadId: WorkloadType) => {
+        setError(null);
+        setLoadingWriteConsent(workloadId);
+
+        try {
+            const scopes = WORKLOAD_WRITE_SCOPES[workloadId];
+            if (!scopes || scopes.length === 0) {
+                throw new Error(`No write scopes defined for ${workloadId}`);
+            }
+
+            await instance.acquireTokenPopup({
+                scopes,
+                account: accounts[0]
+            });
+            setWriteConsentStates(prev => ({ ...prev, [workloadId]: true }));
+            setWriteConsentGranted(workloadId, true);
+        } catch (err) {
+            setError(`Failed to grant write permissions for ${workloadId}. Please try again.`);
+            Logger.error("SettingsModal", `Write consent error:`, err);
+        } finally {
+            setLoadingWriteConsent(null);
         }
     };
 
@@ -312,14 +369,24 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className="border-b border-zinc-200 dark:border-zinc-800 px-6">
                     <div className="flex gap-1 overflow-x-auto">
                         <button
-                            onClick={() => setActiveTab("workloads")}
-                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "workloads"
+                            onClick={() => setActiveTab("dashboard")}
+                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "dashboard"
                                 ? "border-blue-500 text-blue-600 dark:text-blue-400"
                                 : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                                 }`}
                         >
-                            <Shield className="h-4 w-4" />
-                            Workloads
+                            <LayoutDashboard className="h-4 w-4" />
+                            Dashboard
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("configure")}
+                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === "configure"
+                                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                                }`}
+                        >
+                            <Wrench className="h-4 w-4" />
+                            Configuration
                         </button>
                         <button
                             onClick={() => setActiveTab("developer")}
@@ -345,14 +412,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             </div>
                         )}
 
-                        {activeTab === "workloads" && (
+                        {activeTab === "dashboard" && (
                             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div>
                                     <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-1">
-                                        {HELP_CONTENT.settings.modal.workloads.title}
+                                        Dashboard Visibility & Read Access
                                     </h3>
                                     <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                                        {HELP_CONTENT.settings.modal.workloads.description}
+                                        Manage which workloads are visible on your dashboard and grant read permissions.
                                     </p>
                                 </div>
 
@@ -575,6 +642,150 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             </div>
                         )}
 
+                        {activeTab === "configure" && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div>
+                                    <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-1 flex items-center gap-2">
+                                        <Wrench className="h-5 w-5" />
+                                        Configure Permissions
+                                    </h3>
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                        Grant Write permissions to enable configuration of PIM policies and assignments.
+                                    </p>
+                                </div>
+
+                                {/* Warning about Entra roles */}
+                                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                        <p className="text-sm text-amber-900 dark:text-amber-200">
+                                            <strong>Important:</strong> Write permissions require both Graph API consent <strong>and</strong> the appropriate Entra role (e.g., Privileged Role Administrator).
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Write consent cards */}
+                                <div className="space-y-3">
+                                    {/* Directory Roles Write */}
+                                    <div className={`p-4 rounded-lg border ${writeConsentStates.directoryRoles
+                                        ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10"
+                                        : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50"
+                                        }`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${writeConsentStates.directoryRoles
+                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                                                    : "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                                    }`}>
+                                                    <Shield className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-medium text-zinc-900 dark:text-zinc-100">
+                                                            Directory Roles (Write)
+                                                        </h4>
+                                                        {writeConsentStates.directoryRoles && (
+                                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                                                <Check className="h-3 w-3" />
+                                                                Consented
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                                        Update policies and create role assignments
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="ml-4">
+                                                {writeConsentStates.directoryRoles ? (
+                                                    <div className="px-4 py-2 text-sm text-green-600 dark:text-green-400">
+                                                        Ready
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleConsentWrite("directoryRoles")}
+                                                        disabled={loadingWriteConsent === "directoryRoles"}
+                                                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                    >
+                                                        {loadingWriteConsent === "directoryRoles" ? (
+                                                            <>
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                Granting...
+                                                            </>
+                                                        ) : (
+                                                            "Grant Access"
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* PIM Groups Write */}
+                                    <div className={`p-4 rounded-lg border ${writeConsentStates.pimGroups
+                                        ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10"
+                                        : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50"
+                                        }`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${writeConsentStates.pimGroups
+                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                                                    : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                                                    }`}>
+                                                    <Users className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-medium text-zinc-900 dark:text-zinc-100">
+                                                            PIM Groups (Write)
+                                                        </h4>
+                                                        {writeConsentStates.pimGroups && (
+                                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                                                <Check className="h-3 w-3" />
+                                                                Consented
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                                        Update group policies and create eligible assignments
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="ml-4">
+                                                {writeConsentStates.pimGroups ? (
+                                                    <div className="px-4 py-2 text-sm text-green-600 dark:text-green-400">
+                                                        Ready
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleConsentWrite("pimGroups")}
+                                                        disabled={loadingWriteConsent === "pimGroups"}
+                                                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                    >
+                                                        {loadingWriteConsent === "pimGroups" ? (
+                                                            <>
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                Granting...
+                                                            </>
+                                                        ) : (
+                                                            "Grant Access"
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Info note */}
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                                        <strong>Tip:</strong> You can also grant these permissions when you first open the Configure page. Pre-consenting here saves time later.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === "developer" && (
                             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                 <div>
@@ -599,8 +810,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                             <button
                                                 onClick={() => handleLogLevelChange('INFO')}
                                                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${logLevel === 'INFO'
-                                                        ? 'bg-white dark:bg-zinc-600 shadow text-zinc-900 dark:text-zinc-100'
-                                                        : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                                                    ? 'bg-white dark:bg-zinc-600 shadow text-zinc-900 dark:text-zinc-100'
+                                                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
                                                     }`}
                                             >
                                                 INFO
@@ -608,8 +819,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                             <button
                                                 onClick={() => handleLogLevelChange('DEBUG')}
                                                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${logLevel === 'DEBUG'
-                                                        ? 'bg-white dark:bg-zinc-600 shadow text-zinc-900 dark:text-zinc-100'
-                                                        : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                                                    ? 'bg-white dark:bg-zinc-600 shadow text-zinc-900 dark:text-zinc-100'
+                                                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
                                                     }`}
                                             >
                                                 DEBUG
@@ -631,6 +842,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         )}
                     </div>
                 </div>
+
+                {/* Version footer */}
+                {process.env.NEXT_PUBLIC_APP_VERSION && (
+                    <div className="px-6 py-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>
+                            {process.env.NEXT_PUBLIC_APP_VERSION}
+                            {process.env.NEXT_PUBLIC_APP_RELEASE_DATE && (
+                                <> · {format(new Date(process.env.NEXT_PUBLIC_APP_RELEASE_DATE), "MMM d, yyyy")}</>
+                            )}
+                        </span>
+                    </div>
+                )}
             </div>
         </div>
     );

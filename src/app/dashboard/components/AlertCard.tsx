@@ -1,4 +1,4 @@
-import { SecurityAlert, getSeverityColor, getSeverityIcon, getSeverityLabel } from "@/types/securityAlerts";
+import { SecurityAlert, getSeverityColor, getSeverityIcon, getSeverityLabel } from '@/types/securityAlerts.types';
 import { formatAlertString } from "@/utils/alertFormatting";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 

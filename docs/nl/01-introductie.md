@@ -47,13 +47,15 @@ Deze applicatie is ontworpen voor:
 - Bekijk scope-informatie (Tenant-breed, App-scoped, RMAU)
 - Authentication Context weergave voor rollen die specifieke toegang vereisen
 
-### ⚙️ Configuratiepagina (Binnenkort)
-- Selecteer meerdere rollen om tegelijk te configureren
-- Pas consistente activatie-instellingen toe (MFA, goedkeuring, max. duur)
-- Maak nieuwe roltoewijzingen aan (eligible of actief)
+### ⚙️ Configuratiepagina
+- **Wizard Modus**: Begeleide stapsgewijze configuratie — workload, scope, beleid, toewijzingen, beoordeling en toepassen
+- **Handmatige Modus**: Vrije 3-kolomsindeling met gestaagde wijzigingen — selecteer rollen/groepen, configureer en wacht op toepassing
+- **Bulk Modus**: CSV-gebaseerde batchconfiguratie — upload een CSV, vergelijk met live-instellingen en pas toe op schaal
+- Pas consistente activatie-instellingen toe (MFA, goedkeuring, max. duur) voor meerdere rollen en groepen
+- Maak eligible/actieve toewijzingen aan en beheer ze met AU-scope ondersteuning
 
 > [!NOTE]
-> De Configuratiepagina is momenteel in actieve ontwikkeling en is nog niet beschikbaar voor algemeen gebruik. De focus ligt nu op **inzicht en rapportage**.
+> Schrijfmachtigingen voor Configure (`RoleManagementPolicy.ReadWrite.Directory` en gerelateerde scopes) worden aangevraagd via incrementele consent — alleen wanneer je de Configuratiepagina voor het eerst opent. Rapportagefuncties vereisen deze machtigingen niet.
 
 ---
 
@@ -70,15 +72,33 @@ De applicatie vereist een Microsoft Entra app-registratie met de volgende **gede
 | `RoleAssignmentSchedule.Read.Directory` | Lees PIM actieve toewijzingen |
 | `RoleEligibilitySchedule.Read.Directory` | Lees PIM eligible toewijzingen |
 | `RoleManagementPolicy.Read.Directory` | Lees PIM-beleid |
-| `PrivilegedAccess.Read.AzureADGroup` | Lees PIM voor Groepen toewijzingen |
 | `Policy.Read.ConditionalAccess` | Lees authenticatiecontexten |
 | `User.Read.All` | Lees gebruikersweergavenamen |
 | `Group.Read.All` | Lees groepsweergavenamen |
 | `AdministrativeUnit.Read.All` | Lees administrative unit namen |
 | `Application.Read.All` | Lees applicatienamen |
 
+**Optionele leesmachtigingen** (functies worden graceful uitgeschakeld als niet verleend):
+
+| Machtiging | Functie | Fallback Gedrag |
+|------------|---------|-----------------|
+| `RoleManagementAlert.Read.Directory` | Beveiligingswaarschuwingen paneel | Paneel verborgen bij 403 |
+| `PrivilegedAccess.Read.AzureADGroup` | PIM voor Groepen workload | Workload niet getoond in instellingen |
+| `RoleManagementPolicy.Read.AzureADGroup` | PIM Groepen policies | Groepsdata onvolledig zonder dit |
+
+**Optionele schrijfmachtigingen** (via incrementele consent, alleen bij gebruik van Configureren):
+
+| Machtiging | Doel |
+|------------|------|
+| `RoleManagementPolicy.ReadWrite.Directory` | Update PIM-beleid voor Directory Rollen |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Maak eligible toewijzingen voor Directory Rollen |
+| `RoleAssignmentSchedule.ReadWrite.Directory` | Maak actieve toewijzingen voor Directory Rollen |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Update PIM-beleid voor PIM Groepen |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Maak eligible toewijzingen voor PIM Groepen |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Maak actieve toewijzingen voor PIM Groepen |
+
 > [!TIP]
-> De applicatie volgt het **least privilege principe** door uitsluitend **Read** machtigingen te gebruiken. Er zijn **geen schrijfrechten** nodig voor de rapportagefuncties.
+> De applicatie volgt het **least privilege principe**. Rapportagefuncties gebruiken alleen leesmachtigingen. Schrijfmachtigingen worden alleen aangevraagd wanneer je de Configuratiefunctie gebruikt — en alleen voor de workload die je wilt configureren.
 
 ### Ondersteunde Browsers
 
@@ -93,12 +113,21 @@ Elke moderne browser (Chrome, Edge, Firefox, Safari) met JavaScript ingeschakeld
 │                    Browser van Gebruiker                │
 ├─────────────────────────────────────────────────────────┤
 │  Next.js React Applicatie                               │
-│  ├── Dashboard Pagina                                   │
-│  ├── Rapport Pagina                                     │
-│  └── Configuratie Pagina                                │
+│  ├── Dashboard Pagina (Analyses & Inzichten)            │
+│  ├── Rapport Pagina (Gedetailleerde Configuratieweergave)│
+│  └── Configuratie Pagina (Wizard / Handmatig / Bulk)    │
 ├─────────────────────────────────────────────────────────┤
-│  PimDataContext (Gedeelde State)                        │
-│  └── directoryRoleService (Data Ophalen)                │
+│  State Management Laag                                  │
+│  ├── UnifiedPimContext (Workload Orkestratie)           │
+│  ├── DirectoryRoleContext (Directory Rollen)            │
+│  ├── ViewModeContext (UI Voorkeuren)                    │
+│  └── Delta Sync Service (Slimme Verversing)             │
+├─────────────────────────────────────────────────────────┤
+│  Data Services                                          │
+│  ├── directoryRoleService (Rollen & Policies)           │
+│  ├── pimGroupService (PIM Groepen)                      │
+│  ├── deltaService (Incrementele Updates)                │
+│  └── SessionStorage (60-minuten cache)                  │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
 └─────────────────────────────────────────────────────────┘
@@ -118,6 +147,28 @@ Alle data wordt **client-side** opgehaald in de browser van de gebruiker. De app
 
 > [!NOTE]
 > Er is geen backend server. Alle gevoelige operaties gebruiken de machtigingen van de gebruiker zelf.
+
+### Prestaties & Geavanceerde Functies
+
+**Slimme Verversing (Delta Sync):**
+- Haalt alleen wijzigingen op sinds de laatste synchronisatie, waar ondersteund
+- Vermindert datatransfer met 70-80% ten opzichte van volledige verversing
+- Automatische terugval naar volledige fetch als delta-token vervalt
+
+**SessionStorage Caching:**
+- Data blijft behouden bij paginanavigatie
+- 60-minuten versheidscontrole voor herverversing
+- Vermindert onnodige API-calls
+
+**Workload Beheer:**
+- Schakel specifieke workloads in/uit (Directory Rollen, PIM Groepen)
+- Op machtigingen gebaseerde functiezichtbaarheid
+- Synchronisatiestatus per workload
+
+**Graceful Degradation:**
+- Optionele functies (Beveiligingswaarschuwingen, PIM Groepen) verbergen bij ontbrekende machtigingen
+- Geen fatale fouten bij ontbrekende optionele machtigingen
+- Duidelijke indicatoren wanneer functies niet beschikbaar zijn
 
 ---
 

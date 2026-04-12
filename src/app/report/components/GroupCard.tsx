@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 import { PimGroupData, GroupType } from "@/types/pimGroup.types";
+import { AuthenticationContext } from "@/utils/authContextApi";
 import {
     Users,
     ChevronDown,
@@ -28,7 +29,7 @@ interface GroupCardProps {
     groupData: PimGroupData;
     isExpanded: boolean;
     onToggle: () => void;
-    authenticationContexts?: any[];
+    authenticationContexts?: AuthenticationContext[];
 }
 
 const GroupCard = memo(function GroupCard({ groupData, isExpanded, onToggle, authenticationContexts = [] }: GroupCardProps) {

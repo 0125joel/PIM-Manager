@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import { getAuthContextDisplayName } from "@/utils/authContextApi";
+import { isoDurationToLabel } from "@/utils/durationUtils";
 
 interface PimPolicySectionProps {
     policy: any;
@@ -152,7 +153,7 @@ export function PimPolicySection({ policy, loadingApprovers, approvers, authenti
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div className="bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded">
                                 <span className="block text-xs text-zinc-500 mb-1">Maximum Duration</span>
-                                <span className="font-medium">{activationExpiration?.maximumDuration || "Default"}</span>
+                                <span className="font-medium">{isoDurationToLabel(activationExpiration?.maximumDuration) || "Default"}</span>
                             </div>
                             <div className="bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded">
                                 <span className="block text-xs text-zinc-500 mb-1">On activation, require</span>
@@ -222,7 +223,7 @@ export function PimPolicySection({ policy, loadingApprovers, approvers, authenti
                                     {adminEligibleExpiration?.isExpirationRequired && adminEligibleExpiration?.maximumDuration && (
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Expire After:</span>
-                                            <span className="font-medium">{adminEligibleExpiration.maximumDuration}</span>
+                                            <span className="font-medium">{isoDurationToLabel(adminEligibleExpiration.maximumDuration)}</span>
                                         </div>
                                     )}
                                 </div>
@@ -239,7 +240,7 @@ export function PimPolicySection({ policy, loadingApprovers, approvers, authenti
                                     {adminAssignExpiration?.isExpirationRequired && adminAssignExpiration?.maximumDuration && (
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Expire After:</span>
-                                            <span className="font-medium">{adminAssignExpiration.maximumDuration}</span>
+                                            <span className="font-medium">{isoDurationToLabel(adminAssignExpiration.maximumDuration)}</span>
                                         </div>
                                     )}
                                 </div>

@@ -7,7 +7,7 @@ This document explains the organization of the PIM Manager codebase. Understandi
 ## Root Directory
 
 ```
-PIM-configurator/
+PIM-manager/
 ├── docs/                  # Documentation (you are here)
 ├── public/                # Static assets (icons, images)
 ├── src/                   # Source code (main application)
@@ -47,7 +47,7 @@ Each subfolder represents a page in the application.
 | `app/page.tsx` | Landing page (login) |
 | `app/dashboard/` | Dashboard overview |
 | `app/report/` | Main report page with all role data |
-| `app/configure/` | (Coming Soon) Bulk configuration page |
+| `app/configure/` | PIM configuration page (Wizard, Manual, Bulk modes) |
 | `app/layout.tsx` | Shared layout (navigation, providers) |
 | `app/globals.css` | Global styles |
 
@@ -78,16 +78,7 @@ Reusable building blocks used across pages.
 
 React Context for sharing data across pages.
 
-| File | Purpose |
-|------|---------|
-| `PimDataContext.tsx` | **Central data store** for all PIM data |
-
-> [!IMPORTANT]
-> `PimDataContext` is the heart of data sharing. It:
-> - Fetches data once
-> - Caches it in session storage
-> - Provides it to all pages
-> - Handles background policy loading
+This section has been expanded below — see **📁 `src/contexts/`** for the full context list.
 
 ---
 
@@ -99,8 +90,12 @@ Core logic for interacting with Microsoft Graph API.
 |------|---------|
 | `directoryRoleService.ts` | **Directory Roles**: Fetch role definitions, assignments, policies |
 | `pimGroupService.ts` | **PIM Groups**: Fetch PIM-onboarded groups and policies |
+| `pimConfigurationService.ts` | **Policy Read/Write**: Parse rules, update PIM policies and assignments |
+| `wizardApplyService.ts` | **Wizard Apply**: Execute bulk policy/assignment writes via Graph API |
 | `deltaService.ts` | **Smart Refresh**: Delta queries for incremental updates |
-| `pimConfigurationService.ts` | **Write Operations**: Update policies, create assignments (planned) |
+| `CsvParserService.ts` | **Bulk Mode**: Parse and validate CSV files for batch configuration |
+| `WizardValidationService.ts` | **Wizard Validation**: Cross-step business rule validation |
+| `policyParserService.ts` | **Policy Parsing**: Parse Graph API policy rule structures into typed settings |
 
 **directoryRoleService.ts** contains:
 - `getRoleDefinitions()` - Fetch all Entra ID role definitions
@@ -157,14 +152,15 @@ Utility functions and API helpers.
 
 | File | Purpose |
 |------|---------|
-| `workerPool.ts` | **Worker Pool**: Parallel API calls with concurrency control and throttling protection |
-| `logger.ts` | **Centralized Logging**: Development/production logging with environment checks |
-| `alertsApi.ts` | **Security Alerts**: Fetch PIM security alerts from Graph API |
+| `workerPool.ts` | **Worker Pool**: Parallel API calls with concurrency control and throttling protection (default: 8 workers, 300ms) |
+| `retryUtils.ts` | **Retry Logic**: `withRetry()` with exponential backoff for 429/5xx errors |
+| `durationUtils.ts` | **Duration Helpers**: ISO 8601 parsing, formatting, and Graph API duration conversions |
+| `etagCache.ts` | **ETag Cache**: ETag-based HTTP caching to avoid redundant API calls |
+| `scopeUtils.ts` | **Scope Detection**: Identify scope types (Tenant-wide, App-scoped, AU, RMAU, etc.) |
+| `logger.ts` | **Centralized Logging**: Structured logging with dynamic level via localStorage |
+| `authContextApi.ts` | **Authentication Contexts**: Fetch Conditional Access authentication contexts |
 | `alertFormatting.ts` | **Alert Formatting**: Format and sort security alerts by severity |
 | `chartCapture.ts` | **PDF Generation**: Capture chart elements as images for PDF export |
-| `scopeUtils.ts` | **Scope Detection**: Identify scope types (Tenant-wide, App-scoped, RMAU) |
-| `authContextApi.ts` | **Authentication Contexts**: Fetch Conditional Access authentication contexts |
-| `pimApi.ts` | **[DEPRECATED]** Moved to services/pimConfigurationService |
 
 ---
 
@@ -193,11 +189,14 @@ Reusable React hooks.
 
 | File | Purpose |
 |------|---------|
-| `usePimData.ts` | **Legacy wrapper** - re-exports from DirectoryRoleContext for backwards compatibility |
-| `useRoleFilters.ts` | **Filter Management**: Role/group filtering logic for Report and Dashboard pages |
+| `useWizardState.tsx` | **Wizard State**: Full wizard context + selector hooks (useWizardData, useWizardActions, etc.) |
+| `usePimData.ts` | **Directory Roles Data**: Access roles data, policies, refresh functions |
+| `usePimSelectors.ts` | **Memoized Selectors**: Optimized selectors to avoid unnecessary re-renders |
 | `useAggregatedData.ts` | **Data Aggregation**: Combines data across multiple workloads (Directory Roles, PIM Groups) |
+| `useRoleFilters.ts` | **Filter Management**: Role/group filtering logic for Report and Dashboard pages |
 | `useConsentedWorkloads.ts` | **Workload Permissions**: Manages which workloads have user consent |
 | `useIncrementalConsent.ts` | **Consent Flow**: Handles incremental permission requests |
+| `useNavigationGuard.ts` | **Navigation Guard**: Warns on unsaved changes when navigating away |
 
 ### 📁 `src/contexts/` - React Context Providers
 
@@ -206,9 +205,10 @@ Global state management with React Context API.
 | File | Purpose |
 |------|---------|
 | `UnifiedPimContext.tsx` | **Main Orchestrator**: Manages all workloads (Directory Roles, PIM Groups, etc.) with unified refresh logic |
-| `DirectoryRoleContext.tsx` | **Directory Roles State**: Manages role data, policies, assignments with delta sync support |
+| `DirectoryRoleContext.tsx` | **Directory Roles State**: Manages role data, policies, assignments with delta sync. Exports `PimDataProvider` for backward compat. |
 | `ViewModeContext.tsx` | **UI Preferences**: Manages Basic/Advanced view mode toggle with localStorage persistence |
 | `MobileMenuContext.tsx` | **Mobile UI State**: Controls mobile menu open/close state |
+| `ToastContext.tsx` | **Notifications**: Toast notification system (success/error/info, auto-dismiss 3s) |
 
 **Key Context Relationships:**
 - `UnifiedPimContext` orchestrates multiple workloads
@@ -225,7 +225,7 @@ flowchart TD
     subgraph "Pages"
         A[Dashboard]
         B[Report]
-        C[Configure - Planned]
+        C[Configure]
     end
 
     subgraph "Contexts"

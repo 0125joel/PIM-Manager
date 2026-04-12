@@ -1,16 +1,28 @@
 import { Configuration, PopupRequest } from "@azure/msal-browser";
 
-// Ensure required environment variables are set
-if (!process.env.NEXT_PUBLIC_CLIENT_ID) {
-    throw new Error(
-        "CRITICAL: NEXT_PUBLIC_CLIENT_ID environment variable is required. " +
-        "Please configure this in your .env.local file. See README.md for setup instructions."
-    );
+// Resolve Client ID at runtime.
+// Priority: runtime config (self-hosted via Azure) → build-time env var (SaaS / local dev)
+// During static export build (SSR context, typeof window === "undefined"), no Client ID is
+// available — return a placeholder so the build succeeds. The real Client ID is always
+// resolved in the browser before MSAL initialises.
+function getClientId(): string {
+    if (typeof window !== "undefined") {
+        const runtimeClientId = (window as Window & { __PIM_CONFIG__?: { clientId?: string } }).__PIM_CONFIG__?.clientId;
+        if (runtimeClientId) return runtimeClientId;
+        const envClientId = process.env.NEXT_PUBLIC_CLIENT_ID;
+        if (envClientId) return envClientId;
+        throw new Error(
+            "CRITICAL: Client ID not configured. " +
+            "Self-hosted: ensure env-config.js contains a valid clientId. " +
+            "Local dev: set NEXT_PUBLIC_CLIENT_ID in .env.local."
+        );
+    }
+    return process.env.NEXT_PUBLIC_CLIENT_ID ?? "00000000-0000-0000-0000-000000000000";
 }
 
 export const msalConfig: Configuration = {
     auth: {
-        clientId: process.env.NEXT_PUBLIC_CLIENT_ID,
+        clientId: getClientId(),
         authority: "https://login.microsoftonline.com/organizations",
         redirectUri: typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_REDIRECT_URI || "http://localhost:3000"),
     },

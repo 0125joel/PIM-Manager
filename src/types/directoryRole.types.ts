@@ -185,15 +185,22 @@ export interface ApprovalStage {
     escalationApprovers?: Approver[];
 }
 
-export interface Approver {
-    id: string;
-    "@odata.type": string; // "#microsoft.graph.singleUser" | "#microsoft.graph.groupMembers"
+/** Raw approver from Graph API before enrichment */
+export interface PrimaryApprover {
+    id?: string;
+    groupId?: string;
+    userId?: string;
+    "@odata.type": "#microsoft.graph.singleUser" | "#microsoft.graph.groupMembers" | "#microsoft.graph.requestorManager";
     isBackup?: boolean;
-    // Enriched data (fetched separately)
+}
+
+/** Enriched approver with display information */
+export interface Approver extends PrimaryApprover {
+    id: string;
     displayName?: string;
     userPrincipalName?: string;
     mail?: string;
-    type?: "user" | "group";
+    type?: "user" | "group" | "manager";
 }
 
 // Step 17: Other Policy Rules

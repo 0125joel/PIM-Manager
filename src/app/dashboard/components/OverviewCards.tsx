@@ -1,7 +1,7 @@
 "use client";
 
 import { RoleDetailData } from "@/types/directoryRole.types";
-import { RoleFilterState } from "@/types/roleFilters";
+import { RoleFilterState } from '@/types/roleFilters.types';
 import { Shield, Users, Clock, CheckCircle2, UserCheck, FileCheck, Loader2, FolderKanban } from "lucide-react";
 import { useMemo } from "react";
 import { InteractiveStatCard } from "@/components/InteractiveStatCard";

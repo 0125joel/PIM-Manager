@@ -1,5 +1,5 @@
 import { useMsal } from "@azure/msal-react";
-import { WorkloadType } from "@/types/workload";
+import { WorkloadType } from '@/types/workload.types';
 import { useCallback } from "react";
 
 const WORKLOAD_SCOPES: Record<WorkloadType, string[]> = {

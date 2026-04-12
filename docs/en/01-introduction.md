@@ -47,13 +47,15 @@ This application is designed for:
 - View scope information (Tenant-wide, App-scoped, RMAU)
 - Authentication Context display for roles requiring specific access
 
-### ⚙️ Configure Page (Planned Feature)
-- Bulk modification of PIM settings across multiple roles
-- Apply consistent activation settings (MFA, approval, max duration)
-- Create new role assignments at scale
+### ⚙️ Configure Page
+- **Wizard Mode**: Guided step-by-step configuration — workload, scope, policies, assignments, review, and apply
+- **Manual Mode**: Freeform 3-column layout with staged changes — select roles/groups, configure, and queue changes
+- **Bulk Mode**: CSV-based batch configuration — upload a CSV, compare against live settings, and apply at scale
+- Apply consistent activation settings (MFA, approval, max duration) across multiple roles and groups
+- Create, manage, and remove eligible/active assignments with AU scope support
 
 > [!NOTE]
-> **Read-Only Application**: PIM Manager is currently focused on visibility and reporting. Configuration capabilities are planned but not yet exposed in the UI. All current features use read-only permissions.
+> Write permissions for Configure (`RoleManagementPolicy.ReadWrite.Directory` and related scopes) are requested via incremental consent — only when you first enter Configure mode. Read-only reporting does not require these permissions.
 
 ---
 
@@ -70,14 +72,13 @@ The application requires a Microsoft Entra app registration with the following *
 | `RoleAssignmentSchedule.Read.Directory` | Read PIM active assignments |
 | `RoleEligibilitySchedule.Read.Directory` | Read PIM eligible assignments |
 | `RoleManagementPolicy.Read.Directory` | Read PIM policies |
-| `PrivilegedAccess.Read.AzureADGroup` | Read PIM for Groups assignments |
 | `Policy.Read.ConditionalAccess` | Read authentication contexts |
 | `User.Read.All` | Read user display names |
 | `Group.Read.All` | Read group display names |
 | `AdministrativeUnit.Read.All` | Read administrative unit names |
 | `Application.Read.All` | Read application names |
 
-**Optional Permissions** (features gracefully degrade if not granted):
+**Optional Read Permissions** (features gracefully degrade if not granted):
 
 | Permission | Feature Enabled | Fallback Behavior |
 |------------|-----------------|-------------------|
@@ -85,8 +86,19 @@ The application requires a Microsoft Entra app registration with the following *
 | `PrivilegedAccess.Read.AzureADGroup` | PIM for Groups workload | Workload not shown in settings |
 | `RoleManagementPolicy.Read.AzureADGroup` | PIM Groups policies | Groups data incomplete without this |
 
+**Configure Write Permissions** (requested via incremental consent when entering Configure mode):
+
+| Permission | Feature Enabled |
+|------------|-----------------|
+| `RoleManagementPolicy.ReadWrite.Directory` | Update PIM policies for Directory Roles |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Create eligible assignments for Directory Roles |
+| `RoleAssignmentSchedule.ReadWrite.Directory` | Create active assignments for Directory Roles |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Update PIM policies for PIM Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Create eligible assignments for PIM Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Create active assignments for PIM Groups |
+
 > [!TIP]
-> The application follows the **least privilege principle** by using **Read-only** permissions. No **write permissions** are required for reporting features.
+> The application follows the **least privilege principle**. Read-only permissions cover all reporting features. Write permissions are only requested when you explicitly enter the Configure feature — and only for the workload you choose to configure.
 
 
 
@@ -105,7 +117,7 @@ Any modern browser (Chrome, Edge, Firefox, Safari) with JavaScript enabled.
 │  Next.js React Application                              │
 │  ├── Dashboard Page (Analytics & Insights)              │
 │  ├── Report Page (Detailed Configuration View)          │
-│  └── Configure Page (Planned)                           │
+│  └── Configure Page (Wizard / Manual / Bulk)            │
 ├─────────────────────────────────────────────────────────┤
 │  State Management Layer                                 │
 │  ├── UnifiedPimContext (Workload Orchestration)         │
@@ -147,7 +159,7 @@ All data fetching happens **client-side** in the user's browser. The application
 
 **SessionStorage Caching:**
 - Data persists across page navigation
-- 5-minute freshness check before re-fetching
+- 60-minute freshness check before re-fetching
 - Reduces unnecessary API calls
 
 **Workload Management:**

@@ -11,8 +11,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PimDataProvider } from "@/contexts/DirectoryRoleContext";
 import { UnifiedPimProvider } from "@/contexts/UnifiedPimContext";
 import { MobileMenuProvider } from "@/contexts/MobileMenuContext";
+import { ToastProvider } from "@/contexts/ToastContext";
 import { GlobalProgressBar } from "@/components/GlobalProgressBar";
-
+import { OnboardingWrapper } from "@/components/OnboardingWrapper";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,32 +38,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  const theme = localStorage.getItem('theme') || 'system';
-                  const root = document.documentElement;
-                  root.classList.remove('light', 'dark');
-
-                  if (theme === 'system') {
-                    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                    root.classList.add(systemTheme);
-                  } else {
-                    root.classList.add(theme);
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
-      </head>
       <body
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-50 dark:bg-black`}
       >
+        {/* beforeInteractive runs before hydration — sets runtime config and theme before React loads */}
+        <Script src="/env-config.js" strategy="beforeInteractive" />
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
         <ThemeProvider>
           <AuthProvider>
             <ProtectedRoute>
@@ -69,14 +52,17 @@ export default function RootLayout({
                 <UnifiedPimProvider>
                   <PimDataProvider>
                     <ErrorBoundary>
-                      <GlobalProgressBar />
-                      <div className="min-h-screen">
-                        <ConditionalHeader />
-                        <ConditionalSidebar />
-                        <ConditionalLayout>
-                          {children}
-                        </ConditionalLayout>
-                      </div>
+                      <ToastProvider>
+                        <GlobalProgressBar />
+                        <div className="min-h-screen">
+                          <ConditionalHeader />
+                          <ConditionalSidebar />
+                          <ConditionalLayout>
+                            {children}
+                          </ConditionalLayout>
+                        </div>
+                        <OnboardingWrapper />
+                      </ToastProvider>
                     </ErrorBoundary>
                   </PimDataProvider>
                 </UnifiedPimProvider>

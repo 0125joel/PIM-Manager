@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RoleSettings, Principal } from "@/types";
+import { RoleSettings, Principal } from "@/types/shared.types";
 import { UserGroupSearch } from "./UserGroupSearch";
+import { Toggle } from "@/components/ui/Toggle";
 import { AuthContextSelector } from "./AuthContextSelector";
 import { Loader2 } from "lucide-react";
 
 interface RoleSettingsFormProps {
     selectedRoleCount: number;
     onApply: (settings: RoleSettings) => void;
+    onStage?: (settings: RoleSettings) => void;
     initialSettings?: RoleSettings;
     isLoading?: boolean;
+    showStageButton?: boolean;
 }
 
-export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, isLoading }: RoleSettingsFormProps) {
+export function RoleSettingsForm({ selectedRoleCount, onApply, onStage, initialSettings, isLoading, showStageButton }: RoleSettingsFormProps) {
     const [activeTab, setActiveTab] = useState<"activation" | "assignment" | "notification">("activation");
     const [settings, setSettings] = useState<RoleSettings>({
         activation: {
@@ -34,25 +37,19 @@ export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, 
         },
         notification: {
             eligibleAssignment: {
-                sendToAdmin: true,
-                sendToAssignee: false,
-                sendToApprover: true,
-                additionalRecipients: [],
-                criticalOnly: false,
+                admin: { isEnabled: true, additionalRecipients: [], criticalOnly: false },
+                assignee: { isEnabled: false, additionalRecipients: [], criticalOnly: false },
+                approver: { isEnabled: true, additionalRecipients: [], criticalOnly: false }
             },
             activeAssignment: {
-                sendToAdmin: true,
-                sendToAssignee: false,
-                sendToApprover: true,
-                additionalRecipients: [],
-                criticalOnly: false,
+                admin: { isEnabled: true, additionalRecipients: [], criticalOnly: false },
+                assignee: { isEnabled: false, additionalRecipients: [], criticalOnly: false },
+                approver: { isEnabled: true, additionalRecipients: [], criticalOnly: false }
             },
             eligibleActivation: {
-                sendToAdmin: false,
-                sendToAssignee: true,
-                sendToApprover: true,
-                additionalRecipients: [],
-                criticalOnly: false,
+                admin: { isEnabled: false, additionalRecipients: [], criticalOnly: false },
+                requestor: { isEnabled: true, additionalRecipients: [], criticalOnly: false },
+                approver: { isEnabled: true, additionalRecipients: [], criticalOnly: false }
             },
         },
     });
@@ -372,22 +369,15 @@ export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, 
                             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
                                 Send notifications when members are assigned as eligible to this role
                             </h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-4 gap-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                                    <div>Type</div>
-                                    <div>Default recipients</div>
-                                    <div>Additional recipients</div>
-                                    <div>Critical emails only</div>
-                                </div>
-                                <NotificationRow
-                                    label="Role assignment alert"
-                                    rule={settings.notification.eligibleAssignment}
-                                    onChange={(rule) => setSettings({
-                                        ...settings,
-                                        notification: { ...settings.notification, eligibleAssignment: rule }
-                                    })}
-                                />
-                            </div>
+                            <GranularNotificationSection
+                                label="Role assignment alert"
+                                settings={settings.notification.eligibleAssignment}
+                                onChange={(blockSettings) => setSettings({
+                                    ...settings,
+                                    notification: { ...settings.notification, eligibleAssignment: blockSettings }
+                                })}
+                                type="assignment"
+                            />
                         </div>
 
                         {/* Active Assignment Notifications */}
@@ -395,22 +385,15 @@ export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, 
                             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
                                 Send notifications when members are assigned as active to this role
                             </h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-4 gap-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                                    <div>Type</div>
-                                    <div>Default recipients</div>
-                                    <div>Additional recipients</div>
-                                    <div>Critical emails only</div>
-                                </div>
-                                <NotificationRow
-                                    label="Role assignment alert"
-                                    rule={settings.notification.activeAssignment}
-                                    onChange={(rule) => setSettings({
-                                        ...settings,
-                                        notification: { ...settings.notification, activeAssignment: rule }
-                                    })}
-                                />
-                            </div>
+                            <GranularNotificationSection
+                                label="Role assignment alert"
+                                settings={settings.notification.activeAssignment}
+                                onChange={(blockSettings) => setSettings({
+                                    ...settings,
+                                    notification: { ...settings.notification, activeAssignment: blockSettings }
+                                })}
+                                type="assignment"
+                            />
                         </div>
 
                         {/* Activation Notifications */}
@@ -418,34 +401,48 @@ export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, 
                             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
                                 Send notifications when eligible members activate this role
                             </h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-4 gap-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                                    <div>Type</div>
-                                    <div>Default recipients</div>
-                                    <div>Additional recipients</div>
-                                    <div>Critical emails only</div>
-                                </div>
-                                <NotificationRow
-                                    label="Role activation alert"
-                                    rule={settings.notification.eligibleActivation}
-                                    onChange={(rule) => setSettings({
-                                        ...settings,
-                                        notification: { ...settings.notification, eligibleActivation: rule }
-                                    })}
-                                />
-                            </div>
+                            <GranularNotificationSection
+                                label="Role activation alert"
+                                settings={settings.notification.eligibleActivation}
+                                onChange={(blockSettings) => setSettings({
+                                    ...settings,
+                                    notification: { ...settings.notification, eligibleActivation: blockSettings }
+                                })}
+                                type="activation"
+                            />
                         </div>
                     </div>
                 )}
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-2">
-                    <button
-                        type="submit"
-                        disabled={selectedRoleCount === 0 || !isAuthContextValid}
-                        className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Apply to {selectedRoleCount} Role{selectedRoleCount !== 1 ? 's' : ''}
-                    </button>
+                    {showStageButton && onStage && (
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => onStage(settings)}
+                                disabled={selectedRoleCount === 0 || !isAuthContextValid}
+                                className="flex-1 bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Stage Changes
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={selectedRoleCount === 0 || !isAuthContextValid}
+                                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Apply Now
+                            </button>
+                        </div>
+                    )}
+                    {!showStageButton && (
+                        <button
+                            type="submit"
+                            disabled={selectedRoleCount === 0 || !isAuthContextValid}
+                            className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Apply to {selectedRoleCount} Role{selectedRoleCount !== 1 ? 's' : ''}
+                        </button>
+                    )}
                     {!isAuthContextValid && (
                         <p className="text-xs text-red-500 text-center">Please select an authentication context to proceed.</p>
                     )}
@@ -455,67 +452,68 @@ export function RoleSettingsForm({ selectedRoleCount, onApply, initialSettings, 
     );
 }
 
-// Helper component for notification rows
-function NotificationRow({ label, rule, onChange }: {
+// Helper component for granular notification sections
+function GranularNotificationSection({ label, settings, onChange, type }: {
     label: string;
-    rule: { sendToAdmin: boolean; sendToAssignee: boolean; sendToApprover: boolean; additionalRecipients: string[]; criticalOnly: boolean };
-    onChange: (rule: any) => void;
+    settings: any;
+    onChange: (s: any) => void;
+    type: "assignment" | "activation";
 }) {
-    return (
-        <div className="grid grid-cols-4 gap-4 items-start">
-            <div className="text-sm text-zinc-600 dark:text-zinc-400">{label}</div>
-            <div className="space-y-2">
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={rule.sendToAdmin}
-                        onChange={(e) => onChange({ ...rule, sendToAdmin: e.target.checked })}
-                        className="h-4 w-4 rounded"
+    const isActivation = type === "activation";
+
+    const update = (recipientKey: string, field: string, value: any) => {
+        onChange({
+            ...settings,
+            [recipientKey]: { ...settings[recipientKey], [field]: value }
+        });
+    };
+
+    const renderRow = (recipientKey: string, recipientLabel: string) => {
+        const data = settings[recipientKey];
+        if (!data) return null;
+
+        return (
+            <div className="grid grid-cols-[1.5fr_1.5fr_2.5fr_0.5fr] gap-4 items-center py-2 text-sm border-b border-zinc-100 dark:border-zinc-800/50 last:border-0">
+                <span className="text-zinc-700 dark:text-zinc-300">{label}</span>
+                <div className="flex items-center gap-2">
+                    <Toggle
+                        checked={data.isEnabled}
+                        onChange={(val) => update(recipientKey, 'isEnabled', val)}
+                        size="sm"
                     />
-                    <span className="text-sm">Admin</span>
-                </label>
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={rule.sendToAssignee}
-                        onChange={(e) => onChange({ ...rule, sendToAssignee: e.target.checked })}
-                        className="h-4 w-4 rounded"
-                    />
-                    <span className="text-sm">Assignee</span>
-                </label>
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={rule.sendToApprover}
-                        onChange={(e) => onChange({ ...rule, sendToApprover: e.target.checked })}
-                        className="h-4 w-4 rounded"
-                    />
-                    <span className="text-sm">Approver</span>
-                </label>
-            </div>
-            <div>
+                    <span className="text-zinc-900 dark:text-zinc-100">{recipientLabel}</span>
+                </div>
                 <input
                     type="text"
-                    placeholder="email IDs separated by semicolon"
-                    className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm"
-                    value={rule.additionalRecipients.join("; ")}
-                    onChange={(e) => onChange({
-                        ...rule,
-                        additionalRecipients: e.target.value.split(";").map(s => s.trim()).filter(Boolean)
-                    })}
+                    value={data.additionalRecipients?.join("; ") || ""}
+                    onChange={(e) => update(recipientKey, 'additionalRecipients', e.target.value.split(";").map((s: string) => s.trim()).filter(Boolean))}
+                    placeholder="Email IDs separated by semicolon"
+                    disabled={!data.isEnabled}
+                    className="w-full px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm disabled:opacity-50"
                 />
-            </div>
-            <div>
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={rule.criticalOnly}
-                        onChange={(e) => onChange({ ...rule, criticalOnly: e.target.checked })}
-                        className="h-4 w-4 rounded"
+                <div className="flex justify-center">
+                    <Toggle
+                        checked={data.criticalOnly}
+                        onChange={(val) => update(recipientKey, 'criticalOnly', val)}
+                        disabled={!data.isEnabled}
+                        size="sm"
                     />
-                    <span className="text-sm">Critical emails only</span>
-                </label>
+                </div>
             </div>
+        );
+    };
+
+    return (
+        <div className="space-y-1">
+            <div className="grid grid-cols-[1.5fr_1.5fr_2.5fr_0.5fr] gap-4 text-xs font-semibold text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-2">
+                <div>Type</div>
+                <div>Default recipients</div>
+                <div>Additional recipients</div>
+                <div className="text-center">Critical emails only</div>
+            </div>
+            {renderRow('admin', 'Admin')}
+            {renderRow(isActivation ? 'requestor' : 'assignee', isActivation ? 'Requestor' : 'Assignee')}
+            {renderRow('approver', 'Approver')}
         </div>
     );
 }

@@ -1,5 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { ScopeType, ScopeInfo } from "@/types/directoryRole.types";
+import { Logger } from "@/utils/logger";
 
 /**
  * Detects the scope type based on directoryScopeId and appScopeId
@@ -71,7 +72,7 @@ export async function enrichScopeInfo(
                     isRestricted: au.isMemberManagementRestricted
                 };
             } catch (error) {
-                console.warn(`Failed to fetch AU details for ${directoryScopeId}:`, error);
+                Logger.warn("scopeUtils", `Failed to fetch AU details for ${directoryScopeId}`, error);
                 return {
                     type: "administrative-unit",
                     displayName: directoryScope.displayName,
@@ -127,7 +128,7 @@ export async function enrichScopeInfo(
                 };
             }
         } catch (error) {
-            console.warn(`Failed to fetch application details for ${directoryScopeId}:`, error);
+            Logger.warn("scopeUtils", `Failed to fetch application details for ${directoryScopeId}`, error);
             return {
                 type: "application",
                 displayName: `Application (${directoryScopeId})`,
@@ -152,7 +153,7 @@ export async function enrichScopeInfo(
                 isRestricted: au.isMemberManagementRestricted
             };
         } catch (error) {
-            console.warn(`Failed to fetch AU details for ${directoryScopeId}:`, error);
+            Logger.warn("scopeUtils", `Failed to fetch AU details for ${directoryScopeId}:`, error);
             return {
                 type: "administrative-unit",
                 displayName: `Administrative Unit (${directoryScopeId})`,

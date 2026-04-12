@@ -3,6 +3,7 @@ import { Download, FileSpreadsheet, FileJson, Check, X, Loader2, Shield, Users, 
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { PimGroupData } from "@/types/pimGroup.types";
 import { getAuthContextDisplayName } from "@/utils/authContextApi";
+import { Logger } from "@/utils/logger";
 
 interface ReportExportModalProps {
     isOpen: boolean;
@@ -52,7 +53,7 @@ export function ReportExportModal({
         {
             key: "accessRights",
             label: "Access Rights",
-            description: "User & Group Assignments (Who has what access)",
+            description: "Role & Group Assignments — bulk import compatible (Role ID, Group ID, Principal ID included)",
             icon: Users,
             hasData: filteredRoles.length > 0
         },
@@ -96,8 +97,14 @@ export function ReportExportModal({
                 }
 
                 if (selectedSections.accessRights) {
-                    const content = generateAssignmentDetailCsv();
-                    downloadFile(content, `pim-access-rights-${getDateStr()}.csv`, "text/csv;charset=utf-8;");
+                    if (filteredRoles.length > 0) {
+                        const content = generateRoleAssignmentsCsv();
+                        downloadFile(content, `pim-role-assignments-${getDateStr()}.csv`, "text/csv;charset=utf-8;");
+                    }
+                    if (isPimGroupsVisible && pimGroupsData.length > 0) {
+                        const content = generateGroupAssignmentsCsv();
+                        downloadFile(content, `pim-group-assignments-${getDateStr()}.csv`, "text/csv;charset=utf-8;");
+                    }
                 }
 
                 if (selectedSections.groupPolicies) {
@@ -107,7 +114,7 @@ export function ReportExportModal({
             }
             onClose();
         } catch (error) {
-            console.error("Export failed", error);
+            Logger.error("ReportExportModal", "Export failed", error);
             // In a real app, user toast notification here
         } finally {
             setIsExporting(false);
@@ -117,6 +124,13 @@ export function ReportExportModal({
     // --- Helper Functions ---
 
     const getDateStr = () => new Date().toISOString().split('T')[0];
+
+    // Sanitize CSV field values to prevent formula injection in spreadsheet applications.
+    // Prefixes values starting with =, +, -, @, tab, or carriage return with a single quote.
+    const sanitizeCsvField = (value: string): string => {
+        if (/^[=+\-@\t\r]/.test(value)) return `'${value}`;
+        return value;
+    };
 
     const downloadFile = (content: string, filename: string, type: string) => {
         const blob = new Blob([content], { type });
@@ -134,6 +148,7 @@ export function ReportExportModal({
 
     const generateRoleSummaryCsv = () => {
         const headers = [
+            "Role ID",
             "Role Name", "Description", "Built-in", "Privileged", "PIM Configured",
             "Max Activation Duration", "MFA Required", "Justification Required",
             "Approval Required", "Approvers", "Auth Context",
@@ -178,11 +193,12 @@ export function ReportExportModal({
             }
 
             return [
-                `"${definition.displayName.replace(/"/g, '""')}"`,
-                `"${(definition.description || '').replace(/"/g, '""')}"`,
+                definition.id,
+                `"${sanitizeCsvField(definition.displayName).replace(/"/g, '""')}"`,
+                `"${sanitizeCsvField(definition.description || '').replace(/"/g, '""')}"`,
                 definition.isBuiltIn ? "Yes" : "No", definition.isPrivileged ? "Yes" : "No", isPimConfigured ? "Yes" : "No",
                 maxDuration, mfaRequired || "No", justificationRequired || "No", approvalRequired || "",
-                `"${approvers}"`, `"${authContext}"`,
+                `"${sanitizeCsvField(approvers)}"`, `"${sanitizeCsvField(authContext)}"`,
                 assignments.permanent.length, assignments.eligible.length, assignments.active.length,
                 assignments.permanent.length + assignments.eligible.length + assignments.active.length
             ].join(",");
@@ -191,90 +207,76 @@ export function ReportExportModal({
         return [headers.join(","), ...rows].join("\n");
     };
 
-    const generateAssignmentDetailCsv = () => {
+    // Bulk-compatible role assignments CSV — matches the bulk import format exactly
+    const generateRoleAssignmentsCsv = () => {
         const headers = [
-            "Resource Name", "Principal Name", "Principal Type", "Principal Email",
-            "Assignment Type", "Member Type", "Scope Type", "Scope ID",
-            "Start Date", "Expiry Date", "Status"
+            "Role ID", "Role Name", "Principal ID", "Principal UPN",
+            "Assignment Type", "Duration Days", "Justification", "Action"
         ];
         const rows: string[] = [];
 
-        // Helper to push row
-        const pushRow = (resourceName: string, item: any, type: string, dates: any) => {
-            const principal = item.principal;
-            const principalType = principal?.["@odata.type"]?.includes("group") ? "Group" : "User";
-            const memberType = item.memberType || "Direct";
-
-            rows.push([
-                `"${resourceName.replace(/"/g, '""')}"`,
-                `"${(principal?.displayName || item.principalId).replace(/"/g, '""')}"`,
-                principalType,
-                `"${principal?.mail || principal?.userPrincipalName || ''}"`,
-                type,
-                memberType,
-                item.scopeInfo?.type || "tenant-wide",
-                item.directoryScopeId || "/",
-                dates.start || "",
-                dates.end || (dates.noExp ? "No Expiration" : ""),
-                item.status || "Provisioned"
-            ].join(","));
-        };
-
-        // 1. Directory Roles
         filteredRoles.forEach(roleData => {
             const { definition, assignments } = roleData;
 
-            assignments.permanent.forEach((a: any) => pushRow(definition.displayName, a, "Permanent", { start: a.createdDateTime, end: "" }));
-            assignments.eligible.forEach((s: any) => pushRow(definition.displayName, s, "Eligible", {
-                start: s.scheduleInfo?.startDateTime,
-                end: s.scheduleInfo?.expiration?.endDateTime,
-                noExp: s.scheduleInfo?.expiration?.type === "noExpiration"
-            }));
-            assignments.active.forEach((s: any) => pushRow(definition.displayName, s, "Active (PIM)", {
-                start: s.scheduleInfo?.startDateTime,
-                end: s.scheduleInfo?.expiration?.endDateTime
-            }));
+            const pushRow = (item: any, assignmentType: "eligible" | "active", durationDays: string) => {
+                const principal = item.principal;
+                rows.push([
+                    definition.id,
+                    `"${sanitizeCsvField(definition.displayName).replace(/"/g, '""')}"`,
+                    item.principalId || principal?.id || "",
+                    `"${sanitizeCsvField(principal?.userPrincipalName || principal?.mail || '').replace(/"/g, '""')}"`,
+                    assignmentType,
+                    durationDays,
+                    "",
+                    "add"
+                ].join(","));
+            };
+
+            // Permanent = active with no expiration
+            assignments.permanent.forEach((a: any) => pushRow(a, "active", "permanent"));
+            assignments.eligible.forEach((s: any) => pushRow(s, "eligible", ""));
+            assignments.active.forEach((s: any) => pushRow(s, "active", ""));
         });
 
-        // 2. PIM Groups (if visible)
-        if (isPimGroupsVisible) {
-            pimGroupsData.forEach(groupData => {
-                const { group, assignments } = groupData;
+        return [headers.join(","), ...rows].join("\n");
+    };
 
-                // PIM Group assignments don't have "active vs eligible" arrays separated quite the same way
-                // in the `assignments` array they are mixed but tagged with `assignmentType`
+    // Bulk-compatible group assignments CSV — matches the bulk import format exactly
+    const generateGroupAssignmentsCsv = () => {
+        const headers = [
+            "Group ID", "Group Name", "Principal ID", "Principal UPN",
+            "Access Type", "Assignment Type", "Duration Days", "Justification", "Action"
+        ];
+        const rows: string[] = [];
 
-                assignments.forEach(assignment => {
-                    const typeLabel = assignment.assignmentType === 'eligible'
-                        ? 'Eligible'
-                        : assignment.assignmentType === 'active'
-                            ? 'Active (PIM)'
-                            : 'Permanent';
+        pimGroupsData.forEach(groupData => {
+            const { group, assignments } = groupData;
 
-                    // Determine Member vs Owner based on roleId?
-                    // Usually "Member" or "Owner" is in the roleDefinitionId, but we might have mapped it.
-                    // The `assignment` object in `PimGroupData` has `memberType` ("Direct" | "Group")
-                    // but we need to verify the role. `accessType` provides "member" or "owner".
+            assignments.forEach(assignment => {
+                const principal = assignment.principal;
+                const assignmentType: "eligible" | "active" =
+                    assignment.assignmentType === "active" ? "active" : "eligible";
 
-                    const roleName = assignment.accessType
-                        ? assignment.accessType.charAt(0).toUpperCase() + assignment.accessType.slice(1) // "Member" or "Owner"
-                        : "Member";
-                    const resourceLabel = `${group.displayName} (${roleName})`;
-
-                    pushRow(resourceLabel, assignment, typeLabel, {
-                        start: assignment.startDateTime,
-                        end: assignment.endDateTime,
-                        noExp: assignment.endDateTime === "No Expiration" || !assignment.endDateTime
-                    });
-                });
+                rows.push([
+                    group.id,
+                    `"${sanitizeCsvField(group.displayName).replace(/"/g, '""')}"`,
+                    assignment.principalId || principal?.id || "",
+                    `"${sanitizeCsvField(principal?.userPrincipalName || principal?.mail || '').replace(/"/g, '""')}"`,
+                    assignment.accessType || "member",
+                    assignmentType,
+                    "",
+                    "",
+                    "add"
+                ].join(","));
             });
-        }
+        });
 
         return [headers.join(","), ...rows].join("\n");
     };
 
     const generateGroupSummaryCsv = () => {
         const headers = [
+            "Group ID",
             "Group Name", "Group Type", "Role-Assignable",
             "Eligible Members", "Eligible Owners", "Active Members", "Active Owners",
             "Member Max Duration", "Member MFA", "Member Approval",
@@ -283,6 +285,7 @@ export function ReportExportModal({
         const rows = pimGroupsData.map(g => {
             const { group, stats, settings } = g;
             return [
+                group.id,
                 `"${group.displayName.replace(/"/g, '""')}"`,
                 group.groupType, group.isAssignableToRole ? "Yes" : "No",
                 stats?.eligibleMembers || 0, stats?.eligibleOwners || 0, stats?.activeMembers || 0, stats?.activeOwners || 0,

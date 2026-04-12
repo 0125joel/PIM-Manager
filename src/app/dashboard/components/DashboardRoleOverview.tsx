@@ -62,7 +62,6 @@ export function DashboardRoleOverview({ rolesData, loading, viewMode = "advanced
             const totalHours = hours + (days * 24);
 
             if (totalHours < 1) maxDuration = "<1h";
-            else if (totalHours <= 8) maxDuration = `${totalHours}h`;
             else if (totalHours <= 24) maxDuration = `${totalHours}h`;
             else maxDuration = `${Math.round(totalHours / 24)}d`;
         }

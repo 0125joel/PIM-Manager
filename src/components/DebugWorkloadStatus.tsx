@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
-import { WorkloadType } from "@/types/workload";
+import { WorkloadType } from '@/types/workload.types';
 
 export function DebugWorkloadStatus() {
     const {

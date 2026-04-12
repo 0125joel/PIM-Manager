@@ -14,7 +14,7 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 | [Key Concepts](./06-key-concepts.md) | Important technical concepts explained |
 | [Dashboard Page](./07-dashboard-page.md) | Visual overview and security insights |
 | [Report Page](./08-report-page.md) | Detailed role configuration view |
-| [Configure Page](./09-configure-page.md) | Planned write capabilities |
+| [Configure Page](./09-configure-page.md) | Wizard, Manual, and Bulk configuration modes |
 | [Settings](./11-settings.md) | Workloads and consent framework |
 
 ---

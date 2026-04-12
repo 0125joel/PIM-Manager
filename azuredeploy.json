@@ -1,0 +1,120 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Deploy PIM Manager to Azure Static Web Apps"
+  },
+  "parameters": {
+    "staticWebAppName": {
+      "type": "string",
+      "defaultValue": "pim-manager",
+      "metadata": {
+        "description": "Name of the Azure Static Web App resource"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "allowedValues": [
+        "westeurope",
+        "eastus2",
+        "eastasia",
+        "westus2",
+        "centralus",
+        "northeurope"
+      ],
+      "metadata": {
+        "description": "Azure region for the deployment"
+      }
+    },
+    "entraClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "App Registration Client ID from Microsoft Entra ID"
+      }
+    }
+  },
+  "variables": {
+    "managedIdentityName": "[concat(parameters('staticWebAppName'), '-deploy-id')]",
+    "storageAccountName": "[toLower(concat('pimdeploy', uniqueString(resourceGroup().id)))]",
+    "deployScriptName": "[concat(parameters('staticWebAppName'), '-deploy-script')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/staticSites",
+      "apiVersion": "2023-01-01",
+      "name": "[parameters('staticWebAppName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Free",
+        "tier": "Free"
+      },
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('managedIdentityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[variables('deployScriptName')]",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/staticSites', parameters('staticWebAppName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('managedIdentityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "azCliVersion": "2.63.0",
+        "storageAccountSettings": {
+          "storageAccountName": "[variables('storageAccountName')]",
+          "storageAccountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-01-01').keys[0].value]"
+        },
+        "environmentVariables": [
+          {
+            "name": "CLIENT_ID",
+            "value": "[parameters('entraClientId')]"
+          },
+          {
+            "name": "DEPLOYMENT_TOKEN",
+            "secureValue": "[listSecrets(resourceId('Microsoft.Web/staticSites', parameters('staticWebAppName')), '2023-01-01').properties.apiKey]"
+          }
+        ],
+        "scriptContent": "#!/bin/bash\nset -e\n\n# Install Node.js/npm — handle both Azure Linux (tdnf, >= 2.64) and Alpine (apk, < 2.64) container images\nif ! command -v npm &> /dev/null; then\n  tdnf install -y nodejs npm 2>/dev/null || apk add --no-cache nodejs npm 2>/dev/null || true\nfi\n\n# Install SWA CLI\nnpm install -g @azure/static-web-apps-cli@2 --silent\n\n# Download latest release — curl removed from azure-cli image >= 2.54, use wget as fallback\nif command -v curl &> /dev/null; then\n  curl -sL https://github.com/0125joel/PIM-manager/releases/latest/download/release.zip -o release.zip\nelse\n  wget -q -O release.zip https://github.com/0125joel/PIM-manager/releases/latest/download/release.zip\nfi\nunzip -q release.zip\n\n# Inject Client ID into runtime config\nprintf 'window.__PIM_CONFIG__ = { clientId: \"%s\" };' \"$CLIENT_ID\" > out/env-config.js\n\n# Deploy to Azure Static Web Apps\nswa deploy ./out --deployment-token \"$DEPLOYMENT_TOKEN\" --env production\n",
+        "timeout": "PT30M",
+        "cleanupPreference": "OnSuccess",
+        "retentionInterval": "P1D"
+      }
+    }
+  ],
+  "outputs": {
+    "staticWebAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', reference(resourceId('Microsoft.Web/staticSites', parameters('staticWebAppName'))).defaultHostname)]"
+    }
+  }
+}

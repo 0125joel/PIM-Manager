@@ -3,8 +3,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Client } from "@microsoft/microsoft-graph-client";
-import { Principal } from "@/types";
+import { Principal } from "@/types/shared.types";
 import { Search, User, Users, Check, X } from "lucide-react";
+import { Logger } from "@/utils/logger";
+import { withRetry } from "@/utils/retryUtils";
 
 /**
  * Escapes single quotes in OData filter strings to prevent injection attacks.
@@ -61,22 +63,20 @@ export function UserGroupSearch({ onSelectionChange, initialSelected = [] }: Use
 
             // Search Users - using $search for better results if consistencyLevel is set
             // Note: $search requires ConsistencyLevel: eventual header
-            const usersReq = graphClient.api("/users")
-                .header("ConsistencyLevel", "eventual")
-                .search(`"displayName:${term}" OR "userPrincipalName:${term}"`)
-                .select("id,displayName,userPrincipalName")
-                .top(5)
-                .get();
-
-            // Search Groups
-            const groupsReq = graphClient.api("/groups")
-                .header("ConsistencyLevel", "eventual")
-                .search(`"displayName:${term}"`)
-                .select("id,displayName,groupTypes")
-                .top(5)
-                .get();
-
-            const [usersRes, groupsRes] = await Promise.all([usersReq, groupsReq]);
+            const [usersRes, groupsRes] = await Promise.all([
+                withRetry(() => graphClient.api("/users")
+                    .header("ConsistencyLevel", "eventual")
+                    .search(`"displayName:${term}" OR "userPrincipalName:${term}"`)
+                    .select("id,displayName,userPrincipalName")
+                    .top(5)
+                    .get(), 3, 1000, "UserGroupSearch users $search"),
+                withRetry(() => graphClient.api("/groups")
+                    .header("ConsistencyLevel", "eventual")
+                    .search(`"displayName:${term}"`)
+                    .select("id,displayName,groupTypes")
+                    .top(5)
+                    .get(), 3, 1000, "UserGroupSearch groups $search"),
+            ]);
 
             const foundUsers: Principal[] = (usersRes.value || []).map((u: any) => ({
                 id: u.id,
@@ -95,7 +95,7 @@ export function UserGroupSearch({ onSelectionChange, initialSelected = [] }: Use
             setResults([...foundUsers, ...foundGroups]);
 
         } catch (error) {
-            console.error("Search failed", error);
+            Logger.error("UserGroupSearch", "Search failed", error);
             // Fallback to simple filter if search fails (e.g. if complex query not supported)
             try {
                 const request = {
@@ -110,19 +110,18 @@ export function UserGroupSearch({ onSelectionChange, initialSelected = [] }: Use
                 // Escape user input to prevent OData injection attacks
                 const escapedTerm = escapeODataString(term);
 
-                const usersReq = graphClient.api("/users")
-                    .filter(`startswith(displayName,'${escapedTerm}') or startswith(userPrincipalName,'${escapedTerm}')`)
-                    .select("id,displayName,userPrincipalName")
-                    .top(5)
-                    .get();
-
-                const groupsReq = graphClient.api("/groups")
-                    .filter(`startswith(displayName,'${escapedTerm}')`)
-                    .select("id,displayName,groupTypes")
-                    .top(5)
-                    .get();
-
-                const [usersRes, groupsRes] = await Promise.all([usersReq, groupsReq]);
+                const [usersRes, groupsRes] = await Promise.all([
+                    withRetry(() => graphClient.api("/users")
+                        .filter(`startswith(displayName,'${escapedTerm}') or startswith(userPrincipalName,'${escapedTerm}')`)
+                        .select("id,displayName,userPrincipalName")
+                        .top(5)
+                        .get(), 3, 1000, "UserGroupSearch users $filter"),
+                    withRetry(() => graphClient.api("/groups")
+                        .filter(`startswith(displayName,'${escapedTerm}')`)
+                        .select("id,displayName,groupTypes")
+                        .top(5)
+                        .get(), 3, 1000, "UserGroupSearch groups $filter"),
+                ]);
 
                 const foundUsers: Principal[] = (usersRes.value || []).map((u: any) => ({
                     id: u.id,
@@ -140,7 +139,7 @@ export function UserGroupSearch({ onSelectionChange, initialSelected = [] }: Use
                 setResults([...foundUsers, ...foundGroups]);
 
             } catch (fallbackError) {
-                console.error("Fallback search failed", fallbackError);
+                Logger.error("UserGroupSearch", "Fallback search failed", fallbackError);
             }
         } finally {
             setLoading(false);

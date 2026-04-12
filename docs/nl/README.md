@@ -14,7 +14,7 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 | [Belangrijke Concepten](./06-belangrijke-concepten.md) | Uitleg van technische concepten |
 | [Dashboard Pagina](./07-dashboard-pagina.md) | Visueel overzicht en beveiligingsinzichten |
 | [Rapport Pagina](./08-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
-| [Configuratie Pagina](./09-configuratie-pagina.md) | Geplande schrijfcapaciteiten |
+| [Configuratie Pagina](./09-configuratie-pagina.md) | Wizard, Handmatig en Bulk configuratiemodi |
 | [Instellingen](./11-settings.md) | Workloads en consent framework |
 
 ---

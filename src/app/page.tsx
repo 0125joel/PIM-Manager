@@ -20,12 +20,23 @@ import {
 } from "lucide-react";
 import { loginRequest } from "@/config/authConfig";
 import { PreviewModal } from "@/components/PreviewModal";
+import { Logger } from "@/utils/logger";
 
 const securityDashboardImages = [
   { src: "/previews/dashboard-basic.png", caption: "Security Dashboard - Overview of PIM health and active alerts" },
   { src: "/previews/dashboard-advanced.png", caption: "Advanced Metrics - Detail breakdown of role activation trends" },
   { src: "/previews/dashboard-export.png", caption: "Export Modal - PDF reports for management" },
   { src: "/previews/dashboard-alerts.png", caption: "Security Alerts - Real-time risk detection" },
+];
+
+const configureImages = [
+  { src: "/previews/configure-modes.png", caption: "Mode Selection - Choose Wizard, Manual, or Bulk (CSV) mode" },
+  { src: "/previews/configure-wizard-scope.png", caption: "Wizard - Select roles and configuration approach" },
+  { src: "/previews/configure-wizard-policies.png", caption: "Wizard - Configure PIM policies per role" },
+  { src: "/previews/configure-wizard-assignments.png", caption: "Wizard - Create eligible and active assignments" },
+  { src: "/previews/configure-wizard-review.png", caption: "Wizard - Review all changes before applying" },
+  { src: "/previews/configure-manual.png", caption: "Manual Mode - Freeform policy editing with staged changes" },
+  { src: "/previews/configure-bulk.png", caption: "Bulk Mode - CSV-based batch configuration with diff preview" },
 ];
 
 const reportsImages = [
@@ -52,9 +63,7 @@ export default function Home() {
 
   const handleLogin = () => {
     instance.loginPopup(loginRequest).catch((e) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error("Login error:", e);
-      }
+      Logger.error("Home", "Login error:", e);
     });
   };
 
@@ -108,10 +117,12 @@ export default function Home() {
             />
             <FeatureCard
               icon={<Settings className="h-6 w-6" />}
-              title="Bulk Configuration"
-              description="Configure PIM settings for multiple roles simultaneously. Set activation duration, MFA requirements, and approval workflows."
+              title="Configure"
+              description="Apply PIM policies and manage assignments at scale. Choose from Wizard, Manual, or Bulk (CSV) mode to configure roles and groups."
               color="purple"
-              available={false}
+              available={true}
+              badge="New"
+              onPreview={() => setPreviewFeature("configure")}
             />
           </div>
 
@@ -127,6 +138,7 @@ export default function Home() {
                 <Benefit text="Gain insights into privileged access patterns" />
                 <Benefit text="Export detailed reports for compliance audits" />
                 <Benefit text="Identify security risks before they become problems" />
+                <Benefit text="Apply and manage PIM configurations at scale" />
               </div>
             </div>
 
@@ -176,7 +188,7 @@ export default function Home() {
           <PermissionsAccordion />
 
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-6">
-            Admin consent is required • All permissions follow least privilege principle
+            Admin consent is required • Read permissions are requested on login • Write permissions are only requested when using the Configure feature
           </p>
         </div>
       </div>
@@ -184,8 +196,8 @@ export default function Home() {
       <PreviewModal
         isOpen={!!previewFeature}
         onClose={() => setPreviewFeature(null)}
-        title={previewFeature === "dashboard" ? "Security Dashboard" : "Comprehensive Reports"}
-        images={previewFeature === "dashboard" ? securityDashboardImages : reportsImages}
+        title={previewFeature === "dashboard" ? "Security Dashboard" : previewFeature === "configure" ? "Configure" : "Comprehensive Reports"}
+        images={previewFeature === "dashboard" ? securityDashboardImages : previewFeature === "configure" ? configureImages : reportsImages}
       />
 
       {/* Footer */}
@@ -196,12 +208,13 @@ export default function Home() {
   );
 }
 
-function FeatureCard({ icon, title, description, color, available = true, onPreview }: {
+function FeatureCard({ icon, title, description, color, available = true, badge, onPreview }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   color: "blue" | "purple" | "green";
   available?: boolean;
+  badge?: string;
   onPreview?: () => void;
 }) {
   const colorClasses = {
@@ -212,29 +225,36 @@ function FeatureCard({ icon, title, description, color, available = true, onPrev
 
   return (
     <div className={`relative bg-white dark:bg-zinc-800 rounded-xl p-6 shadow-lg border border-zinc-200 dark:border-zinc-700 hover:shadow-xl transition-shadow ${!available ? 'opacity-75' : ''}`}>
-      {/* Preview Button (Top Right) */}
-      {available && onPreview && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onPreview();
-          }}
-          className="absolute top-4 right-4 p-2 bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors z-10 group"
-          title="Preview Feature"
-        >
-          <Eye className="h-4 w-4" />
-        </button>
-      )}
-
-      <div className="flex items-start justify-between mb-4">
-        <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${colorClasses[color]} text-white`}>
-          {icon}
-        </div>
+      {/* Top Right: Badge + Preview */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         {!available && (
           <span className="px-3 py-1 text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
             Coming Soon
           </span>
         )}
+        {available && badge && (
+          <span className="px-3 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">
+            {badge}
+          </span>
+        )}
+        {available && onPreview && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview();
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Preview</span>
+          </button>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${colorClasses[color]} text-white`}>
+          {icon}
+        </div>
       </div>
       <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
         {title}
@@ -371,6 +391,31 @@ function PermissionsAccordion() {
                       perm="RoleManagementPolicy.Read.AzureADGroup"
                       desc="Read PIM Groups policies"
                     />
+                  </div>
+                </div>
+
+                {/* Configure (Write) Group */}
+                <div className="border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl p-4 relative bg-zinc-50/50 dark:bg-zinc-800/50">
+                  <span className="absolute -top-2.5 left-4 bg-white dark:bg-zinc-800 px-2 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                    Configure (Write)
+                  </span>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">Directory Roles</p>
+                      <div className="space-y-2">
+                        <PermissionItem perm="RoleManagementPolicy.ReadWrite.Directory" desc="Update role policies" />
+                        <PermissionItem perm="RoleEligibilitySchedule.ReadWrite.Directory" desc="Create eligible assignments" />
+                        <PermissionItem perm="RoleAssignmentSchedule.ReadWrite.Directory" desc="Create active assignments" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">PIM for Groups</p>
+                      <div className="space-y-2">
+                        <PermissionItem perm="RoleManagementPolicy.ReadWrite.AzureADGroup" desc="Update group policies" />
+                        <PermissionItem perm="PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup" desc="Create eligible group assignments" />
+                        <PermissionItem perm="PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup" desc="Create active group assignments" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -6,6 +6,9 @@ export type WorkloadType =
     | "sharepoint"
     | "defender";
 
+/** Subset of workloads supported by the Configure feature */
+export type ConfigureWorkloadType = "directoryRoles" | "pimGroups";
+
 export type LoadingPhase =
     | "idle"
     | "consent"

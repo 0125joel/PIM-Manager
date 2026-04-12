@@ -1,4 +1,4 @@
-import { SecurityAlert } from "@/types/securityAlerts";
+import { SecurityAlert } from '@/types/securityAlerts.types';
 
 /**
  * Formats a security alert string by replacing placeholders with actual values.

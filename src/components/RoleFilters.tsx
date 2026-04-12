@@ -1,7 +1,7 @@
 "use client";
 
 import { RoleDetailData } from "@/types/directoryRole.types";
-import { RoleFilterState, AvailableFilterOptions } from "@/types/roleFilters";
+import { RoleFilterState, AvailableFilterOptions } from '@/types/roleFilters.types';
 import { FilterGroup } from "@/components/FilterGroup";
 import { MultiSelectDropdown, MultiSelectOption } from "@/components/MultiSelectDropdown";
 import { Filter, ChevronDown, ChevronRight, Ban } from "lucide-react";
@@ -105,7 +105,7 @@ export function RoleFilters({
     );
 
     return (
-        <div className="mb-6 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div className="mb-6 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden" data-tour="report-filters">
             {/* Filter Header */}
             <div
                 className="p-4 flex items-center justify-between cursor-pointer bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"

@@ -1,6 +1,7 @@
 "use client";
 
 import html2canvas from "html2canvas";
+import { Logger } from "@/utils/logger";
 
 /**
  * Sanitizes colors in an element tree to avoid html2canvas parsing errors
@@ -90,7 +91,7 @@ export async function captureChartsAsImages(
             try {
                 images[id] = await captureElementAsImage(element);
             } catch (error) {
-                console.error(`Failed to capture chart ${id}:`, error);
+                Logger.error("chartCapture", `Failed to capture chart ${id}:`, error);
             }
         }
     }

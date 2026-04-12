@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AssignmentSettings, Principal } from "@/types";
+import { AssignmentSettings, Principal } from "@/types/shared.types";
 import { UserGroupSearch } from "./UserGroupSearch";
 import { X } from "lucide-react";
 

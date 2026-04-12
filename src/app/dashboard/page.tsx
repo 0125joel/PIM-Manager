@@ -146,6 +146,7 @@ function DashboardContent() {
                             <button
                                 onClick={() => setShowPdfModal(true)}
                                 disabled={loading || policiesLoading || !chartsData}
+                                data-tour="dashboard-export-pdf"
                                 className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1 md:flex-none"
                             >
                                 <FileDown className="h-4 w-4" />

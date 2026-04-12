@@ -13,7 +13,8 @@ import {
 } from "@/config/pdfExportConfig";
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { PimGroupData } from "@/types/pimGroup.types";
-import { SecurityAlert } from "@/types/securityAlerts";
+import { SecurityAlert } from '@/types/securityAlerts.types';
+import { Logger } from "@/utils/logger";
 
 interface PdfExportModalProps {
     isOpen: boolean;
@@ -110,7 +111,7 @@ export function PdfExportModal({
 
             onClose();
         } catch (error) {
-            console.error("Failed to generate PDF:", error);
+            Logger.error("PdfExportModal", "Failed to generate PDF:", error);
             alert("Failed to generate PDF. Please try again.");
         } finally {
             setIsGenerating(false);

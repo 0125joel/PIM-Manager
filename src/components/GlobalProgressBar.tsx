@@ -1,19 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePimData } from "@/hooks/usePimData";
-import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
+import { usePimGroupsLoading } from "@/hooks/usePimSelectors";
 
 /**
  * Global progress bar that displays at the top of the viewport
  * Shows combined progress from both Directory Roles and PIM Groups
+ *
+ * Uses selector hooks to only re-render when loading state changes,
+ * not when data changes in unrelated workloads.
  */
 export function GlobalProgressBar() {
-    const { loading, policiesLoading, loadingProgress, policyProgress } = usePimData();
-    const { workloads } = useUnifiedPimData();
+    const [isMounted, setIsMounted] = useState(false);
 
-    // PIM Groups loading state
-    const pimGroupsLoading = workloads.pimGroups.loading.phase === "fetching";
-    const pimGroupsProgress = workloads.pimGroups.loading.progress;
+    // Only render client-side to avoid SSR/hydration issues
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
+
+    return <GlobalProgressBarContent />;
+}
+
+function GlobalProgressBarContent() {
+    const { loading, policiesLoading, loadingProgress, policyProgress } = usePimData();
+    // Use selector hook - only re-renders when pimGroups loading state changes
+    const pimGroupsLoadingState = usePimGroupsLoading();
+
+    // PIM Groups loading state (from selector hook)
+    const pimGroupsLoading = pimGroupsLoadingState.phase === "fetching";
+    const pimGroupsProgress = pimGroupsLoadingState.progress;
 
     // Calculate combined progress
     let progress = 0;

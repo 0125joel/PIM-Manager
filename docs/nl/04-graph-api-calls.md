@@ -397,6 +397,32 @@ GET /identityGovernance/roleManagementAlerts/alerts
 | `AdministrativeUnit.Read.All` | Gedelegeerd | Administrative unit namen ophalen |
 | `Application.Read.All` | Gedelegeerd | Applicatienamen ophalen |
 
+### Configure Schrijfmachtigingen
+
+| Machtiging | Scope | Gebruikt Voor |
+|------------|-------|---------------|
+| `RoleManagementPolicy.ReadWrite.Directory` | Gedelegeerd | PIM-beleidsregels updaten voor Directory Roles |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Gedelegeerd | Eligible toewijzingen aanmaken voor Directory Roles |
+| `RoleAssignmentSchedule.ReadWrite.Directory` | Gedelegeerd | Actieve toewijzingen aanmaken voor Directory Roles |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Gedelegeerd | PIM-beleidsregels updaten voor PIM Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Eligible toewijzingen aanmaken voor PIM Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Actieve toewijzingen aanmaken voor PIM Groups |
+
+> [!NOTE]
+> Schrijfmachtigingen worden via incrementele consent aangevraagd, alleen wanneer de gebruiker de Configuratiepagina opent. Ze zijn niet inbegrepen in het initiële inlogverzoek.
+
+### Configure Schrijf-API Endpoints
+
+| Operatie | Endpoint | Methode | Machtiging |
+|----------|----------|---------|------------|
+| Beleidsregel updaten | `/policies/roleManagementPolicies/{policyId}/rules/{ruleId}` | PATCH | RoleManagementPolicy.ReadWrite.Directory |
+| Eligible roltoewijzing aanmaken | `/roleManagement/directory/roleEligibilityScheduleRequests` | POST | RoleEligibilitySchedule.ReadWrite.Directory |
+| Actieve roltoewijzing aanmaken | `/roleManagement/directory/roleAssignmentScheduleRequests` | POST | RoleAssignmentSchedule.ReadWrite.Directory |
+| Groepstoewijzing aanmaken | `/identityGovernance/privilegedAccess/group/assignmentScheduleRequests` | POST | PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup |
+| Groepsbeleidsregel updaten | `/policies/roleManagementPolicies/{policyId}/rules/{ruleId}` | PATCH | RoleManagementPolicy.ReadWrite.AzureADGroup |
+
+---
+
 ### Optionele Machtigingen (PIM Groups & Security Alerts)
 
 | Machtiging | Scope | Gebruikt Voor |
@@ -415,5 +441,5 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ## Volgende Stappen
 
-- [Belangrijke Concepten](./05-belangrijke-concepten.md) - Technische concepten uitgelegd
-- [Rapportpagina](./06-rapportpagina.md) - Hoe de Rapportpagina werkt
+- [Belangrijke Concepten](./06-belangrijke-concepten.md) - Technische concepten uitgelegd
+- [Rapportpagina](./08-rapport-pagina.md) - Hoe de Rapportpagina werkt

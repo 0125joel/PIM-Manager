@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Shield, Users, AlertTriangle, Settings, EyeOff, Eye, ShieldOff } from "lucide-react";
-import { WorkloadType } from "@/types/workload";
+import { WorkloadType } from '@/types/workload.types';
 import { getEnabledWorkloads } from "@/hooks/useIncrementalConsent";
 import { isWorkloadVisible, setWorkloadVisible } from "@/components/SettingsModal";
 
@@ -162,7 +162,7 @@ export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndepen
     }
 
     return (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap" data-tour="workload-chips">
             <span className="text-xs text-zinc-500 dark:text-zinc-400 mr-1">View:</span>
 
             {visibleChips.map((chip) => {

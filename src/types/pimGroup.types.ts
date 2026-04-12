@@ -2,7 +2,7 @@
 // Reuses Principal and ScheduleInfo from roleData.ts for consistency
 
 import { Principal, ScheduleInfo, ScopeInfo } from "./directoryRole.types";
-import { WorkloadLink } from "./workload";
+import { WorkloadLink } from "./workload.types";
 
 // Group types
 export type GroupType = "security" | "m365" | "mailEnabled" | "unknown";
@@ -96,9 +96,9 @@ export interface GroupPolicyRule {
     "@odata.type": string;
     id: string;
     target?: {
-        caller?: string;
-        operations?: string[];
-        level?: string;
+        caller: string;
+        operations: string[];
+        level: string;
         inheritableSettings?: string[];
     };
     // ExpirationRule properties

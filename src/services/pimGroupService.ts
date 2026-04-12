@@ -15,6 +15,7 @@ import {
     extractGroupPolicySettings
 } from "@/types/pimGroup.types";
 import { runWorkerPool } from "@/utils/workerPool";
+import { withRetry } from "@/utils/retryUtils";
 import { Logger } from "@/utils/logger";
 
 /**
@@ -59,13 +60,14 @@ async function fetchAllPages<T>(
     request = request.header("Accept-Language", GRAPH_LOCALE);
 
     try {
-        const response = await request.get();
+        const response = await withRetry(() => request.get(), 3, 1000, `pimGroup fetchAllPages ${endpoint}`);
         allItems.push(...(response.value || []));
         nextLink = response["@odata.nextLink"] || null;
 
         while (nextLink) {
             await delay(100);
-            const nextResponse = await client.api(nextLink).get();
+            const link = nextLink;
+            const nextResponse = await withRetry(() => client.api(link).get(), 3, 1000, `pimGroup nextLink ${endpoint}`);
             allItems.push(...(nextResponse.value || []));
             nextLink = nextResponse["@odata.nextLink"] || null;
         }
@@ -222,11 +224,14 @@ async function fetchAssignmentInstancesForGroup(
  */
 async function fetchGroupDetails(client: Client, groupId: string): Promise<PimGroup | null> {
     try {
-        const group = await client.api(`/groups/${groupId}`)
-            .version("v1.0")
-            .select("id,displayName,description,mail,mailEnabled,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,isAssignableToRole")
-            .header("Accept-Language", GRAPH_LOCALE)
-            .get();
+        const group = await withRetry(
+            () => client.api(`/groups/${groupId}`)
+                .version("v1.0")
+                .select("id,displayName,description,mail,mailEnabled,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,isAssignableToRole")
+                .header("Accept-Language", GRAPH_LOCALE)
+                .get(),
+            3, 1000, 'fetchGroupDetails'
+        );
 
         return {
             id: group.id,
@@ -433,50 +438,7 @@ export async function fetchAllPimGroupData(
     }
 }
 
-/**
- * Get aggregated stats across all PIM groups
- */
-export function getAggregatedGroupStats(groupData: PimGroupData[]): {
-    totalGroups: number;
-    totalEligibleMembers: number;
-    totalActiveMembers: number;
-    totalPermanentMembers: number;
-    totalEligibleOwners: number;
-    totalActiveOwners: number;
-    totalPermanentOwners: number;
-    totalAssignments: number;
-} {
-    let totalEligibleMembers = 0;
-    let totalActiveMembers = 0;
-    let totalPermanentMembers = 0;
-    let totalEligibleOwners = 0;
-    let totalActiveOwners = 0;
-    let totalPermanentOwners = 0;
-    let totalAssignments = 0;
-
-    for (const data of groupData) {
-        if (data.stats) {
-            totalEligibleMembers += data.stats.eligibleMembers;
-            totalActiveMembers += data.stats.activeMembers;
-            totalPermanentMembers += data.stats.permanentMembers;
-            totalEligibleOwners += data.stats.eligibleOwners;
-            totalActiveOwners += data.stats.activeOwners;
-            totalPermanentOwners += data.stats.permanentOwners;
-            totalAssignments += data.stats.totalAssignments;
-        }
-    }
-
-    return {
-        totalGroups: groupData.length,
-        totalEligibleMembers,
-        totalActiveMembers,
-        totalPermanentMembers,
-        totalEligibleOwners,
-        totalActiveOwners,
-        totalPermanentOwners,
-        totalAssignments
-    };
-}
+export { getAggregatedGroupStats } from "@/utils/groupStatsUtils";
 
 // ============================================================================
 // POLICY FETCHING (Progressive Loading - like Directory Roles)
@@ -519,13 +481,16 @@ async function fetchGroupPolicies(
     try {
         // Use same endpoint structure as Directory Roles (pimApi.ts)
         // Note: Using beta version for Groups (v1.0 not supported for scopeType='Group')
-        const response = await client
-            .api("/policies/roleManagementPolicyAssignments")
-            .version("beta")
-            .header("Accept-Language", GRAPH_LOCALE)
-            .filter(`scopeId eq '${groupId}' and scopeType eq 'Group'`)
-            .expand("policy($expand=rules)")
-            .get();
+        const response = await withRetry(
+            () => client
+                .api("/policies/roleManagementPolicyAssignments")
+                .version("beta")
+                .header("Accept-Language", GRAPH_LOCALE)
+                .filter(`scopeId eq '${groupId}' and scopeType eq 'Group'`)
+                .expand("policy($expand=rules)")
+                .get(),
+            3, 1000, 'fetchGroupPolicies'
+        );
 
         const assignments = response.value || [];
         const policies: GroupPimPolicy[] = [];

@@ -425,8 +425,7 @@ Na refactoring volgen alle services een consistent patroon:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Note**: PIM Groups haalt momenteel GEEN policies op (duration, MFA, approval).
-> Dit is een geplande uitbreiding voor toekomstige versies.
+> **Note**: PIM Groups policy data (duration, MFA, approval) wordt opgehaald als onderdeel van het groepsdata-laden en is beschikbaar in de wizard PoliciesStep.
 
 ### Data Aggregation
 
@@ -481,7 +480,7 @@ interface AggregatedData {
 
 | Data Type | Cache Location | Expiry | Rationale |
 |-----------|---------------|--------|-----------|
-| Role Data | SessionStorage | 5 min | Frequente updates nodig |
+| Role Data | SessionStorage | 60 min | Balans tussen performance en actualiteit |
 | Consent State | LocalStorage | Permanent | Onthoud user preferences |
 | Workload Settings | LocalStorage | Permanent | User config |
 | Navigatie Status | URL Search Params | Transient | Tijdelijke overrides (bijv. ?workload=directoryRoles) |
@@ -494,6 +493,161 @@ De applicatie gebruikt een **Hybrid State** aanpak voor navigatie:
    - De overschreven status wordt NIET opgeslagen in storage.
    - Wegnavigeren (URL wissen) herstelt de opgeslagen voorkeur van de gebruiker.
    - Dit voorkomt dat tijdelijke gefilterde weergaven "blijven hangen" en de gebruiker hinderen.
+
+---
+
+## Configure Wizard
+
+De **Configure Wizard** (`/configure`) biedt een begeleide multi-step workflow voor PIM-beheerders om roleassignments, policies en groepsinstellingen te configureren.
+
+### Wizard Architectuur
+
+**Belangrijkste Componenten:**
+- `src/app/configure/page.tsx` - Hoofd wizard pagina (456 regels)
+- `src/components/configure/ConfigureWizard.tsx` - Wizard orchestrator (124 regels)
+- `src/hooks/useWizardState.tsx` - Gecentraliseerd state management (429 regels)
+- `src/hooks/useNavigationGuard.ts` - Bescherming tegen onopgeslagen wijzigingen (80 regels)
+
+**Wizard Stappen (dynamisch, 8–10 totaal afhankelijk van selecties):**
+1. **BackupStep** - Data verversen en verifiëren dat data actueel is voor het maken van wijzigingen
+2. **WorkloadStep** - Selecteer workload(s): Directory Roles, PIM Groups, of beide
+3. **ConfigTypeStep** - Kies configuratietype: alleen policies, alleen toewijzingen, of beide
+4. **ScopeStep** - Selecteer specifieke rollen/groepen; kies scratch / huidige laden / klonen modus
+5. **PoliciesStep** *(per workload, indien policies geselecteerd)* - Activatie-, assignment-vervaldatum- en notificatie-instellingen
+6. **AssignmentsStep** *(per workload, indien toewijzingen geselecteerd)* - Maak eligible/actieve toewijzingen met principal- en scope-selectie
+7. **ReviewStep** - Bekijk alle wijzigingen voor toepassen
+8. **ApplyStep** - Voer uit via Graph API met real-time voortgangsregistratie
+9. **CheckpointStep** *(alleen bij dual-workload flows)* - Resultaten voor eerste workload; doorgaan of afsluiten
+10. **FinalStep** - Voltooiingssamenvatting met navigatielinks
+
+### State Management Pattern
+
+**Wizard Context Provider met Selector Pattern:**
+```typescript
+// src/hooks/useWizardState.tsx
+interface WizardData {
+    configType: "settings" | "assignment" | "both";
+    selectedRoleIds: string[];
+    selectedGroupIds: string[];
+    directoryRoles: WorkloadConfig;  // policies, assignments, configSource
+    pimGroups: WorkloadConfig;
+}
+
+// Selector hooks — voorkeur boven volledige context om re-renders te beperken
+const selectedRoles = useWizardData(data => data.selectedRoleIds);
+const { nextStep, prevStep } = useWizardNavigation();
+const { updateData } = useWizardActions();
+const steps = useWizardSteps();
+const isDirty = useWizardDirty();
+const roleConfig = useWorkloadConfig('directoryRoles');
+```
+
+**Key Features:**
+- Selector hooks voorkomen onnodige re-renders in leaf components
+- Step validatie met `WizardValidationService`
+- Dirty state tracking voor navigatie guards
+- Type-safe workload-specifieke configuraties per workload
+
+### Navigatie & Validatie
+
+**Navigation Guard:**
+- Browser navigatiebescherming via `beforeunload` event
+- React Router navigatie blokkering wanneer `isDirty === true`
+- Gebruikersbevestigingsdialoog voor onopgeslagen wijzigingen
+
+**Step Validatie:**
+```typescript
+// Elke stap moet validatie doorstaan voordat doorgegaan kan worden
+validateCurrentStep(): boolean {
+    switch (currentStep.id) {
+        case "scope": return selectedRoles.length > 0;
+        case "policies": return policies.isValid;
+        case "assignments": return assignments.length > 0;
+        // ...
+    }
+}
+```
+
+### Apply Service Architectuur
+
+**Uitvoeringsflow** (`src/services/wizardApplyService.ts` - 872 regels):
+
+1. **Backup Fase** (Optioneel)
+   - Exporteer bestaande role policies naar JSON
+   - Opslaan naar lokaal bestandssysteem
+
+2. **Policy Application Fase**
+   - Update role policy instellingen via Graph API
+   - Parallelle uitvoering met worker pool pattern
+   - Rate limiting: 200ms vertraging tussen requests
+
+3. **Assignment Creation Fase**
+   - Creëer eligible/active assignments
+   - Sequentiële uitvoering voor betrouwbaarheid
+   - Voortgangsregistratie met real-time UI updates
+
+**Error Handling:**
+- Individuele operatie error capture
+- Ondersteuning voor gedeeltelijk succes scenario's
+- Gedetailleerde foutrapportage per role/group
+- Rollback begeleiding bij fouten
+
+### Services & Utilities
+
+**Policy Parser Service** (`src/services/policyParserService.ts` - 323 regels):
+- Parseert bestaande Graph API policy responses
+- Normaliseert duration formats (ISO 8601 ↔ uren/dagen)
+- Type-safe policy transformaties
+
+**Wizard Validation Service** (`src/services/WizardValidationService.ts` - 61 regels):
+- Cross-step validatieregels
+- Business logic validatie
+- Voorkomt ongeldige configuraties
+
+**Duration Utilities** (`src/utils/durationUtils.ts` - 254 regels):
+- ISO 8601 duration parsing en formatting
+- Menselijk leesbare duration conversie
+- Validatie van min/max constraints
+
+### UI Components
+
+**Gespecialiseerde Componenten:**
+- `DurationSlider.tsx` (173 regels) - Duration input met presets
+- `PrincipalSelector.tsx` - User/group zoeken met Graph API integratie
+- `Toggle.tsx` (43 regels) - Toegankelijke toggle switches
+- `Skeleton.tsx` (92 regels) - Loading state placeholders
+
+**Design Patterns:**
+- React.memo voor dure step componenten (PoliciesStep, ScopeStep)
+- useMemo voor berekende waarden en gefilterde lijsten
+- useCallback voor event handlers om re-renders te voorkomen
+- Compound component pattern voor multi-part formulieren
+
+### Beveiliging & Data Validatie
+
+**Input Validatie:**
+- OData filter escaping in principal search queries
+- Duration range validatie (min/max constraints)
+- Principal ID validatie (GUID formaat)
+- Role/group existence verificatie
+
+**Permission Vereisten:**
+- Zelfde permissies als hoofdapplicatie (RoleManagement.ReadWrite.Directory)
+- Geen privilege elevatie tijdens wizard uitvoering
+- Read-only preview voor toepassen
+
+### Performance Overwegingen
+
+**Optimalisaties:**
+- Lazy loading van step componenten
+- Gevirtualiseerde lijsten voor grote role/group sets
+- Debounced search inputs (300ms vertraging)
+- Gecachte Graph API responses tijdens wizard sessie
+
+**Bekende Bottlenecks** (Zie Code Optimization Analysis):
+- Monolithische wizard context veroorzaakt brede re-renders
+- Sequentiële API calls bij assignment creation (25s voor 100 assignments)
+- JSON.stringify keys in PoliciesStep veroorzaken render overhead
 
 ---
 
@@ -530,10 +684,13 @@ async function runWorkerPool<TItem, TResult>({
 
 ### Rate Limiting Strategy
 
-| Workload | Workers | Delay | Rationale |
-|----------|---------|-------|-----------|
-| Directory Roles Policies | 8 | 300ms | Geoptimaliseerd, blijft binnen quota (10-22%) |
-| PIM Groups | 8 | 300ms | Geoptimaliseerd voor consistente performance |
+| Workload / Operatie | Workers | Delay | Rationale |
+|---------------------|---------|-------|-----------|
+| Directory Roles — policy fetch | 8 | 300ms | Geoptimaliseerd, blijft binnen quota (10-22%) |
+| PIM Groups — hoofddata fetch | 3 | 500ms | Conservatief ter bescherming van group API quota |
+| PIM Groups — onbeheerde groepen | 5 | 200ms | Matige belasting voor aanvullende data |
+| PIM Groups — volledige refresh | 8 | 300ms | Maximale doorvoer bij expliciete gebruikersinitiatief |
+| Worker pool standaard (indien niet opgegeven) | 8 | 300ms | Valt terug op maximale doorvoer |
 
 **Microsoft Graph API Limieten (Identity & Access):**
 
@@ -705,7 +862,7 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 | Data Type | Sensitivity | Storage | Lifetime |
 |-----------|-------------|---------|----------|
 | Access tokens | High | Memory only | Session |
-| Role data | Medium | SessionStorage | 5 minutes |
+| Role data | Medium | SessionStorage | 60 minutes |
 | Consent state | Low | LocalStorage | Permanent |
 | User preferences | Low | LocalStorage | Permanent |
 
@@ -813,39 +970,65 @@ Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./08-deplo
 ```
 src/
 ├── components/
+│   ├── configure/                # Configure functie (Wizard, Handmatig, Bulk modi)
+│   │   ├── shared/               # Gedeelde componenten over modi
+│   │   │   └── PrincipalSelector.tsx  # Gebruiker/groep zoeken (Graph API)
+│   │   ├── wizard/               # Wizard modus stap componenten
+│   │   └── modes/                # ManualMode.tsx, BulkMode.tsx
+│   ├── ui/                       # Primitieve UI: Toggle, Skeleton, Toast, DurationSlider
 │   ├── ErrorBoundary.tsx         # Error catching + fallback UI
-│   ├── GlobalProgressBar.tsx     # Combined loading progress
-│   ├── LoadingStatus.tsx         # Inline loading indicators
-│   ├── InteractiveStatCard.tsx   # Reusable dashboard card
-│   ├── ScopeBadge.tsx            # Scope visualization
+│   ├── GlobalProgressBar.tsx     # Gecombineerde laadvoortgang
+│   ├── LoadingStatus.tsx         # Inline laadindicatoren
+│   ├── InteractiveStatCard.tsx   # Herbruikbare dashboard kaart
+│   ├── ScopeBadge.tsx            # Scope visualisatie
 │   ├── WorkloadChips.tsx         # Workload toggle chips
-│   └── ThemeProvider.tsx         # Dark/light mode
+│   └── ThemeProvider.tsx         # Donker/licht modus
 │
 ├── services/
 │   ├── directoryRoleService.ts   # Entra ID Roles + Policies
-│   └── pimGroupService.ts        # PIM for Groups
+│   ├── pimGroupService.ts        # PIM for Groups
+│   ├── pimConfigurationService.ts # Policy parsing + schrijf helpers
+│   ├── wizardApplyService.ts     # Bulk policy/toewijzing schrijven via Graph API
+│   ├── deltaService.ts           # Incrementele Graph API delta updates
+│   ├── CsvParserService.ts       # CSV parsen + valideren voor Bulk modus
+│   ├── WizardValidationService.ts # Cross-stap wizard validatieregels
+│   └── policyParserService.ts    # Parse Graph API policy regelstructuren
 │
 ├── contexts/
 │   ├── UnifiedPimContext.tsx     # Multi-workload state
-│   ├── DirectoryRoleContext.tsx  # Legacy roles context (exports PimDataProvider)
+│   ├── DirectoryRoleContext.tsx  # Directory Roles data (exporteert PimDataProvider)
 │   ├── ViewModeContext.tsx       # View mode state
-│   └── MobileMenuContext.tsx     # Mobile menu state
+│   ├── MobileMenuContext.tsx     # Mobile menu state
+│   └── ToastContext.tsx          # Toast notificatiesysteem
 │
 ├── hooks/
-│   ├── useAggregatedData.ts      # Combined statistics
+│   ├── useWizardState.tsx        # Wizard context + selector hooks
+│   ├── usePimData.ts             # Directory Roles data toegang
+│   ├── usePimSelectors.ts        # Gememoïseerde selectors voor PIM data
+│   ├── useAggregatedData.ts      # Gecombineerde statistieken over workloads
 │   ├── useIncrementalConsent.ts  # Consent flow
-│   ├── useConsentedWorkloads.ts  # Consent detection
-│   └── useRoleFilters.ts         # Role filtering logic
+│   ├── useConsentedWorkloads.ts  # Consent detectie
+│   ├── useRoleFilters.ts         # Rol filter logica
+│   └── useNavigationGuard.ts    # Waarschuw bij onopgeslagen wijzigingen
 │
 ├── types/
-│   ├── directoryRole.types.ts    # Role data types
-│   ├── pimGroup.types.ts         # Group data types
-│   └── workload.ts               # Workload state types
+│   ├── directoryRole.types.ts    # Rol data types
+│   ├── pimGroup.types.ts         # Groep data types
+│   ├── wizard.types.ts           # Wizard data types
+│   ├── workload.ts               # Workload state types
+│   ├── roleFilters.ts            # Filter types
+│   └── securityAlerts.ts        # Security alert types
 │
 └── utils/
-    ├── workerPool.ts             # Parallel fetching utility
-    ├── pimApi.ts                 # Policy read/write helpers
-    └── scopeUtils.ts             # Scope enrichment
+    ├── workerPool.ts             # Parallel fetch utility (standaard: 8 workers, 300ms)
+    ├── retryUtils.ts             # withRetry() exponentiële backoff voor 429/5xx
+    ├── durationUtils.ts          # ISO 8601 duration parsing + formattering
+    ├── etagCache.ts              # ETag-gebaseerde HTTP caching
+    ├── scopeUtils.ts             # Scope type detectie (7 scope types)
+    ├── logger.ts                 # Gestructureerde logging met dynamische niveaus
+    ├── authContextApi.ts         # Haal Conditional Access auth contexten op
+    ├── alertFormatting.ts        # Security alert iconen + kleuren
+    └── chartCapture.ts           # html2canvas wrapper voor PDF export
 ```
 
 ---

@@ -48,12 +48,16 @@ const loginRequest = {
 };
 ```
 
-**Optional Scopes** (Incremental Consent):
+**Optional Read Scopes** (Incremental Consent):
 - `PrivilegedAccess.Read.AzureADGroup` - PIM for Groups
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
 
-**Read-Only by Default:** No write scopes in core functionality. PIM Manager is a visualization and reporting tool.
+**Write Scopes** (Incremental Consent — only when entering Configure mode):
+- Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
+- PIM Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
+
+**Read-Only by Default:** No write scopes in the core login request. Reporting features use read-only permissions. Write permissions are only requested when the user explicitly enters the Configure feature, using incremental consent.
 
 ---
 
@@ -67,10 +71,9 @@ Microsoft Authentication Library (MSAL) handles all authentication.
 ```typescript
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_CLIENT_ID!,
+    clientId: getClientId(),  // Runtime config (self-hosted) or NEXT_PUBLIC_CLIENT_ID (SaaS)
     authority: "https://login.microsoftonline.com/organizations",
-    redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI ||
-                 window.location.origin
+    redirectUri: window.location.origin  // Auto-detected, works on any hosting domain
   },
   cache: {
     cacheLocation: "sessionStorage",  // Critical: NOT localStorage
@@ -81,7 +84,7 @@ export const msalConfig: Configuration = {
 
 **Key Security Features:**
 - Multi-tenant support (`/organizations` endpoint)
-- Runtime validation of required environment variables
+- Client ID resolved at runtime — supports both SaaS and self-hosted deployments without secrets
 - Token storage in sessionStorage (cleared on browser close)
 
 ### Token Storage
@@ -165,11 +168,10 @@ const nextConfig: NextConfig = {
 **SessionStorage Usage:**
 ```typescript
 // src/services/deltaService.ts
-const DELTA_LINK_KEY_ROLES = "pim_delta_roles";
-const DELTA_LINK_KEY_ELIGIBLE = "pim_delta_eligible";
-const DELTA_LINK_KEY_ACTIVE = "pim_delta_active";
+const STORAGE_DELTA_LINK_KEY = "pim_directory_roles_delta_link";
+const STORAGE_GROUP_DELTA_LINK_KEY = "pim_groups_delta_link";
 
-sessionStorage.setItem(DELTA_LINK_KEY_ROLES, deltaLink);
+sessionStorage.setItem(STORAGE_DELTA_LINK_KEY, deltaLink);
 ```
 
 **LocalStorage Usage (Non-Sensitive Only):**
@@ -179,6 +181,8 @@ localStorage.setItem("LOG_LEVEL", "DEBUG");
 
 // src/hooks/useIncrementalConsent.ts
 localStorage.setItem("pim_workload_enabled_directoryRoles", "true");
+
+// src/components/SettingsModal.tsx
 localStorage.setItem("pim_visibility_directoryRoles", "true");
 ```
 
@@ -217,14 +221,14 @@ const client = Client.initWithMiddleware({
 
 **Worker Pool** (`src/utils/workerPool.ts`):
 ```typescript
-export async function runWorkerPool<TInput, TOutput>(
-  items: TInput[],
-  taskFn: (item: TInput) => Promise<TOutput>,
-  options: WorkerPoolOptions = {}
-): Promise<TOutput[]> {
+export async function runWorkerPool<TItem, TResult>(
+  options: WorkerPoolOptions<TItem, TResult>
+): Promise<WorkerPoolResult<TItem, TResult>> {
   const {
+    items,
     workerCount = 8,      // Configurable concurrency
     delayMs = 300,        // Delay between requests per worker
+    processor,
     onProgress
   } = options;
 
@@ -239,8 +243,8 @@ export async function runWorkerPool<TInput, TOutput>(
 - Graceful handling of API throttling (429 errors)
 
 **Per-Endpoint Delays:**
-- Paginated requests: 100ms delay (`src/services/directoryRoleService.ts:73`)
-- Scope enrichment: 50ms delay (`src/services/directoryRoleService.ts:221`)
+- Paginated requests: 100ms delay between pages in `src/services/directoryRoleService.ts`
+- Paginated requests: 100ms delay between pages in `src/services/pimGroupService.ts`
 
 ### Input Validation
 
@@ -279,7 +283,7 @@ catch (error: unknown) {
 **React Automatic Escaping:**
 - React escapes all JSX expressions by default
 - No use of `dangerouslySetInnerHTML` with user input
-- Safe theme script embedding (`src/app/layout.tsx:41-58`)
+- Safe theme script embedding via `next/script` (`public/theme-init.js`)
 
 **Input Sanitization:**
 - OData escaping for search queries
@@ -290,11 +294,12 @@ catch (error: unknown) {
 
 **Error Boundaries** (`src/components/ErrorBoundary.tsx`):
 ```typescript
-componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("Error boundary caught:", error.message);
+componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  if (process.env.NODE_ENV === 'development') {
+    Logger.error("ErrorBoundary", "Caught error:", error);
+    Logger.error("ErrorBoundary", "Component stack:", errorInfo.componentStack);
   } else {
-    console.error("Error boundary caught:", error, errorInfo);
+    Logger.error("ErrorBoundary", "An error occurred:", error.message);
   }
 }
 ```
@@ -404,26 +409,32 @@ if (!isAuthenticated) {
 
 ## 8. Deployment Security
 
-### Recommended Security Headers (Cloudflare Pages)
+### Recommended Security Headers (Cloudflare Pages & Azure Static Web Apps)
 
 **Content Security Policy:**
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  script-src 'self' 'unsafe-inline' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: https:;
-  connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com;
-  font-src 'self';
-  frame-ancestors 'none';
+  img-src 'self' data: https://graph.microsoft.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com;
+  font-src 'self' data:;
+  frame-src 'self' https://login.microsoftonline.com;
+  object-src 'none';
+  base-uri 'self';
 ```
+
+> [!NOTE]
+> `'unsafe-eval'` is **not** needed and is intentionally omitted. `'unsafe-inline'` in `script-src` is required because Next.js static export injects inline RSC hydration scripts (`self.__next_f.push`) that cannot be avoided. The inline theme script is served from `/theme-init.js` (loaded via `next/script`), but the Next.js runtime hydration still requires `'unsafe-inline'`.
 
 **Additional Headers:**
 ```
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: geolocation=(), microphone=(), camera=()
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 ```
 
 **HTTPS Only:**
@@ -499,7 +510,7 @@ Permissions-Policy: geolocation=(), microphone=(), camera=()
 
 **Authentication:**
 - [ ] Verify `cacheLocation: "sessionStorage"` in `authConfig.ts`
-- [ ] Confirm no write scopes in core `loginRequest`
+- [ ] Confirm no write scopes in core `loginRequest` (write scopes only in incremental consent)
 - [ ] Check MSAL version for known vulnerabilities
 
 **Data Protection:**
@@ -564,4 +575,4 @@ PIM Manager implements defense-in-depth security:
 
 - [**Architecture**](./00-architecture.md) - Understanding the client-side design
 - [**Data Flow**](./03-data-flow.md) - How data moves through the application
-- [**Deployment**](./09-deployment.md) - Secure deployment on Cloudflare Pages
+- [**Deployment**](./10-deployment.md) - Deployment on Cloudflare Pages or Azure Static Web Apps

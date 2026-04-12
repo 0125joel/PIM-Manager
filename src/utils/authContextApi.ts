@@ -1,5 +1,6 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { GRAPH_LOCALE } from "@/config/constants";
+import { Logger } from "@/utils/logger";
 
 export interface AuthenticationContext {
     id: string;              // e.g., "c1", "c2"
@@ -27,9 +28,7 @@ export async function getAuthenticationContexts(client: Client): Promise<Authent
             isAvailable: ctx.isAvailable !== false
         }));
     } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-            console.error("Failed to fetch authentication contexts:", error);
-        }
+        Logger.error("authContextApi", "Failed to fetch authentication contexts:", error);
         return [];
     }
 }

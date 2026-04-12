@@ -41,10 +41,48 @@ Managing Privileged Access in complex environments is challenging.
 
 ## Key Benefits
 
-*   **Unified Governance**: View and manage all your privileged assignments (Directory, Groups, Resources) in a single, consolidated view.
+*   **Unified Governance**: View and manage all your privileged assignments (Directory Roles and PIM Groups) in a single, consolidated view.
 *   **Visual Reporting**: Instantly visualize role distribution and assignment types (Eligible vs. Active) to identify security risks.
 *   **Security & Trust**: Open Source and client-side executed for maximum transparency and trust.
 
+
+## Deployment
+
+PIM Manager can be used in two ways:
+
+### Use the Hosted Version
+
+Visit **[pimmanager.com](https://pimmanager.com)** — no setup required. Sign in with your Microsoft Entra ID account and start immediately.
+
+### Self-Host in Your Own Azure Tenant
+
+Deploy PIM Manager directly into your own Azure environment using Azure Static Web Apps (free tier). No fork or CLI required — everything happens in Azure Portal.
+
+**Prerequisites:**
+1. An [App Registration](docs/en/README.md) in your Microsoft Entra ID tenant with the required permissions
+2. An Azure subscription
+
+**Deploy:**
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F0125joel%2FPIM-manager%2Fmain%2Fazuredeploy.json)
+
+The wizard asks for 3 values:
+- **Static Web App Name** — the resource name in Azure
+- **Location** — Azure region (West Europe recommended)
+- **Entra Client ID** — the Client ID from your App Registration
+
+Azure will create the Static Web App, automatically download the latest release, and deploy it. Your app will be live at the URL shown in the deployment outputs.
+
+**After deployment:** add your Static Web App URL as a redirect URI in your App Registration:
+1. Go to **Entra ID > App registrations > [Your App] > Authentication**
+2. Under **Single-page application**, add your SWA URL (e.g. `https://your-app.azurestaticapps.net`)
+3. Save
+
+> The app will not function until this step is completed. See [Deployment docs](docs/en/10-deployment.md) for full details.
+
+**To update:** re-run the template or delete and redeploy.
+
+---
 
 ## What's New
 
@@ -77,6 +115,10 @@ See the [LICENSE](LICENSE) file for details.
   <h3>Visitor Statistics</h3>
   <p><strong>Page Views:</strong></p>
   <img src="https://hits.sh/github.com/0125joel/PIM-manager.svg?style=flat-square&label=hits&color=48c5fa" alt="Hits"/>
+  <br/>
+  <br/>
+  <p><strong>Self-Hosted Deployments:</strong></p>
+  <img src="https://img.shields.io/github/downloads/0125joel/PIM-Manager/total/release.zip?style=flat-square&label=deployments&color=48c5fa" alt="Deployments"/>
   <br/>
   <br/>
   <p><strong>Unique Visitors:</strong></p>

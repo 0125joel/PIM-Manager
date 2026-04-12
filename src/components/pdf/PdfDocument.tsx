@@ -13,7 +13,7 @@ import {
 import { CHART_SECTIONS, OVERVIEW_STATS, calculateOverviewStats, WorkloadSelection } from "@/config/pdfExportConfig";
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { PimGroupData } from "@/types/pimGroup.types";
-import { SecurityAlert, getSeverityLabel } from "@/types/securityAlerts";
+import { SecurityAlert, getSeverityLabel } from '@/types/securityAlerts.types';
 import { formatAlertString } from "@/utils/alertFormatting";
 
 // Color Palette (matching app design)

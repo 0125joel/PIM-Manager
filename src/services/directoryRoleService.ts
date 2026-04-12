@@ -2,19 +2,20 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { GRAPH_LOCALE, PIM_URLS } from "@/config/constants";
 import {
     RoleDefinition,
-    RoleAssignment,
-    PimEligibilitySchedule,
-    PimAssignmentSchedule,
     PimScheduleInstance,
     PimPolicyAssignment,
     PimPolicy,
+    PimPolicyRule,
     Approver,
+    PrimaryApprover,
     RoleDetailData,
     GraphListResponse,
-    Principal
+    Principal,
+    ScopeInfo
 } from "@/types/directoryRole.types";
 import { detectScopeType, enrichScopeInfo } from "@/utils/scopeUtils";
 import { runWorkerPool } from "@/utils/workerPool";
+import { withRetry } from "@/utils/retryUtils";
 import { Logger } from "../utils/logger";
 import { getRolePolicy } from "@/services/pimConfigurationService";
 
@@ -39,6 +40,7 @@ async function fetchAllPages<T>(
         expand?: string;
         select?: string;
         filter?: string;
+        top?: number;
     }
 ): Promise<T[]> {
     const allItems: T[] = [];
@@ -59,19 +61,27 @@ async function fetchAllPages<T>(
     if (options?.filter) {
         request = request.filter(options.filter);
     }
+    // Add $top parameter for pagination optimization (default 100 items per page)
+    // Reduces API calls by 5x compared to default 20 items (500 roles: 25 calls → 5 calls)
+    if (options?.top) {
+        request = request.top(options.top);
+    } else {
+        request = request.top(100); // Graph API max for most endpoints
+    }
 
     request = request.header("Accept-Language", GRAPH_LOCALE);
 
     try {
         // Fetch first page
-        const response = await request.get();
+        const response = await withRetry(() => request.get(), 3, 1000, `directoryRole fetchAllPages ${endpoint}`);
         allItems.push(...(response.value || []));
         nextLink = response["@odata.nextLink"] || null;
 
         // Fetch remaining pages
         while (nextLink) {
             await delay(100); // Small delay between pages to avoid throttling
-            const nextResponse = await client.api(nextLink).get();
+            const link = nextLink;
+            const nextResponse = await withRetry(() => client.api(link).get(), 3, 1000, `directoryRole nextLink ${endpoint}`);
             allItems.push(...(nextResponse.value || []));
             nextLink = nextResponse["@odata.nextLink"] || null;
         }
@@ -92,18 +102,85 @@ export type ProgressCallback = (current: number, total: number, status: string) 
 
 /**
  * Callback for when a single policy is loaded (for deferred/priority loading)
+ * Receives PimPolicyAssignment (with nested .policy property) or null
  * error is set when the fetch failed
  */
-export type PolicyLoadedCallback = (roleId: string, policy: any, error?: string) => void;
+export type PolicyLoadedCallback = (roleId: string, policy: PimPolicyAssignment | null, error?: string) => void;
 
-// Track which policies have been fetched (for priority fetch deduplication)
-const fetchedPolicies = new Set<string>();
+// SessionStorage keys for policy caching (60min TTL matching architecture standard)
+const POLICY_CACHE_STORAGE_KEY = "directory_role_policy_cache";
+const POLICY_CACHE_TIMESTAMP_KEY = "directory_role_policy_timestamp";
+const CACHE_TTL = 60 * 60 * 1000; // 60 minutes (architecture standard)
+
+// In-memory policy cache for current session (Map stores actual policy data)
+const policyCache = new Map<string, PimPolicyAssignment | null>();
+
+/**
+ * Load policy cache from SessionStorage if not expired
+ */
+function loadPolicyCacheFromStorage(): void {
+    // Guard: only run in browser environment
+    if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+        return;
+    }
+
+    try {
+        const timestamp = sessionStorage.getItem(POLICY_CACHE_TIMESTAMP_KEY);
+        const cacheData = sessionStorage.getItem(POLICY_CACHE_STORAGE_KEY);
+
+        if (timestamp && cacheData) {
+            const cacheAge = Date.now() - parseInt(timestamp, 10);
+            if (cacheAge < CACHE_TTL) {
+                const parsed = JSON.parse(cacheData) as Record<string, PimPolicyAssignment | null>;
+                Object.entries(parsed).forEach(([roleId, policy]) => {
+                    policyCache.set(roleId, policy);
+                });
+                Logger.debug("PolicyCache", `Loaded ${policyCache.size} policies from cache (age: ${Math.round(cacheAge / 1000)}s)`);
+            } else {
+                Logger.debug("PolicyCache", `Cache expired (age: ${Math.round(cacheAge / 1000)}s), clearing`);
+                sessionStorage.removeItem(POLICY_CACHE_STORAGE_KEY);
+                sessionStorage.removeItem(POLICY_CACHE_TIMESTAMP_KEY);
+            }
+        }
+    } catch (error) {
+        Logger.warn("PolicyCache", "Failed to load cache from storage:", error);
+    }
+}
+
+/**
+ * Save policy cache to SessionStorage
+ */
+function savePolicyCacheToStorage(): void {
+    // Guard: only run in browser environment
+    if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+        return;
+    }
+
+    try {
+        const cacheObject = Object.fromEntries(policyCache.entries());
+        sessionStorage.setItem(POLICY_CACHE_STORAGE_KEY, JSON.stringify(cacheObject));
+        sessionStorage.setItem(POLICY_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        Logger.debug("PolicyCache", `Saved ${policyCache.size} policies to storage`);
+    } catch (error) {
+        Logger.warn("PolicyCache", "Failed to save cache to storage:", error);
+    }
+}
+
+// Load cache on module initialization
+loadPolicyCacheFromStorage();
 
 /**
  * Clear the policy cache - used when forcing a fresh policy comparison
  */
 export function clearPolicyCache(): void {
-    fetchedPolicies.clear();
+    policyCache.clear();
+
+    // Guard: only clear sessionStorage in browser environment
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(POLICY_CACHE_STORAGE_KEY);
+        sessionStorage.removeItem(POLICY_CACHE_TIMESTAMP_KEY);
+    }
+
     Logger.debug("PolicyCache", "Policy cache cleared");
 }
 
@@ -115,49 +192,63 @@ export async function fetchSinglePolicy(
     client: Client,
     roleId: string
 ): Promise<any | null | "CACHED"> {
-    // Already fetched? Return "CACHED" to indicate no fetch needed but data exists
-    if (fetchedPolicies.has(roleId)) {
-        Logger.debug("PriorityFetch", `Policy for ${roleId} already fetched, skipping`);
-        return "CACHED";
+    // Check cache first - return actual cached data
+    if (policyCache.has(roleId)) {
+        const cachedPolicy = policyCache.get(roleId);
+        Logger.debug("PriorityFetch", `Policy for ${roleId} loaded from cache`);
+        return cachedPolicy; // Return actual data, not "CACHED" string
     }
 
     try {
         Logger.debug("PriorityFetch", `Fetching policy for role ${roleId}`);
-        const response = await client
-            .api(PIM_URLS.roleManagementPolicyAssignments)
-            .version("v1.0")
-            .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
-            .expand('policy($expand=rules)')
-            .header('Accept-Language', GRAPH_LOCALE)
-            .get();
+        const response = await withRetry(
+            () => client
+                .api(PIM_URLS.roleManagementPolicyAssignments)
+                .version("v1.0")
+                .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
+                .expand('policy($expand=rules)')
+                .header('Accept-Language', GRAPH_LOCALE)
+                .get(),
+            3, 1000, 'fetchSinglePolicy'
+        );
 
-        fetchedPolicies.add(roleId); // Always mark as fetched, even if empty
+        const policy = response.value?.length > 0 ? response.value[0] : null;
 
-        if (response.value?.length > 0) {
-            return response.value[0];
-        }
-        return null; // Explicitly return null for "No Policy Found"
+        // Cache the policy data (store actual data, not just ID)
+        policyCache.set(roleId, policy);
+        savePolicyCacheToStorage(); // Persist to SessionStorage
+
+        return policy;
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         Logger.error("PriorityFetch", `Failed for role ${roleId}:`, errorMessage);
-        fetchedPolicies.add(roleId); // Mark as fetched even on error to prevent infinite retry loops
+        // Cache null to prevent infinite retry loops
+        policyCache.set(roleId, null);
+        savePolicyCacheToStorage();
         return null;
     }
 }
 
 
+/** Assignment types that can be enriched with scope info */
+interface EnrichableAssignment {
+    directoryScopeId: string;
+    appScopeId?: string;
+    scopeInfo?: ScopeInfo;
+}
+
 /**
  * Enriches assignments with scope information
  * Uses caching to avoid duplicate API calls for the same scope
  */
-export async function enrichAssignmentsWithScope(
+export async function enrichAssignmentsWithScope<T extends EnrichableAssignment>(
     client: Client,
-    assignments: any[]
-): Promise<any[]> {
+    assignments: T[]
+): Promise<T[]> {
     if (!assignments || assignments.length === 0) return assignments;
 
-    const scopeCache = new Map<string, any>();
-    const enrichedAssignments: any[] = [];
+    const scopeCache = new Map<string, ScopeInfo>();
+    const enrichedAssignments: T[] = [];
 
     Logger.debug("ScopeEnrichment", `Enriching ${assignments.length} assignments with scope info`);
 
@@ -232,24 +323,30 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
     try {
         // Try to fetch with isPrivileged first
         try {
-            const response: GraphListResponse<RoleDefinition> = await client
-                .api(PIM_URLS.roleDefinitions)
-                .version("beta")
-                .header("Accept-Language", GRAPH_LOCALE)
-                .select("id,displayName,description,isBuiltIn,isPrivileged,templateId,resourceScopes")
-                .get();
+            const response: GraphListResponse<RoleDefinition> = await withRetry(
+                () => client
+                    .api(PIM_URLS.roleDefinitions)
+                    .version("beta")
+                    .header("Accept-Language", GRAPH_LOCALE)
+                    .select("id,displayName,description,isBuiltIn,isPrivileged,templateId,resourceScopes")
+                    .get(),
+                3, 1000, 'getRoleDefinitions'
+            );
 
             return response.value || [];
         } catch (err) {
             Logger.warn("directoryRole", "Failed to fetch isPrivileged property, retrying without it.", err);
 
             // Fallback: Fetch without isPrivileged
-            const response: GraphListResponse<RoleDefinition> = await client
-                .api(PIM_URLS.roleDefinitions)
-                .version("beta")
-                .header("Accept-Language", GRAPH_LOCALE)
-                .select("id,displayName,description,isBuiltIn,templateId,resourceScopes")
-                .get();
+            const response: GraphListResponse<RoleDefinition> = await withRetry(
+                () => client
+                    .api(PIM_URLS.roleDefinitions)
+                    .version("beta")
+                    .header("Accept-Language", GRAPH_LOCALE)
+                    .select("id,displayName,description,isBuiltIn,templateId,resourceScopes")
+                    .get(),
+                3, 1000, 'getRoleDefinitions:fallback'
+            );
 
             return response.value || [];
         }
@@ -276,12 +373,19 @@ export async function concurrentFetchPolicies(
 ): Promise<Map<string, any>> {
     const policyMap = new Map<string, any>();
 
-    // Filter out already-fetched roleIds
-    const unfetchedRoleIds = roleIds.filter(id => !fetchedPolicies.has(id));
-    const skippedCount = roleIds.length - unfetchedRoleIds.length;
+    // Filter out already-cached roleIds and populate map with cached data
+    const unfetchedRoleIds = roleIds.filter(id => {
+        if (policyCache.has(id)) {
+            const cachedPolicy = policyCache.get(id);
+            policyMap.set(id, cachedPolicy);
+            return false; // Exclude from unfetched list
+        }
+        return true; // Include in unfetched list
+    });
+    const cachedCount = roleIds.length - unfetchedRoleIds.length;
 
-    if (skippedCount > 0) {
-        Logger.debug("PolicyFetch", `Skipping ${skippedCount} already-fetched policies`);
+    if (cachedCount > 0) {
+        Logger.debug("PolicyFetch", `Loaded ${cachedCount} policies from cache`);
     }
 
     if (unfetchedRoleIds.length === 0) {
@@ -298,17 +402,20 @@ export async function concurrentFetchPolicies(
         processor: async (roleId, workerId) => {
             try {
                 // v1.0 is available for roleManagementPolicyAssignments
-                const response = await client
-                    .api(PIM_URLS.roleManagementPolicyAssignments)
-                    .version("v1.0")
-                    .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
-                    .expand('policy($expand=rules)')
-                    .header('Accept-Language', GRAPH_LOCALE)
-                    .get();
+                const response = await withRetry(
+                    () => client
+                        .api(PIM_URLS.roleManagementPolicyAssignments)
+                        .version("v1.0")
+                        .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
+                        .expand('policy($expand=rules)')
+                        .header('Accept-Language', GRAPH_LOCALE)
+                        .get(),
+                    3, 1000, 'concurrentFetchPolicies'
+                );
 
                 if (response.value?.length > 0) {
                     const policy = response.value[0];
-                    fetchedPolicies.add(roleId);
+                    policyCache.set(roleId, policy); // Cache the policy data
                     policyMap.set(roleId, policy);
 
                     // Notify caller that policy is loaded (for progressive UI updates)
@@ -316,45 +423,156 @@ export async function concurrentFetchPolicies(
                     return policy;
                 }
 
-                fetchedPolicies.add(roleId);
+                policyCache.set(roleId, null); // Cache null to prevent retry loops
                 return null;
             } catch (error: unknown) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
-                fetchedPolicies.add(roleId); // Mark as fetched even on error
+                policyCache.set(roleId, null); // Cache null even on error to prevent retry loops
                 onPolicyLoaded?.(roleId, null, errorMsg); // Report error via callback
                 throw error; // Re-throw so worker pool counts it as failed
             }
         },
         onProgress: (current, total) => {
-            // Adjust progress to include skipped items
-            onProgress?.(skippedCount + current, roleIds.length);
+            // Adjust progress to include cached items
+            onProgress?.(cachedCount + current, roleIds.length);
         }
     });
+
+    // Persist cache to SessionStorage after batch completion
+    savePolicyCacheToStorage();
 
     Logger.debug('DirectoryRoleService', `Completed fetching policies: ${policyMap.size}/${roleIds.length} resolved`);
     return policyMap;
 }
 
 /**
- * Resolve approvers from primary approvers list
+ * Resolve approvers from primary approvers list using Graph API $batch
+ * Optimized: Batches up to 20 requests per batch call (Graph API limit)
+ * Performance: 150 individual calls → 8 batch calls (90% reduction)
  */
-async function resolveApprovers(client: Client, primaryApprovers: any[]): Promise<Approver[]> {
-    const approvers: Approver[] = [];
+async function resolveApprovers(client: Client, primaryApprovers: PrimaryApprover[]): Promise<Approver[]> {
+    if (!primaryApprovers || primaryApprovers.length === 0) return [];
 
+    const approvers: Approver[] = [];
+    const uncachedApprovers: Array<{ approver: PrimaryApprover; id: string; type: string }> = [];
+
+    // Step 1: Check cache and separate cached vs uncached
     for (const approver of primaryApprovers) {
-        try {
-            const enrichedApprover = await resolveApprover(client, approver);
-            if (enrichedApprover) {
-                approvers.push(enrichedApprover);
-            }
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            Logger.warn('DirectoryRoleService', `Failed to resolve approver ${approver.id}: ${errorMessage}`);
+        const type = approver["@odata.type"];
+        const id = approver.id || approver.groupId || approver.userId;
+
+        // Handle manager type (no API call needed)
+        if (type === "#microsoft.graph.requestorManager") {
             approvers.push({
                 ...approver,
-                displayName: `Unknown (${approver.id})`,
-                type: approver["@odata.type"] === "#microsoft.graph.singleUser" ? "user" : "group"
+                id: "manager", // Use placeholder ID for manager type
+                displayName: "Manager",
+                type: "manager"
             });
+            continue;
+        }
+
+        // Skip entries without valid ID
+        if (!id) {
+            continue;
+        }
+
+        // Check cache
+        if (approverCache.has(id)) {
+            approvers.push(approverCache.get(id)!);
+            continue;
+        }
+
+        // Queue for batch resolution
+        uncachedApprovers.push({ approver, id, type });
+    }
+
+    // Step 2: If all cached, return early
+    if (uncachedApprovers.length === 0) {
+        return approvers;
+    }
+
+    // Step 3: Batch resolve uncached approvers (max 20 per batch - Graph API limit)
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < uncachedApprovers.length; i += BATCH_SIZE) {
+        const batch = uncachedApprovers.slice(i, i + BATCH_SIZE);
+
+        // Build batch request
+        const batchRequests = batch.map((item, index) => {
+            const endpoint = item.type === "#microsoft.graph.singleUser"
+                ? `/users/${item.id}?$select=id,displayName,userPrincipalName,mail`
+                : `/groups/${item.id}?$select=id,displayName,mail`;
+
+            return {
+                id: String(index),
+                method: "GET",
+                url: endpoint,
+                headers: {
+                    "Accept-Language": GRAPH_LOCALE
+                }
+            };
+        });
+
+        try {
+            const batchResponse = await withRetry(
+                () => client
+                    .api("/$batch")
+                    .post({ requests: batchRequests }),
+                3, 1000, 'resolveApprovers:batch'
+            );
+
+            // Process batch responses
+            for (const response of batchResponse.responses) {
+                const index = parseInt(response.id);
+                const item = batch[index];
+
+                if (response.status === 200 && response.body) {
+                    const isUser = item.type === "#microsoft.graph.singleUser";
+                    const resolved: Approver = {
+                        ...item.approver,
+                        id: item.id, // Ensure id is always set
+                        displayName: response.body.displayName,
+                        userPrincipalName: isUser ? response.body.userPrincipalName : undefined,
+                        mail: response.body.mail,
+                        type: isUser ? "user" : "group"
+                    };
+
+                    approverCache.set(item.id, resolved);
+                    approvers.push(resolved);
+                } else {
+                    // Handle failed individual request in batch
+                    Logger.warn('DirectoryRoleService', `Batch request failed for ${item.id}: ${response.status}`);
+                    approvers.push({
+                        ...item.approver,
+                        id: item.id, // Ensure id is always set
+                        displayName: `Unknown (${item.id})`,
+                        type: item.type === "#microsoft.graph.singleUser" ? "user" : "group"
+                    });
+                }
+            }
+        } catch (error) {
+            // Fallback: If batch fails entirely, resolve individually
+            Logger.warn('DirectoryRoleService', 'Batch request failed, falling back to individual resolution', error);
+            for (const item of batch) {
+                try {
+                    const resolved = await resolveApprover(client, item.approver);
+                    if (resolved) {
+                        approvers.push(resolved);
+                    }
+                } catch {
+                    approvers.push({
+                        ...item.approver,
+                        id: item.id, // Ensure id is always set
+                        displayName: `Unknown (${item.id})`,
+                        type: item.type === "#microsoft.graph.singleUser" ? "user" : "group"
+                    });
+                }
+            }
+        }
+
+        // Add small delay between batches to avoid throttling
+        if (i + BATCH_SIZE < uncachedApprovers.length) {
+            await delay(100);
         }
     }
 
@@ -369,12 +587,22 @@ const approverCache = new Map<string, Approver>();
 /**
  * Helper: Resolve single approver (user or group)
  */
-async function resolveApprover(client: Client, approver: any): Promise<Approver | null> {
+async function resolveApprover(client: Client, approver: PrimaryApprover): Promise<Approver | null> {
     const type = approver["@odata.type"];
     // Try to find the ID property (it might be 'id' or 'groupId' depending on API version/type)
     const id = approver.id || approver.groupId || approver.userId;
 
-    if (!id && type !== "#microsoft.graph.requestorManager") {
+    // Handle manager type
+    if (type === "#microsoft.graph.requestorManager") {
+        return {
+            ...approver,
+            id: "manager",
+            displayName: "Manager",
+            type: "manager"
+        };
+    }
+
+    if (!id) {
         return null; // Skip invalid entries silently
     }
 
@@ -387,28 +615,36 @@ async function resolveApprover(client: Client, approver: any): Promise<Approver 
 
     try {
         if (type === "#microsoft.graph.singleUser") {
-            const user: Principal = await client
-                .api(`/users/${id}`)
-                .header("Accept-Language", GRAPH_LOCALE)
-                .select("id,displayName,userPrincipalName,mail")
-                .get();
+            const user: Principal = await withRetry(
+                () => client
+                    .api(`/users/${id}`)
+                    .header("Accept-Language", GRAPH_LOCALE)
+                    .select("id,displayName,userPrincipalName,mail")
+                    .get(),
+                3, 1000, 'resolveApprovers:fallback:user'
+            );
 
             result = {
                 ...approver,
+                id, // Ensure id is always set
                 displayName: user.displayName,
                 userPrincipalName: user.userPrincipalName,
                 mail: user.mail,
                 type: "user"
             };
         } else if (type === "#microsoft.graph.groupMembers") {
-            const group: any = await client
-                .api(`/groups/${id}`)
-                .header("Accept-Language", GRAPH_LOCALE)
-                .select("id,displayName,mail")
-                .get();
+            const group = await withRetry(
+                () => client
+                    .api(`/groups/${id}`)
+                    .header("Accept-Language", GRAPH_LOCALE)
+                    .select("id,displayName,mail")
+                    .get(),
+                3, 1000, 'resolveApprovers:fallback:group'
+            );
 
             result = {
                 ...approver,
+                id, // Ensure id is always set
                 displayName: group.displayName,
                 mail: group.mail,
                 type: "group"
@@ -428,16 +664,25 @@ async function resolveApprover(client: Client, approver: any): Promise<Approver 
     return null;
 }
 
+/** Approval rule with typed setting for type narrowing */
+interface ApprovalRuleWithSetting extends PimPolicyRule {
+    setting?: {
+        approvalStages?: Array<{
+            primaryApprovers?: PrimaryApprover[];
+        }>;
+    };
+}
+
 /**
  * Lazy load approvers for a specific role
  */
 export async function loadApproversForRole(
     client: Client,
-    policyRules?: any[]
+    policyRules?: PimPolicyRule[]
 ): Promise<Approver[]> {
     if (!policyRules) return [];
 
-    const approvalRules = policyRules.filter((rule: any) =>
+    const approvalRules = policyRules.filter((rule): rule is ApprovalRuleWithSetting =>
         rule["@odata.type"]?.includes("ApprovalRule")
     );
 
@@ -512,12 +757,14 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
 
         if (signal?.aborted) throw new Error("Aborted");
 
-        // Step 3: Enrich with Scope Info
+        // Step 3: Enrich with Scope Info (Parallel for maximum speed)
         onProgress?.(50, 100, "Enriching scope information (Optimized)...");
 
-        const enrichedAssignments = await enrichAssignmentsWithScope(client, assignments);
-        const enrichedEligibilities = await enrichAssignmentsWithScope(client, eligibilities);
-        const enrichedSchedules = await enrichAssignmentsWithScope(client, assignmentSchedules);
+        const [enrichedAssignments, enrichedEligibilities, enrichedSchedules] = await Promise.all([
+            enrichAssignmentsWithScope(client, assignments),
+            enrichAssignmentsWithScope(client, eligibilities),
+            enrichAssignmentsWithScope(client, assignmentSchedules)
+        ]);
 
         if (signal?.aborted) throw new Error("Aborted");
 
@@ -614,5 +861,86 @@ export async function syncRolesWithDelta(
     }
 
     return updatedData;
+}
+
+// ── AssignmentOverview ────────────────────────────────────────────────────────
+
+export interface AssignmentOverviewEntry {
+    id: string;
+    roleDefinitionId: string;
+    principalId: string;
+    principalType: "User" | "Group";
+    principalDisplayName: string;
+    assignmentType: "Eligible" | "Active";
+    startDateTime?: string;
+    endDateTime?: string;
+    memberType: "Direct" | "Group";
+}
+
+export interface AssignmentOverviewData {
+    assignments: AssignmentOverviewEntry[];
+    totalRoleCount: number;
+}
+
+/**
+ * Fetches eligible schedules, active assignment schedules, and role definitions
+ * in parallel for the AssignmentOverview component.
+ * All three calls are wrapped with withRetry for transient error resilience.
+ */
+export async function fetchAssignmentOverviewData(client: Client): Promise<AssignmentOverviewData> {
+    const [eligibleRes, activeRes, rolesRes] = await Promise.all([
+        withRetry(
+            () => client.api("/roleManagement/directory/roleEligibilitySchedules").expand("principal,roleDefinition").get(),
+            3, 1000, "fetchAssignmentOverviewData eligibleSchedules"
+        ),
+        withRetry(
+            () => client.api("/roleManagement/directory/roleAssignmentSchedules").expand("principal,roleDefinition").get(),
+            3, 1000, "fetchAssignmentOverviewData activeSchedules"
+        ),
+        withRetry(
+            () => client.api("/roleManagement/directory/roleDefinitions").get(),
+            3, 1000, "fetchAssignmentOverviewData roleDefinitions"
+        ),
+    ]);
+
+    const parseAssignments = (items: any[], type: "Eligible" | "Active"): AssignmentOverviewEntry[] =>
+        items.map((item: any) => ({
+            id: item.id,
+            roleDefinitionId: item.roleDefinitionId,
+            principalId: item.principalId,
+            principalType: (item.principal?.["@odata.type"]?.includes("group") ? "Group" : "User") as "User" | "Group",
+            principalDisplayName: item.principal?.displayName || "Unknown",
+            assignmentType: type,
+            startDateTime: item.startDateTime,
+            endDateTime: item.endDateTime,
+            memberType: (item.memberType || "Direct") as "Direct" | "Group",
+        }));
+
+    return {
+        assignments: [
+            ...parseAssignments(eligibleRes.value ?? [], "Eligible"),
+            ...parseAssignments(activeRes.value ?? [], "Active"),
+        ],
+        totalRoleCount: (rolesRes.value ?? []).length,
+    };
+}
+
+/**
+ * Fetches members of a group for the AssignmentOverview expand feature.
+ * Wrapped with withRetry for transient error resilience.
+ */
+export interface GroupMember {
+    id: string;
+    displayName: string;
+    userPrincipalName?: string;
+    mail?: string;
+}
+
+export async function fetchGroupMembers(client: Client, groupId: string): Promise<GroupMember[]> {
+    const res = await withRetry(
+        () => client.api(`/groups/${groupId}/members`).get(),
+        3, 1000, `fetchGroupMembers ${groupId}`
+    );
+    return res.value ?? [];
 }
 

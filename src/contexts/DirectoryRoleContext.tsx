@@ -1,14 +1,16 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from "react";
-import { RoleDetailData } from "@/types/directoryRole.types";
-import { RoleSettings, AssignmentSettings, AuthenticationContext } from "@/types";
+import { RoleDetailData, Approver } from "@/types/directoryRole.types";
+import { RoleSettings, AssignmentSettings, AuthenticationContext } from "@/types/shared.types";
 import {
+
     getAllRolesOptimizedWithDeferredPolicies,
     fetchSinglePolicy,
     loadApproversForRole,
     syncRolesWithDelta,
     concurrentFetchPolicies,
+    clearPolicyCache,
     // Types
     ProgressCallback,
     BatchLoadedCallback,
@@ -26,22 +28,9 @@ import { useMsal } from "@azure/msal-react";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { Logger } from "@/utils/logger";
 
-// Simple encryption/decryption using base64 (lightweight, no external deps)
-const encryptData = (data: string): string => {
-    try {
-        return btoa(encodeURIComponent(data));
-    } catch {
-        return data;
-    }
-};
-
-const decryptData = (data: string): string => {
-    try {
-        return decodeURIComponent(atob(data));
-    } catch {
-        return data;
-    }
-};
+// SessionStorage is a client-side cache. It's exposed in DevTools and to any XSS script.
+// Base64 encoding is not encryption and provides no security.
+// We store data plaintext: client-side caches don't require encryption.
 
 const STORAGE_KEY = "pim_data_cache";
 const STORAGE_TIMESTAMP_KEY = "pim_data_timestamp";
@@ -111,7 +100,7 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         updateWorkloadState<RoleDetailData>("directoryRoles", (prev) => {
             // Determine global loading phase based on granular state
-            let phase: import("@/types/workload").LoadingPhase = prev.loading.phase;
+            let phase: import("@/types/workload.types").LoadingPhase = prev.loading.phase;
             if (state.loading) phase = "fetching";
             else if (state.policiesLoading) phase = "processing";
             else if (state.rolesData.length > 0) phase = "complete";
@@ -148,15 +137,13 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
                 const encryptedAuthContexts = sessionStorage.getItem(STORAGE_AUTH_CONTEXTS_KEY);
 
                 if (encrypted && timestamp) {
-                    const decrypted = decryptData(encrypted);
-                    const data = JSON.parse(decrypted) as RoleDetailData[];
+                    const data = JSON.parse(encrypted) as RoleDetailData[];
                     const lastFetched = new Date(timestamp);
 
                     let authContexts: AuthenticationContext[] = [];
                     if (encryptedAuthContexts) {
                         try {
-                            const decryptedAuth = decryptData(encryptedAuthContexts);
-                            authContexts = JSON.parse(decryptedAuth) as AuthenticationContext[];
+                            authContexts = JSON.parse(encryptedAuthContexts) as AuthenticationContext[];
                         } catch (e) {
                             Logger.warn("PimData", "Failed to parse cached auth contexts", e);
                         }
@@ -196,13 +183,12 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
     // Save to SessionStorage whenever rolesData changes (debounced slightly by effect nature)
     useEffect(() => {
         if (state.rolesData.length > 0) {
-            const timestamp = new Date().toISOString();
+            const timestamp = state.lastFetched ? state.lastFetched.toISOString() : new Date().toISOString();
 
             try {
                 const serialized = JSON.stringify(state.rolesData);
-                const encrypted = encryptData(serialized);
 
-                sessionStorage.setItem(STORAGE_KEY, encrypted);
+                sessionStorage.setItem(STORAGE_KEY, serialized);
                 sessionStorage.setItem(STORAGE_TIMESTAMP_KEY, timestamp);
             } catch (error) {
                 // Handle QuotaExceededError - data too large for sessionStorage
@@ -230,10 +216,9 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
                             policy: null
                         }));
                         const minimalSerialized = JSON.stringify(minimalData);
-                        const minimalEncrypted = encryptData(minimalSerialized);
-                        sessionStorage.setItem(STORAGE_KEY, minimalEncrypted);
+                        sessionStorage.setItem(STORAGE_KEY, minimalSerialized);
                         sessionStorage.setItem(STORAGE_TIMESTAMP_KEY, timestamp);
-                        console.info("[PimData] Stored minimal cache (definitions only) due to quota limits");
+                        Logger.info("PimData", "Stored minimal cache (definitions only) due to quota limits");
                     } catch (minimalError) {
                         Logger.warn("PimData", "Even minimal cache failed. Running without cache for this session.");
                         // Continue without cache - app will still work, just slower on refresh
@@ -250,8 +235,7 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
         if (state.authenticationContexts.length > 0) {
             try {
                 const serialized = JSON.stringify(state.authenticationContexts);
-                const encrypted = encryptData(serialized);
-                sessionStorage.setItem(STORAGE_AUTH_CONTEXTS_KEY, encrypted);
+                sessionStorage.setItem(STORAGE_AUTH_CONTEXTS_KEY, serialized);
             } catch (error) {
                 Logger.warn("PimData", "Failed to save auth contexts to storage:", error);
             }
@@ -342,10 +326,11 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
                 }
 
                 // If policy is null, it means "Verified Not Configured"
-                const policyData = policy ? {
+                // Only create policyData if policy and policy.policy exist
+                const policyData = (policy && policy.policy) ? {
                     assignment: policy,
-                    details: policy.policy || {},
-                    approvers: [] // Populated asynchronously below
+                    details: policy.policy,
+                    approvers: [] as Approver[] // Populated asynchronously below
                 } : null; // Explicit null
 
                 newRoles[index] = {
@@ -388,12 +373,26 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
     const fetchData = useCallback(async () => {
         // If we already have data and it's less than 5 minutes old, don't refetch automatically
         // unless explicitly requested (handled by refreshData)
+        // If we already have data and it's less than 60 minutes old, don't refetch automatically
         if (state.rolesData.length > 0 && state.lastFetched) {
             const now = new Date();
             const diff = now.getTime() - state.lastFetched.getTime();
-            if (diff < 5 * 60 * 1000) {
+            if (diff < 60 * 60 * 1000) { // 60 minutes cache TTL
                 Logger.debug("PimData", "Data is fresh, skipping fetch");
                 return;
+            }
+        }
+
+        // Safety: Check sessionStorage cache in case hydration hasn't finished yet (avoids race condition on F5)
+        // This is critical to prevent "Scanning..." or "Initializing..." loop on refresh
+        if (typeof sessionStorage !== "undefined" && !state.lastFetched && state.rolesData.length === 0) {
+            const cachedTs = sessionStorage.getItem(STORAGE_TIMESTAMP_KEY);
+            if (cachedTs) {
+                const diff = new Date().getTime() - new Date(cachedTs).getTime();
+                if (diff < 60 * 60 * 1000) {
+                    Logger.debug("PimData", "Found fresh Directory Roles data in storage (pre-hydration), skipping fetch");
+                    return;
+                }
             }
         }
 
@@ -481,8 +480,8 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             concurrentFetchPolicies(
                 client,
                 roleIds,
-                8,
-                300,
+                4,
+                500,
                 handlePolicyProgress, // Adapter needed? func (current, total) -> void. matches.
                 handlePolicyLoaded, // matches
                 undefined // signal
@@ -536,6 +535,10 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             Logger.debug("PimData", "Cancelled previous refresh request");
         }
 
+        // Clear policy cache to ensure fresh data
+        clearPolicyCache();
+        Logger.debug("PimData", "Policy cache cleared for refresh");
+
         // Create new controller
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -572,7 +575,7 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
                     Logger.debug("PimData", `Smart Refresh found ${changes.length} changes.`);
 
                     if (changes.length === 0) {
-                        // No changes detected
+                        // No changes at all
                         Logger.debug("PimData", "No changes detected. Data is up to date.");
                         setState(prev => ({
                             ...prev,
@@ -755,8 +758,8 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             concurrentFetchPolicies(
                 client,
                 roleIds,
-                8,
-                300,
+                4,
+                500,
                 handlePolicyProgress,
                 handlePolicyLoaded,
                 signal
@@ -806,12 +809,13 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             // Check freshness (5 minutes) to prevent redundant "Fetching policies..." on F5
             const now = new Date();
             const diff = now.getTime() - state.lastFetched.getTime();
-            if (diff < 5 * 60 * 1000) {
+            if (diff < 60 * 60 * 1000) { // 60 minutes cache TTL
                 Logger.debug("PimData", "Auto-refresh: Data is fresh, skipping check.");
 
-                // Restore SyncStatus indicator by logging sync timestamp
+                // Restore SyncStatus indicator by logging a "mock" sync
                 addSyncHistoryEntry({
-                    workload: 'directoryRoles'
+                    workload: 'directoryRoles',
+                    timestamp: state.lastFetched
                 });
 
                 return;

@@ -33,10 +33,10 @@ export interface WorkerPoolOptions<TItem, TResult> {
     /** Array of items to process */
     items: TItem[];
 
-    /** Number of concurrent workers (default: 3) */
+    /** Number of concurrent workers (default: 8) */
     workerCount?: number;
 
-    /** Delay in milliseconds between requests per worker (default: 500) */
+    /** Delay in milliseconds between requests per worker (default: 300) */
     delayMs?: number;
 
     /**
@@ -72,6 +72,12 @@ export interface WorkerPoolOptions<TItem, TResult> {
      * Optional AbortSignal to cancel the operation
      */
     signal?: AbortSignal;
+
+    /**
+     * Maximum number of retries for throttled (429) requests (default: 3)
+     * Uses exponential backoff: 2s, 4s, 8s
+     */
+    maxRetries?: number;
 }
 
 /**
@@ -109,7 +115,8 @@ export async function runWorkerPool<TItem, TResult>(
         onProgress,
         onItemComplete,
         onItemError,
-        signal
+        signal,
+        maxRetries = 3
     } = options;
 
     const total = items.length;
@@ -129,6 +136,26 @@ export async function runWorkerPool<TItem, TResult>(
     const chunkSize = Math.ceil(total / workerCount);
     const chunks = chunk(items, chunkSize);
 
+    // Retry wrapper: automatically retries on 429 (rate limit) with exponential backoff
+    const processWithRetry = async (item: TItem, workerId: number): Promise<TResult | null> => {
+        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+            try {
+                return await processor(item, workerId);
+            } catch (error: any) {
+                const is429 = error?.statusCode === 429 || error?.message?.includes('Too Many Requests');
+                if (is429 && attempt <= maxRetries) {
+                    const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                    Logger.warn('WorkerPool', `Worker ${workerId} rate limited (429). Backing off ${backoffMs}ms (attempt ${attempt}/${maxRetries})`);
+                    await delay(backoffMs);
+                    continue;
+                }
+                throw error;
+            }
+        }
+        // Unreachable but satisfies TypeScript
+        throw new Error('processWithRetry: exhausted retries');
+    };
+
     // Worker function
     const runWorker = async (workerId: number, workerItems: TItem[]) => {
         Logger.debug('WorkerPool', `Worker ${workerId} starting with ${workerItems.length} items`);
@@ -144,7 +171,7 @@ export async function runWorkerPool<TItem, TResult>(
             const item = workerItems[i];
 
             try {
-                const result = await processor(item, workerId);
+                const result = await processWithRetry(item, workerId);
 
                 if (result !== null) {
                     results.set(item, result);

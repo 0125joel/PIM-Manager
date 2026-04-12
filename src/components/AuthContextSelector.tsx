@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Client } from "@microsoft/microsoft-graph-client";
-import { AuthenticationContext } from "@/types";
+import { AuthenticationContext } from "@/types/shared.types";
+import { Logger } from "@/utils/logger";
 
 interface AuthContextSelectorProps {
     selectedContextId?: string;
@@ -37,7 +38,7 @@ export function AuthContextSelector({ selectedContextId, onSelect }: AuthContext
 
                 setContexts(result.value.filter((ctx: any) => ctx.isAvailable));
             } catch (error) {
-                console.error("Failed to fetch auth contexts", error);
+                Logger.error("AuthContextSelector", "Failed to fetch auth contexts", error);
                 // Fallback to empty if no permission
                 setContexts([]);
             } finally {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { RoleDefinition } from "@/types";
+import { RoleDefinition } from "@/types/shared.types";
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { Check, Search, Shield, Users, AlertCircle, AlertTriangle } from "lucide-react";
 
@@ -17,6 +17,8 @@ export function RoleSelector({ onSelectionChange, rolesData, loading }: RoleSele
     const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState<"all" | "builtin" | "custom">("all");
+    const [filterPrivileged, setFilterPrivileged] = useState<"all" | "privileged">("all");
+    const [filterHasAssignments, setFilterHasAssignments] = useState<"all" | "yes" | "no">("all");
 
     // Convert RoleDetailData[] to RoleDefinition[]
     const roles = useMemo(() => {
@@ -42,13 +44,18 @@ export function RoleSelector({ onSelectionChange, rolesData, loading }: RoleSele
 
     const filteredRoles = useMemo(() => {
         return roles.filter(role => {
-            const matchesSearch = role.displayName.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesType = filterType === "all" ||
-                (filterType === "builtin" && role.isBuiltIn) ||
-                (filterType === "custom" && !role.isBuiltIn);
-            return matchesSearch && matchesType;
+            if (!role.displayName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+            if (filterType === "builtin" && !role.isBuiltIn) return false;
+            if (filterType === "custom" && role.isBuiltIn) return false;
+            if (filterPrivileged === "privileged" && !role.isPrivileged) return false;
+            if (filterHasAssignments !== "all") {
+                const count = role.assignmentCount ?? 0;
+                if (filterHasAssignments === "yes" && count === 0) return false;
+                if (filterHasAssignments === "no" && count > 0) return false;
+            }
+            return true;
         });
-    }, [roles, searchTerm, filterType]);
+    }, [roles, searchTerm, filterType, filterPrivileged, filterHasAssignments]);
 
     const handleSelectAll = useCallback(() => {
         const newSelected = new Set(selectedRoles);
@@ -79,34 +86,64 @@ export function RoleSelector({ onSelectionChange, rolesData, loading }: RoleSele
             </div>
 
             {/* Filter Buttons */}
-            <div className="flex gap-2 mb-4">
-                <button
-                    onClick={() => setFilterType("all")}
-                    className={`px-3 py-1 text-xs rounded-full transition-colors ${filterType === "all"
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                        }`}
-                >
-                    All Roles
-                </button>
-                <button
-                    onClick={() => setFilterType("builtin")}
-                    className={`px-3 py-1 text-xs rounded-full transition-colors ${filterType === "builtin"
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                        }`}
-                >
-                    Built-in
-                </button>
-                <button
-                    onClick={() => setFilterType("custom")}
-                    className={`px-3 py-1 text-xs rounded-full transition-colors ${filterType === "custom"
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                        }`}
-                >
-                    Custom
-                </button>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Type</span>
+                    <div className="flex gap-1.5">
+                        {(["all", "builtin", "custom"] as const).map(v => (
+                            <button
+                                key={v}
+                                onClick={() => setFilterType(v)}
+                                className={`px-3 py-1 text-xs rounded-full transition-colors ${filterType === v
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    }`}
+                            >
+                                {v === "all" ? "All" : v === "builtin" ? "Built-in" : "Custom"}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Privilege</span>
+                    <div className="flex gap-1.5">
+                        <button
+                            onClick={() => setFilterPrivileged("all")}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${filterPrivileged === "all"
+                                ? "bg-blue-600 text-white"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                }`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setFilterPrivileged("privileged")}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${filterPrivileged === "privileged"
+                                ? "bg-blue-600 text-white"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                }`}
+                        >
+                            Privileged
+                        </button>
+                    </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Assignments</span>
+                    <div className="flex gap-1.5">
+                        {(["all", "yes", "no"] as const).map(v => (
+                            <button
+                                key={v}
+                                onClick={() => setFilterHasAssignments(v)}
+                                className={`px-3 py-1 text-xs rounded-full transition-colors ${filterHasAssignments === v
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    }`}
+                            >
+                                {v === "all" ? "All" : v === "yes" ? "With" : "Without"}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Select All Button */}

@@ -193,4 +193,4 @@ Deze context beheert de data van alle workloads en zorgt ervoor dat componenten 
 ## Volgende Stappen
 
 - [Rapportpagina](./06-rapportpagina.md) - Functie documentatie
-- [Configuratiepagina](./07-configuratiepagina.md) - Configuratie functies
+- [Configuratiepagina](./09-configuratie-pagina.md) - Configuratie functies

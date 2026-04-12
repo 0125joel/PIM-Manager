@@ -8,7 +8,7 @@ export function ViewModeToggle() {
     const { viewMode, setViewMode } = useViewMode();
 
     return (
-        <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1 gap-0.5">
+        <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1 gap-0.5" data-tour="view-mode">
             <button
                 onClick={() => setViewMode("basic")}
                 className={`

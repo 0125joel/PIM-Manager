@@ -1,11 +1,12 @@
 import { Clock } from "lucide-react";
 import { ScopeBadge } from "@/components/ScopeBadge";
+import { RoleAssignment, PimEligibilitySchedule, PimAssignmentSchedule } from "@/types/directoryRole.types";
 
 interface AssignmentsSectionProps {
     assignments: {
-        permanent: any[];
-        eligible: any[];
-        active: any[];
+        permanent: RoleAssignment[];
+        eligible: PimEligibilitySchedule[];
+        active: PimAssignmentSchedule[];
     };
 }
 
@@ -21,7 +22,7 @@ export function AssignmentsSection({ assignments }: AssignmentsSectionProps) {
                             Permanent Assignments ({assignments.permanent.length})
                         </div>
                         <div className="space-y-2">
-                            {assignments.permanent.map((assignment: any) => (
+                            {assignments.permanent.map((assignment) => (
                                 <AssignmentRow key={assignment.id} assignment={assignment} type="permanent" />
                             ))}
                         </div>
@@ -33,7 +34,7 @@ export function AssignmentsSection({ assignments }: AssignmentsSectionProps) {
                             PIM Eligible ({assignments.eligible.length})
                         </div>
                         <div className="space-y-2">
-                            {assignments.eligible.map((schedule: any) => (
+                            {assignments.eligible.map((schedule) => (
                                 <ScheduleRow key={schedule.id} schedule={schedule} type="eligible" />
                             ))}
                         </div>
@@ -45,7 +46,7 @@ export function AssignmentsSection({ assignments }: AssignmentsSectionProps) {
                             PIM Active ({assignments.active.length})
                         </div>
                         <div className="space-y-2">
-                            {assignments.active.map((schedule: any) => (
+                            {assignments.active.map((schedule) => (
                                 <ScheduleRow key={schedule.id} schedule={schedule} type="active" />
                             ))}
                         </div>
@@ -59,7 +60,7 @@ export function AssignmentsSection({ assignments }: AssignmentsSectionProps) {
     );
 }
 
-function AssignmentRow({ assignment, type }: { assignment: any; type: string }) {
+function AssignmentRow({ assignment, type }: { assignment: RoleAssignment; type: string }) {
     const principalType = assignment.principal?.["@odata.type"]?.replace("#microsoft.graph.", "") || "Unknown";
 
     return (
@@ -92,7 +93,7 @@ function AssignmentRow({ assignment, type }: { assignment: any; type: string }) 
     );
 }
 
-function ScheduleRow({ schedule, type }: { schedule: any; type: string }) {
+function ScheduleRow({ schedule, type }: { schedule: PimEligibilitySchedule | PimAssignmentSchedule; type: string }) {
     const principalType = schedule.principal?.["@odata.type"]?.replace("#microsoft.graph.", "") || "Unknown";
     const memberType = schedule.memberType || "Unknown";
     const isDirect = memberType === "Direct";

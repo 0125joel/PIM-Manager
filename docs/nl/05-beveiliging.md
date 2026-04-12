@@ -53,7 +53,9 @@ const loginRequest = {
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
 
-**Standaard Read-Only:** Geen write scopes in core functionaliteit. PIM Manager is een visualisatie en rapportage tool.
+**Standaard Read-Only:** Geen write scopes in de core inlogaanvraag. Schrijfmachtigingen worden via incremental consent aangevraagd wanneer de gebruiker de Configuratiepagina opent:
+- Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
+- PIM Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
 
 ---
 
@@ -67,10 +69,9 @@ Microsoft Authentication Library (MSAL) handelt alle authenticatie af.
 ```typescript
 export const msalConfig: Configuration = {
   auth: {
-    clientId: process.env.NEXT_PUBLIC_CLIENT_ID!,
+    clientId: getClientId(),  // Runtime config (self-hosted) of NEXT_PUBLIC_CLIENT_ID (SaaS)
     authority: "https://login.microsoftonline.com/organizations",
-    redirectUri: process.env.NEXT_PUBLIC_REDIRECT_URI ||
-                 window.location.origin
+    redirectUri: window.location.origin  // Automatisch gedetecteerd, werkt op elk hosting domein
   },
   cache: {
     cacheLocation: "sessionStorage",  // Kritiek: NIET localStorage
@@ -165,11 +166,10 @@ const nextConfig: NextConfig = {
 **SessionStorage Gebruik:**
 ```typescript
 // src/services/deltaService.ts
-const DELTA_LINK_KEY_ROLES = "pim_delta_roles";
-const DELTA_LINK_KEY_ELIGIBLE = "pim_delta_eligible";
-const DELTA_LINK_KEY_ACTIVE = "pim_delta_active";
+const STORAGE_DELTA_LINK_KEY = "pim_directory_roles_delta_link";
+const STORAGE_GROUP_DELTA_LINK_KEY = "pim_groups_delta_link";
 
-sessionStorage.setItem(DELTA_LINK_KEY_ROLES, deltaLink);
+sessionStorage.setItem(STORAGE_DELTA_LINK_KEY, deltaLink);
 ```
 
 **LocalStorage Gebruik (Niet-Gevoelig Alleen):**
@@ -179,6 +179,8 @@ localStorage.setItem("LOG_LEVEL", "DEBUG");
 
 // src/hooks/useIncrementalConsent.ts
 localStorage.setItem("pim_workload_enabled_directoryRoles", "true");
+
+// src/components/SettingsModal.tsx
 localStorage.setItem("pim_visibility_directoryRoles", "true");
 ```
 
@@ -217,14 +219,14 @@ const client = Client.initWithMiddleware({
 
 **Worker Pool** (`src/utils/workerPool.ts`):
 ```typescript
-export async function runWorkerPool<TInput, TOutput>(
-  items: TInput[],
-  taskFn: (item: TInput) => Promise<TOutput>,
-  options: WorkerPoolOptions = {}
-): Promise<TOutput[]> {
+export async function runWorkerPool<TItem, TResult>(
+  options: WorkerPoolOptions<TItem, TResult>
+): Promise<WorkerPoolResult<TItem, TResult>> {
   const {
+    items,
     workerCount = 8,      // Configureerbare concurrency
     delayMs = 300,        // Vertraging tussen requests per worker
+    processor,
     onProgress
   } = options;
 
@@ -239,8 +241,8 @@ export async function runWorkerPool<TInput, TOutput>(
 - Graceful handling van API throttling (429 errors)
 
 **Per-Endpoint Vertragingen:**
-- Paginated requests: 100ms vertraging (`src/services/directoryRoleService.ts:73`)
-- Scope enrichment: 50ms vertraging (`src/services/directoryRoleService.ts:221`)
+- Paginated requests: 100ms vertraging tussen pagina's in `src/services/directoryRoleService.ts`
+- Paginated requests: 100ms vertraging tussen pagina's in `src/services/pimGroupService.ts`
 
 ### Input Validatie
 
@@ -279,7 +281,7 @@ catch (error: unknown) {
 **React Automatische Escaping:**
 - React escapt alle JSX expressies standaard
 - Geen gebruik van `dangerouslySetInnerHTML` met user input
-- Veilige theme script embedding (`src/app/layout.tsx:41-58`)
+- Veilige theme script embedding via `next/script` (`public/theme-init.js`)
 
 **Input Sanitisatie:**
 - OData escaping voor zoekqueries
@@ -290,11 +292,12 @@ catch (error: unknown) {
 
 **Error Boundaries** (`src/components/ErrorBoundary.tsx`):
 ```typescript
-componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("Error boundary caught:", error.message);
+componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  if (process.env.NODE_ENV === 'development') {
+    Logger.error("ErrorBoundary", "Caught error:", error);
+    Logger.error("ErrorBoundary", "Component stack:", errorInfo.componentStack);
   } else {
-    console.error("Error boundary caught:", error, errorInfo);
+    Logger.error("ErrorBoundary", "An error occurred:", error.message);
   }
 }
 ```
@@ -404,26 +407,32 @@ if (!isAuthenticated) {
 
 ## 8. Deployment Beveiliging
 
-### Aanbevolen Security Headers (Cloudflare Pages)
+### Aanbevolen Security Headers (Cloudflare Pages & Azure Static Web Apps)
 
 **Content Security Policy:**
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  script-src 'self' 'unsafe-inline' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: https:;
-  connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com;
-  font-src 'self';
-  frame-ancestors 'none';
+  img-src 'self' data: https://graph.microsoft.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com;
+  font-src 'self' data:;
+  frame-src 'self' https://login.microsoftonline.com;
+  object-src 'none';
+  base-uri 'self';
 ```
+
+> [!NOTE]
+> `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'unsafe-inline'` in `script-src` is vereist omdat Next.js static export inline RSC hydration scripts (`self.__next_f.push`) injecteert die niet te vermijden zijn. Het inline theme-script wordt geladen vanuit `/theme-init.js` (via `next/script`), maar de Next.js runtime hydration vereist nog steeds `'unsafe-inline'`.
 
 **Aanvullende Headers:**
 ```
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: geolocation=(), microphone=(), camera=()
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 ```
 
 **Alleen HTTPS:**
@@ -564,4 +573,4 @@ PIM Manager implementeert defense-in-depth beveiliging:
 
 - [**Architectuur**](./00-architecture.md) - Begrijpen van het client-side design
 - [**Data Flow**](./03-dataflow.md) - Hoe data door de applicatie beweegt
-- [**Deployment**](./10-deployment.md) - Veilige deployment op Cloudflare Pages
+- [**Deployment**](./10-deployment.md) - Implementatie op Cloudflare Pages of Azure Static Web Apps

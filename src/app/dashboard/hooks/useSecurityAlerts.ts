@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import { SecurityAlert } from "@/types/securityAlerts";
+import { SecurityAlert } from '@/types/securityAlerts.types';
 import { fetchSecurityAlerts } from "@/utils/alertsApi";
+import { Logger } from "@/utils/logger";
 
 const DISMISSED_ALERTS_KEY = "pim-dismissed-alerts";
 const ALERTS_PERMISSION = "RoleManagementAlert.Read.Directory";
@@ -77,7 +78,7 @@ export function useSecurityAlerts() {
                 setHasPermission(false);
             } else {
                 setError("Failed to load security alerts");
-                console.error("Alerts fetch error:", err);
+                Logger.error("useSecurityAlerts", "Alerts fetch error", err);
             }
         } finally {
             setLoading(false);
@@ -106,7 +107,7 @@ export function useSecurityAlerts() {
                 setAlerts(fetchedAlerts);
             } catch (err) {
                 setError("Failed to load security alerts");
-                console.error("Alerts fetch error after permission:", err);
+                Logger.error("useSecurityAlerts", "Alerts fetch error after permission:", err);
             } finally {
                 setLoading(false);
             }
@@ -117,7 +118,7 @@ export function useSecurityAlerts() {
                 setError("Permission request was cancelled");
             } else {
                 setError("Failed to request permission");
-                console.error("Permission request error:", err);
+                Logger.error("useSecurityAlerts", "Permission request error", err);
             }
         } finally {
             setRequestingPermission(false);

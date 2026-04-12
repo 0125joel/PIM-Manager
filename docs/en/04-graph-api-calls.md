@@ -431,6 +431,32 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ## Permission Summary
 
+### Configure Write Permissions
+
+| Permission | Scope | Used For |
+|------------|-------|----------|
+| `RoleManagementPolicy.ReadWrite.Directory` | Delegated | Update PIM policy rules for Directory Roles |
+| `RoleEligibilitySchedule.ReadWrite.Directory` | Delegated | Create eligible assignments for Directory Roles |
+| `RoleAssignmentSchedule.ReadWrite.Directory` | Delegated | Create active assignments for Directory Roles |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Delegated | Update PIM policies for PIM Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Delegated | Create eligible assignments for PIM Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Delegated | Create active assignments for PIM Groups |
+
+> [!NOTE]
+> Write permissions are requested via incremental consent only when the user enters Configure mode. They are not included in the initial login request.
+
+### Configure Write API Endpoints
+
+| Operation | Endpoint | Method | Permission |
+|-----------|----------|--------|------------|
+| Update policy rule | `/policies/roleManagementPolicies/{policyId}/rules/{ruleId}` | PATCH | RoleManagementPolicy.ReadWrite.Directory |
+| Create role eligible assignment | `/roleManagement/directory/roleEligibilityScheduleRequests` | POST | RoleEligibilitySchedule.ReadWrite.Directory |
+| Create role active assignment | `/roleManagement/directory/roleAssignmentScheduleRequests` | POST | RoleAssignmentSchedule.ReadWrite.Directory |
+| Create group assignment | `/identityGovernance/privilegedAccess/group/assignmentScheduleRequests` | POST | PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup |
+| Update group policy rule | `/policies/roleManagementPolicies/{policyId}/rules/{ruleId}` | PATCH | RoleManagementPolicy.ReadWrite.AzureADGroup |
+
+---
+
 ### Core Permissions (Directory Roles)
 
 | Permission | Scope | Used For |
@@ -464,5 +490,5 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ## Next Steps
 
-- [Key Concepts](./05-key-concepts.md) - Technical concepts explained
-- [Report Page](./07-report-page.md) - How the Report page works
+- [Key Concepts](./06-key-concepts.md) - Technical concepts explained
+- [Report Page](./08-report-page.md) - How the Report page works

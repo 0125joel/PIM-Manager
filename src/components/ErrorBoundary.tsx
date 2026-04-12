@@ -2,6 +2,7 @@
 
 import React, { Component, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Logger } from "@/utils/logger";
 
 interface Props {
     children: ReactNode;
@@ -38,11 +39,11 @@ export class ErrorBoundary extends Component<Props, State> {
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         // Log error details only in development to prevent stack trace exposure in production
         if (process.env.NODE_ENV === 'development') {
-            console.error("[ErrorBoundary] Caught error:", error);
-            console.error("[ErrorBoundary] Component stack:", errorInfo.componentStack);
+            Logger.error("ErrorBoundary", "Caught error:", error);
+            Logger.error("ErrorBoundary", "Component stack:", errorInfo.componentStack);
         } else {
             // In production, log minimal error info (could integrate with error tracking service)
-            console.error("[ErrorBoundary] An error occurred:", error.message);
+            Logger.error("ErrorBoundary", "An error occurred:", error.message);
         }
     }
 
@@ -91,8 +92,8 @@ export function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
                     An unexpected error occurred. This has been logged for investigation.
                 </p>
 
-                {/* Error details (collapsed by default in production) */}
-                {error && (
+                {/* Error details (development only — never expose stack traces in production) */}
+                {error && process.env.NODE_ENV === 'development' && (
                     <details className="text-left mb-4 text-sm">
                         <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
                             View error details

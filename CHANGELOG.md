@@ -1,14 +1,157 @@
 # What's New in PIM Manager
 
+---
+
+## v2.0.0 — 2026-04-12
+
+The biggest update to PIM Manager yet — introducing the **Configure** feature for full read/write PIM management, Azure self-hosted deployment, and stability improvements across the board.
+
+---
+
+## 🚀 Major Features
+
+### Configure — Wizard Mode
+
+Guided step-by-step PIM configuration for Directory Roles and PIM Groups:
+
+- **Backup step** — Refresh and verify data freshness before making any changes
+- **Workload selection** — Configure Directory Roles, PIM Groups, or both in one session
+- **Config type choice** — Policies only, Assignments only, or both
+- **Scope step** — Select roles/groups with Start Fresh, Load Current, or Clone From modes
+- **Policies step** — Full activation, assignment, and notification settings
+- **Assignments step** — Create eligible/active assignments with Administrative Unit scope picker and duration controls
+- **Review step** — Preview all pending changes before applying
+- **Apply step** — Real-time progress per target with per-rule success/failure tracking
+- **Navigation guard** — Warns on unsaved changes; disabled automatically on the completion step
+
+### Configure — Manual Mode
+
+Freeform 3-column layout for direct policy and assignment management:
+
+- **Workload tabs** — Switch between Directory Roles and PIM Groups
+- **Full policy form** — Activation, assignment, and notification settings for both member and owner policies
+- **Stage Changes workflow** — Queue multiple targets before applying, or Apply Now directly
+- **Assignment Panel** — Create eligible/active assignments with AU scope picker and existing assignment management
+- **Per-target progress** — Individual success/error tracking in ProgressModal
+- **Incremental consent** — Write permissions requested only when entering Configure
+
+### Configure — Bulk Mode
+
+CSV-based batch configuration for policy and assignment management:
+
+- **CSV Upload** — Support for 4 types: Role Policies, Group Policies, Role Assignments, Group Assignments
+- **Auto-detection** — System detects CSV type from headers
+- **Compare View** — Side-by-side diff of current vs. desired state
+- **Assignment Preview** — Row-by-row validation with errors/warnings
+- **Selective Apply** — Choose which changes to apply before execution
+- **Write consent gate** — Incremental consent per workload
+- **Retry Failed** — Re-select failed rows for re-submission
+
+### Filtering in Configure
+
+Role and group lists in the Configure page now have quick-filter pills, making it easier to find what you're looking for in large tenants.
+
+**Wizard — Scope step:**
+- **Roles tab:** filter by Type (Built-in / Custom), Privilege, and Assignments (With / Without)
+- **Groups tab:** filter by Group type (Security / M365 / Mail-enabled)
+
+**Manual Mode:**
+- Role selector: same three filter rows as the Wizard
+- Group selector: Group type filter
+
+"Select All Visible" respects active filters — only the currently visible items are selected.
+
+### Azure Static Web Apps — Self-Hosted Deployment
+
+PIM Manager can now be deployed to your own Azure tenant with a single click — no fork required:
+
+- **Deploy to Azure button** — One-click ARM template deployment directly from the public repository
+- **Three inputs only** — Resource name, region, and your App Registration Client ID
+- **Fully automated** — ARM template provisions Azure Static Web Apps (Free tier), downloads the latest release, and injects your Client ID at deploy time
+- **No secrets needed** — Uses Authorization Code Flow with PKCE; the Client ID is intentionally public
+- **Self-contained** — Nothing leaves your Azure tenant once deployed
+
+### Update Notifications (Self-Hosted)
+
+Self-hosted instances now show a version badge in the sidebar footer when a newer release is available:
+
+- Displays the current installed version with its release date
+- Shows the latest available version with its release date
+- Clickable link to the GitHub Releases page
+- Checked once per session; no impact on performance
+
+---
+
+## ✨ User Experience Enhancements
+
+### Configure Quality of Life
+
+- Group-inherited assignments clearly marked with "via Group" badge — removal correctly disabled with tooltip
+- Approver notification input shows info tooltip when disabled (Graph API limitation)
+- ProgressModal stays open on partial apply failure for review; auto-closes only on full success
+- Incremental write-consent gate per workload — right permissions, right moment
+
+### Help & Documentation
+
+- Help modal updated with dedicated sections for all three Configure modes, including step-by-step Wizard overview and write permissions reference
+
+---
+
+## 🔒 Security
+
+### Write Permissions via Incremental Consent
+
+Write permissions are **never requested at login**. They are requested via incremental consent only when the user actively enters Configure mode:
+
+**Directory Roles:**
+- `RoleManagementPolicy.ReadWrite.Directory` — Update role policies
+- `RoleEligibilitySchedule.ReadWrite.Directory` — Create eligible assignments
+- `RoleAssignmentSchedule.ReadWrite.Directory` — Create active assignments
+
+**PIM for Groups:**
+- `RoleManagementPolicy.ReadWrite.AzureADGroup` — Update group policies
+- `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` — Create eligible group assignments
+- `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` — Create active group assignments
+
+### Security Hardening
+
+- **CSP hardened** — Inline theme script moved to `public/theme-init.js`; `'unsafe-eval'` removed; `object-src 'none'` and `base-uri 'self'` added; missing MSAL domains (`aadcdn.msftauth.net`, `login.microsoft.com`) added to `script-src` and `connect-src`
+- **Simplified sessionStorage** — Data is now stored as plain JSON for better debuggability and transparency
+- **npm vulnerabilities fixed** — 4 audit issues resolved: brace-expansion (moderate), flatted (high), next (moderate), picomatch (high)
+
+---
+
+## ⚡ Reliability Improvements
+
+- Policy updates and assignment removals retry on 429/5xx with exponential backoff
+- Administrative Unit list fetches all pages (was hard-capped at 100)
+- Duration parser correctly handles sub-hour values (PT30M, PT1H30M)
+- Notification email recipients split correctly on semicolon separator
+
+---
+
+## 🐛 Bug Fixes
+
+- **GroupSelector** — Rapid-toggle stale closure fixed; selection changes always propagate correctly
+- **Wizard** — Back-navigation no longer shows stale dynamic steps from a previous workload selection
+- **Group partial-cache** — On-demand policy fetch fills either missing member or owner policy independently
+- **Owner policy** — Correctly applied for permanent-allowed constraint checks in assignments
+- **Dashboard** — 9–24h activation duration range now displays correctly (dead branch removed)
+- **Theme script** — Replaced inline `<script>` with `next/script` (`beforeInteractive`) to suppress React hydration warning
+
+---
+
+## Previous Release — v1.9.0
+
 **Release Date**: January 24, 2026
 
 A comprehensive update bringing powerful new features, major performance improvements, and critical security enhancements.
 
 ---
 
-## 🚀 Major Features
+### 🚀 Major Features
 
-### Full PIM Groups Support
+#### Full PIM Groups Support
 
 Comprehensive support for Microsoft Entra PIM Groups:
 
@@ -17,7 +160,7 @@ Comprehensive support for Microsoft Entra PIM Groups:
 - **Integrated reporting** - Groups data seamlessly integrated across dashboard and reports
 - **Unmanaged Groups detection** - Identify groups not yet enrolled in PIM
 
-### Smart Sync Technology
+#### Smart Sync Technology
 
 Data synchronization improvements:
 
@@ -27,7 +170,7 @@ Data synchronization improvements:
 - **Optimized caching** - Authentication contexts and policy data cached intelligently
 - **Sync status indicator** - Always know when your data was last updated
 
-### PDF Export
+#### PDF Export
 
 Reporting capabilities built-in:
 
@@ -38,9 +181,9 @@ Reporting capabilities built-in:
 
 ---
 
-## ✨ User Experience Enhancements
+### ✨ User Experience Enhancements
 
-### Enhanced Dashboard
+#### Enhanced Dashboard
 
 - **Multi-select filters** - Select multiple values simultaneously for advanced filtering
 - **Authentication Contexts chart** - Visualize Conditional Access requirements
@@ -48,7 +191,7 @@ Reporting capabilities built-in:
 - **Interactive stat cards** - Click to filter, double-click to clear
 - **Granular duration buckets** - Precise breakdown (≤1h, 2-4h, 5-8h, 9-12h, >12h)
 
-### Improved Help & Settings
+#### Improved Help & Settings
 
 - **Search functionality** - Find help topics instantly
 - **Permission grouping** - Better organized consent requirements
@@ -58,16 +201,16 @@ Reporting capabilities built-in:
 
 ---
 
-## ⚡ Performance & Technical Improvements
+### ⚡ Performance & Technical Improvements
 
-### API & Data Management
+#### API & Data Management
 
 - **v1.0 Graph API** - Migrated from beta to stable Microsoft Graph endpoints
 - **Worker pool utility** - Parallel data fetching with throttling protection
 - **Optimized caching** - SessionStorage for authentication contexts
 - **Reduced throttling** - Smart delays prevent 429 errors
 
-### Code Quality
+#### Code Quality
 
 - **Type safety enhancements** - Replaced `any` types with `unknown` for safer error handling
 - **Code cleanup** - Removed debug code and unused features
@@ -75,9 +218,9 @@ Reporting capabilities built-in:
 
 ---
 
-## 🔒 Security Hardening
+### 🔒 Security Hardening
 
-### Production Safety
+#### Production Safety
 
 - All debug logging disabled in production
 - Error messages sanitized for user-facing displays
@@ -86,15 +229,15 @@ Reporting capabilities built-in:
 
 ---
 
-## 🐛 Bug Fixes
+### 🐛 Bug Fixes
 
-### Data Synchronization
+#### Data Synchronization
 
 - Race conditions on page refresh resolved
 - Infinite loops in delta query logic eliminated
 - False change detection on initial load prevented
 
-### User Interface
+#### User Interface
 
 - Filter state properly persists between page navigation
 - Duration format bugs corrected across all components
@@ -103,15 +246,15 @@ Reporting capabilities built-in:
 
 ---
 
-## 📚 Documentation & Transparency
+### 📚 Documentation & Transparency
 
-### Open Source Commitment
+#### Open Source Commitment
 
 - **GPL v3.0 License** - Full transparency and open-source licensing
 - **Comprehensive README** - Clear architecture philosophy and governance focus
 - **Development transparency** - Full changelog and version history available
 
-### Enhanced Documentation
+#### Enhanced Documentation
 
 - Architecture deep-dives with enterprise sections
 - PIM Groups data flow documentation

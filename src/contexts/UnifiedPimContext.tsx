@@ -9,7 +9,7 @@ import {
     WorkloadLoadingState,
     WorkloadState,
     WorkloadConsentState
-} from "@/types/workload";
+} from '@/types/workload.types';
 import { PimGroupData as PimGroupDataType } from "@/types/pimGroup.types";
 import { fetchAllPimGroupData, syncGroupsWithDelta } from "@/services/pimGroupService";
 import { getStoredGroupDeltaLink, fetchGroupDeltas, clearGroupDeltaLink } from "@/services/deltaService";
@@ -57,7 +57,7 @@ export interface DefenderRoleData {
 }
 
 // ============================================================================
-// Sync History (for timestamp tracking)
+// Sync History (for "what changed" visibility)
 // ============================================================================
 
 export interface SyncHistoryEntry {
@@ -96,8 +96,7 @@ export interface UnifiedPimContextValue extends UnifiedPimState {
     refreshAllWorkloads: () => Promise<void>;
     enableWorkload: (workload: WorkloadType) => Promise<boolean>;
     disableWorkload: (workload: WorkloadType) => void;
-    clearSyncHistory: () => void;
-    addSyncHistoryEntry: (entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'>) => void;
+    addSyncHistoryEntry: (entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => void;
 
     // Registration for modular workload refresh (allows child contexts to register their refresh)
     registerWorkloadRefresh: (workload: WorkloadType, refreshFn: () => Promise<void>) => void;
@@ -333,16 +332,11 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         return state.workloads[workload].consent.consented;
     }, [state.workloads]);
 
-    // Sync history functions using refs (no re-renders on update)
-    const clearSyncHistory = useCallback(() => {
-        syncHistoryRef.current = [];
-    }, []);
-
-    const addSyncHistoryEntry = useCallback((entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'>) => {
+    const addSyncHistoryEntry = useCallback((entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => {
         const newEntry: SyncHistoryEntry = {
             ...entry,
             id: crypto.randomUUID(),
-            timestamp: new Date()
+            timestamp: entry.timestamp || new Date()
         };
 
         // Update ref (no re-render)
@@ -350,6 +344,12 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
             newEntry,
             ...syncHistoryRef.current.filter(e => e.workload !== entry.workload)
         ].slice(0, 10);
+
+        // Update state to trigger re-render for SyncStatus
+        setState(prev => ({
+            ...prev,
+            syncHistory: syncHistoryRef.current
+        }));
     }, []);
 
     // ========================================================================
@@ -384,12 +384,13 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                 const now = new Date();
                 const lastFetchedDate = new Date(workloadState.lastFetched);
                 const diff = now.getTime() - lastFetchedDate.getTime();
-                if (diff < 5 * 60 * 1000) {
+                if (diff < 60 * 60 * 1000) { // 60 minutes cache TTL
                     Logger.debug("UnifiedPim", `Data for ${workload} is fresh, skipping fetch`);
 
-                    // Restore SyncStatus indicator by logging sync timestamp
+                    // Restore SyncStatus indicator with original timestamp
                     addSyncHistoryEntry({
-                        workload: workload
+                        workload: workload,
+                        timestamp: lastFetchedDate
                     });
 
                     return;
@@ -398,6 +399,24 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
 
             switch (workload) {
                 case "pimGroups": {
+                    // Safety: Check sessionStorage cache in case hydration hasn't finished yet (avoids race condition on F5)
+                    if (typeof sessionStorage !== "undefined" && !workloadState.lastFetched) {
+                        const cachedTs = sessionStorage.getItem(PIM_GROUPS_TIMESTAMP_KEY);
+                        if (cachedTs) {
+                            const diff = new Date().getTime() - new Date(cachedTs).getTime();
+                            if (diff < 60 * 60 * 1000) {
+                                Logger.debug("UnifiedPim", "Found fresh PIM Groups data in storage (pre-hydration), skipping fetch");
+                                // Manually hydrate if needed, or just let the useEffect hydration take over
+                                // returning here allows useEffect hydration to eventually populate state without triggering a new fetch
+
+                                // However, we must ensure loading state doesn't get stuck if we return here but hydration failed or hasn't run.
+                                // Since hydration runs on mount, it should coincide.
+                                // We can treat this as "Cache Hit" and let the hydration useEffect handle the state update.
+                                return;
+                            }
+                        }
+                    }
+
                     // Get current data for Smart Sync check
                     const currentData = (state.workloads.pimGroups.data || []) as PimGroupDataType[];
                     const hasExistingData = currentData.length > 0;
@@ -406,7 +425,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                     updateWorkloadState(workload, () => ({
                         loading: {
                             phase: "fetching",
-                            progress: { current: 0, total: 3 },
+                            progress: { current: 0, total: 0 },
                             message: "Loading PIM Groups data..."
                         }
                     }));
@@ -453,7 +472,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                                         lastFetched: new Date().toISOString()
                                     }));
 
-                                    // Record sync timestamp for UI notification
+                                    // Record sync timestamp
                                     addSyncHistoryEntry({
                                         workload: 'pimGroups'
                                     });
@@ -728,7 +747,9 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                     if (consented.includes(workload) && workload !== "directoryRoles") {
                         Logger.debug("UnifiedPim", `Auto-loading data for ${workload}`);
                         // Use standard refresh logic
-                        refreshWorkload(workload);
+                        void refreshWorkload(workload).catch(err =>
+                            Logger.error("UnifiedPim", `Auto-load failed for ${workload}:`, err)
+                        );
                     }
                 }
 
@@ -738,7 +759,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         };
 
         initialize();
-    }, [accounts, checkConsent, state.initialized]);
+    }, [accounts, checkConsent, state.initialized, refreshWorkload]);
 
     // ========================================================================
     // Context Value
@@ -760,7 +781,6 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         refreshAllWorkloads,
         enableWorkload,
         disableWorkload,
-        clearSyncHistory,
         addSyncHistoryEntry,
         registerWorkloadRefresh,
         getGraphClient,

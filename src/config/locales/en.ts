@@ -1,7 +1,7 @@
 export const HELP_CONTENT = {
     gettingStarted: {
         title: "Welcome to PIM Manager",
-        description: "View and analyze your Entra ID roles, PIM policies, and role assignments in one place.",
+        description: "View, analyze, and configure your Entra ID PIM policies and role assignments in one place.",
         auth: {
             title: "Authentication & permissions",
             description: "Sign in with your Microsoft account. The application uses read-only permissions:",
@@ -9,9 +9,17 @@ export const HELP_CONTENT = {
         },
         navigation: {
             title: "Navigation",
+            dashboard: {
+                title: "Dashboard",
+                description: "Security posture overview with stats, charts, and alerts"
+            },
             report: {
                 title: "Report",
                 description: "View comprehensive PIM coverage, role assignments, and policies"
+            },
+            configure: {
+                title: "Configure",
+                description: "Apply policy changes and manage assignments across roles and groups"
             }
         }
     },
@@ -127,54 +135,104 @@ export const HELP_CONTENT = {
             csv: "Flat list with summary counts and status flags"
         }
     },
+    configure: {
+        title: "🔧 Configure Guide",
+        description: "Apply PIM policy changes and manage assignments. Three modes are available depending on your workflow.",
+        modes: {
+            wizard: {
+                title: "Wizard",
+                description: "Step-by-step guided flow with backup, preview, and per-workload configuration."
+            },
+            manual: {
+                title: "Manual",
+                description: "Freeform editor. Select targets, adjust settings, and apply directly or via a staged queue."
+            },
+            bulk: {
+                title: "Bulk",
+                description: "CSV-based batch configuration. Upload a file, compare changes, and apply at scale."
+            }
+        },
+        requiredPermissions: {
+            title: "Required Permissions",
+            description: "Configuration requires Write permissions in addition to the standard Read permissions.",
+            directoryRoles: "Directory Roles (Write)",
+            pimGroups: "PIM for Groups (Write)"
+        },
+        wizard: {
+            stepsOverview: {
+                title: "Wizard — Steps Overview",
+                description: "The wizard guides you through dynamic steps based on your selections:",
+                checkpointNote: "When configuring both Directory Roles and PIM Groups, a Checkpoint step appears between the two workloads."
+            },
+            scopeSelection: {
+                title: "Wizard — Step 4: Scope Selection",
+                description: "Choose how to initialize your configuration:",
+                startFresh: {
+                    title: "Start Fresh",
+                    description: "Begin with Microsoft default settings."
+                },
+                loadCurrent: {
+                    title: "Load Current",
+                    description: "Load settings from selected role (single selection only)."
+                },
+                cloneFrom: {
+                    title: "Clone From",
+                    description: "Copy settings from any other role - great for standardizing!"
+                },
+                filteringTitle: "Filtering the list",
+                filteringDescription: "Use the quick-filter pills above the search bar to narrow large role and group lists:",
+                selectAllNote: "\"Select All Visible\" respects active filters — only visible items are selected."
+            },
+            policySettings: {
+                title: "Wizard — Step 5: Policy Settings",
+                activationTitle: "Activation Settings",
+                assignmentTitle: "Assignment Expiration",
+                notificationTitle: "Notification Settings",
+                notificationDescription: "Configure email alerts for Eligible Assignment, Active Assignment, and Activation events to admins, assignees, and approvers.",
+                pimGroupsTip: "For PIM Groups, toggle between Member and Owner policies."
+            },
+            assignments: {
+                title: "Wizard — Step 6: Assignments",
+                createTitle: "Create New Assignments",
+                manageTitle: "Manage Existing Assignments"
+            },
+            applyProcess: {
+                title: "Wizard — Step 8: Apply Process",
+                description: "Changes are applied in three phases:",
+                retryTip: "Failed operations can be retried without re-running successful ones."
+            }
+        },
+        manual: {
+            title: "Manual Mode",
+            description: "A 3-column freeform editor. No fixed steps — select targets, edit settings, and apply on your terms.",
+            column1: {
+                title: "Column 1 — Selector",
+                description: "Pick the workload (Directory Roles or PIM Groups) and select one or more targets. Current settings auto-load for single selections."
+            },
+            column2: {
+                title: "Column 2 — Policy & Assignment tabs",
+                description: "Policy tab: Full activation, assignment, and notification settings. PIM Groups shows both Member and Owner policies. Assignment tab: Create eligible/active assignments, set scope and duration, and manage existing assignments (view, remove)."
+            },
+            column3: {
+                title: "Column 3 — Staged Queue",
+                description: "Use Stage Changes to queue multiple policy edits before applying them all at once, or use Apply Now to apply immediately to the current selection."
+            },
+            permissionsTip: "Write permissions are requested the first time you apply changes — not when you open the page."
+        },
+        bulk: {
+            title: "Bulk Mode",
+            description: "CSV-based configuration for large-scale changes. Supports 4 CSV types: Role Policies, Group Policies, Role Assignments, and Group Assignments. Assignment CSVs handle both add and remove operations in a single file via the Action column.",
+            templateTip: "Download a template, fill in your data, and upload. Or export from the Report page, change Action to \"remove\" for rows you want to delete, and re-import."
+        },
+        requiredEntraRoles: {
+            title: "Required Entra Roles",
+            importantNote: "Graph API permission consent is not enough. The signed-in user must also have the appropriate Entra role."
+        },
+        safetyFeatures: {
+            title: "Safety Features"
+        }
+    },
     settings: {
-        title: "⚙️ Settings guide",
-        description: "Manage workloads, enable optional features, and control what data is displayed.",
-        workloads: {
-            title: "Workloads",
-            description: "Workloads are the data sources that PIM Manager can read from your tenant.",
-            directoryRoles: {
-                title: "Directory roles",
-                description: "Core workload. Always enabled. Shows Entra ID Directory Role assignments and PIM policies."
-            },
-            pimGroups: {
-                title: "PIM for groups",
-                description: "Optional. Shows PIM-eligible group memberships. Requires additional consent."
-            }
-        },
-        optionalFeatures: {
-            title: "Optional features",
-            description: "Features that require additional permissions and are disabled by default.",
-            securityAlerts: {
-                title: "Security alerts",
-                description: "Displays PIM security alerts (roles without MFA, stale accounts, etc.). Requires PrivilegedAccess.Read.AzureAD permission."
-            },
-            note: "Enabling a feature triggers a consent popup. Permissions stay until revoked in Entra ID."
-        },
-        hideDisable: {
-            title: "Hide vs. disable",
-            description: "There are two ways to control workloads and features:",
-            hide: {
-                title: "Hide",
-                description: "Hides from UI only. Permission remains granted. Data is still fetched but not shown."
-            },
-            disable: {
-                title: "Disable",
-                description: "Stops data fetching. To fully revoke permission, visit the Entra Admin Center."
-            }
-        },
-        viewChips: {
-            title: "View chips",
-            description: "The chip bar on the Dashboard lets you quickly toggle which data is visible:",
-            items: [
-                "Click a chip to hide/show that workload's data in all views.",
-                "Grayed chips indicate hidden data (click to show again).",
-                "If only one workload is active, its chip cannot be hidden.",
-                "Settings icon opens the full Settings modal.",
-                "Note: URL parameters (e.g. from Dashboard links) may temporarily override these toggles.",
-                "PIM Groups and Unmanaged Groups can be toggled independently."
-            ]
-        },
         modal: {
             title: "Settings",
             workloads: {

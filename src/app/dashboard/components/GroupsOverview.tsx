@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Users, UserCheck, Clock, ChevronRight, Search, Shield } from "lucide-react";
 import Link from "next/link";
 import { PimGroupData, GroupType } from "@/types/pimGroup.types";
-import { getAggregatedGroupStats } from "@/services/pimGroupService";
+import { getAggregatedGroupStats } from "@/utils/groupStatsUtils";
 import { Badge } from "@/components/ui/Badge";
 
 interface GroupsOverviewProps {

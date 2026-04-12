@@ -24,7 +24,7 @@ export function ConditionalHeader() {
                 <Menu className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
             </button>
 
-            <h1 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-100" data-tour="app-title">
                 Entra ID PIM Manager
             </h1>
         </header>

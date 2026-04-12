@@ -1,6 +1,7 @@
 // API utility for fetching PIM Security Alerts from Graph API beta
-import { SecurityAlert } from "@/types/securityAlerts";
+import { SecurityAlert } from '@/types/securityAlerts.types';
 import { GRAPH_LOCALE } from "@/config/constants";
+import { Logger } from "@/utils/logger";
 
 const ALERTS_ENDPOINT = "https://graph.microsoft.com/beta/identityGovernance/roleManagementAlerts/alerts";
 const ALERTS_FILTER = "scopeId eq '/' and scopeType eq 'DirectoryRole'";
@@ -50,7 +51,7 @@ export async function fetchSecurityAlerts(accessToken: string): Promise<Security
         if (error instanceof Error && error.message === 'PERMISSION_DENIED') {
             throw error;
         }
-        console.error('Failed to fetch security alerts:', error);
+        Logger.error('alertsApi', 'Failed to fetch security alerts:', error);
         throw error;
     }
 }

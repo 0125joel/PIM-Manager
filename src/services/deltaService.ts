@@ -1,6 +1,7 @@
 import { Logger } from "@/utils/logger";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { RoleDetailData } from "@/types/directoryRole.types";
+import { withRetry } from "@/utils/retryUtils";
 
 /**
  * Service to handle Microsoft Graph Delta Queries for PIM resources.
@@ -80,13 +81,15 @@ export const fetchDirectoryRoleDeltas = async (
         while (hasMore) {
             Logger.debug("DeltaService", `Fetching delta: ${currentLink.substring(0, 50)}...`);
 
-            const response: DeltaResponse<DirectoryRoleDeltaChange> = await client
-                .api(currentLink)
-                .version("beta")
-                // Note: Delta endpoint only supports limited properties. isBuiltIn/isPrivileged cause 400 errors.
-                // We only need the ID to know which roles changed.
-                .select("id,displayName,description")
-                .get();
+            const link = currentLink;
+            const response: DeltaResponse<DirectoryRoleDeltaChange> = await withRetry(
+                () => client.api(link).version("beta")
+                    // Note: Delta endpoint only supports limited properties. isBuiltIn/isPrivileged cause 400 errors.
+                    // We only need the ID to know which roles changed.
+                    .select("id,displayName,description")
+                    .get(),
+                3, 1000, "deltaService fetchDirectoryRoleDeltas"
+            );
 
             if (response.value) {
                 allChanges = [...allChanges, ...response.value];
@@ -170,11 +173,13 @@ export const fetchGroupDeltas = async (
         while (hasMore) {
             Logger.debug("DeltaService", `Fetching group delta: ${currentLink.substring(0, 50)}...`);
 
-            const response: DeltaResponse<GroupDeltaChange> = await client
-                .api(currentLink)
-                .version("v1.0") // Groups delta is v1.0 GA
-                .header("Prefer", "return-minimal") // Optional: optimization
-                .get();
+            const groupLink = currentLink;
+            const response: DeltaResponse<GroupDeltaChange> = await withRetry(
+                () => client.api(groupLink).version("v1.0") // Groups delta is v1.0 GA
+                    .header("Prefer", "return-minimal") // Optional: optimization
+                    .get(),
+                3, 1000, "deltaService fetchGroupDeltas"
+            );
 
             if (response.value) {
                 allChanges = [...allChanges, ...response.value];

@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { useMsal } from "@azure/msal-react";
-import { Client } from "@microsoft/microsoft-graph-client";
-import { RoleAssignment } from "@/types";
+import React, { useState, useMemo } from "react";
+import { useAssignmentOverview } from "@/hooks/useAssignmentOverview";
 import { Users, User, ChevronDown, ChevronRight } from "lucide-react";
 
 interface AssignmentOverviewProps {
@@ -11,105 +9,9 @@ interface AssignmentOverviewProps {
 }
 
 export function AssignmentOverview({ onDataLoad }: AssignmentOverviewProps) {
-    const { instance, accounts } = useMsal();
-    const [assignments, setAssignments] = useState<RoleAssignment[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { assignments, loading, error, groupMembers, loadGroupMembers } = useAssignmentOverview(onDataLoad);
     const [filter, setFilter] = useState<"all" | "group" | "individual">("all");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-    const [groupMembers, setGroupMembers] = useState<Map<string, any[]>>(new Map());
-
-    useEffect(() => {
-        const fetchAssignments = async () => {
-            if (accounts.length === 0) return;
-
-            setLoading(true);
-            try {
-                const request = {
-                    scopes: ["RoleAssignmentSchedule.Read.Directory", "RoleEligibilitySchedule.Read.Directory", "User.Read.All", "Group.Read.All"],
-                    account: accounts[0],
-                };
-
-                const response = await instance.acquireTokenSilent(request).catch(async () => {
-                    return await instance.acquireTokenPopup(request);
-                });
-                const graphClient = Client.init({
-                    authProvider: (done) => done(null, response.accessToken),
-                });
-
-                // Fetch both eligible and active assignments
-                const [eligibleRes, activeRes, rolesRes] = await Promise.all([
-                    graphClient.api("/roleManagement/directory/roleEligibilitySchedules").expand("principal,roleDefinition").get(),
-                    graphClient.api("/roleManagement/directory/roleAssignmentSchedules").expand("principal,roleDefinition").get(),
-                    graphClient.api("/roleManagement/directory/roleDefinitions").get(),
-                ]);
-
-                const rolesMap = new Map(rolesRes.value.map((r: any) => [r.id, r.displayName]));
-
-                const parseAssignments = (items: any[], type: "Eligible" | "Active") => {
-                    return items.map((item: any) => ({
-                        id: item.id,
-                        roleDefinitionId: item.roleDefinitionId,
-                        principalId: item.principalId,
-                        principalType: (item.principal?.["@odata.type"]?.includes("group") ? "Group" : "User") as "User" | "Group",
-                        principalDisplayName: item.principal?.displayName || "Unknown",
-                        assignmentType: type,
-                        startDateTime: item.startDateTime,
-                        endDateTime: item.endDateTime,
-                        memberType: (item.memberType || "Direct") as "Direct" | "Group",
-                    }));
-                };
-
-                const allAssignments = [
-                    ...parseAssignments(eligibleRes.value, "Eligible"),
-                    ...parseAssignments(activeRes.value, "Active"),
-                ];
-
-                setAssignments(allAssignments);
-
-                // Calculate PIM coverage
-                const rolesWithPim = new Set(allAssignments.map(a => a.roleDefinitionId));
-                const totalRoles = rolesRes.value.length;
-                const inPim = rolesWithPim.size;
-                const outsidePim = totalRoles - inPim;
-
-                if (onDataLoad) {
-                    onDataLoad(inPim, outsidePim);
-                }
-            } catch (error: any) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.error("Failed to fetch assignments:", error);
-                }
-                setError(`Failed to load assignments: ${error.message || 'Unknown error'}`);
-                // Fallback data
-                setAssignments([
-                    {
-                        id: "1",
-                        roleDefinitionId: "role1",
-                        principalId: "group1",
-                        principalType: "Group",
-                        principalDisplayName: "IT Admins (Demo Data)",
-                        assignmentType: "Eligible",
-                        memberType: "Direct",
-                    },
-                    {
-                        id: "2",
-                        roleDefinitionId: "role2",
-                        principalId: "user1",
-                        principalType: "User",
-                        principalDisplayName: "John Doe (Demo Data)",
-                        assignmentType: "Active",
-                        memberType: "Direct",
-                    },
-                ]);
-                if (onDataLoad) onDataLoad(5, 15);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchAssignments();
-    }, [instance, accounts, onDataLoad]);
 
     const toggleGroup = async (groupId: string) => {
         const newExpanded = new Set(expandedGroups);
@@ -117,24 +19,7 @@ export function AssignmentOverview({ onDataLoad }: AssignmentOverviewProps) {
             newExpanded.delete(groupId);
         } else {
             newExpanded.add(groupId);
-            // Fetch group members if not already loaded
-            if (!groupMembers.has(groupId)) {
-                try {
-                    const request = {
-                        scopes: ["Group.Read.All"],
-                        account: accounts[0],
-                    };
-                    const response = await instance.acquireTokenSilent(request);
-                    const graphClient = Client.init({
-                        authProvider: (done) => done(null, response.accessToken),
-                    });
-
-                    const members = await graphClient.api(`/groups/${groupId}/members`).get();
-                    setGroupMembers(new Map(groupMembers.set(groupId, members.value)));
-                } catch (error) {
-                    console.error("Failed to fetch group members", error);
-                }
-            }
+            await loadGroupMembers(groupId);
         }
         setExpandedGroups(newExpanded);
     };
@@ -271,7 +156,7 @@ export function AssignmentOverview({ onDataLoad }: AssignmentOverviewProps) {
                                             <td colSpan={4} className="px-6 py-2 bg-zinc-50 dark:bg-zinc-800/50">
                                                 <div className="pl-12 space-y-1">
                                                     <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Group Members:</p>
-                                                    {groupMembers.get(assignment.principalId)?.map((member: any) => (
+                                                    {groupMembers.get(assignment.principalId)?.map((member) => (
                                                         <div key={member.id} className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                                                             <User className="h-3 w-3" />
                                                             {member.displayName} ({member.userPrincipalName || member.mail})

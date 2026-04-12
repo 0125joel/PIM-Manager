@@ -4,8 +4,9 @@ import { useState, useEffect, Suspense, useMemo } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import { loadApproversForRole } from "@/services/directoryRoleService";
+import { useApproversForRole } from "@/hooks/useApproversForRole";
 import { RoleDetailData } from "@/types/directoryRole.types";
+import { Logger } from "@/utils/logger";
 import { usePimData } from "@/hooks/usePimData";
 import { useRoleFilters } from "@/hooks/useRoleFilters";
 import {
@@ -47,6 +48,7 @@ import { PimGroupData } from "@/types/pimGroup.types";
 function ReportPageContent() {
     const { instance, accounts } = useMsal();
     const { rolesData, loading, error, loadingProgress, loadingMessage, policiesLoading, policyProgress, refreshData, fetchPolicyForRole, failedRoleIds, authenticationContexts } = usePimData();
+    const { loadApprovers } = useApproversForRole();
     const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set());
     const [privilegedWarning, setPrivilegedWarning] = useState(false);
     const [loadingApprovers, setLoadingApprovers] = useState<Set<string>>(new Set());
@@ -174,29 +176,27 @@ function ReportPageContent() {
             // Lazy load approvers if not already loaded
             const roleData = rolesData.find((r: RoleDetailData) => r.definition.id === roleId);
 
-            // Debug logging only in development (prevents sensitive data exposure in production)
-            if (process.env.NODE_ENV === 'development') {
-                console.log("[handleRoleToggle] Role expansion:", {
-                    hasRoleData: !!roleData,
-                    hasPolicy: !!roleData?.policy,
-                    hasPolicyDetails: !!roleData?.policy?.details,
-                    hasRules: !!roleData?.policy?.details?.rules,
-                    rulesCount: roleData?.policy?.details?.rules?.length,
-                    alreadyInCache: approversCache.has(roleId)
-                });
-            }
+            // Debug logging (Logger defaults to INFO in production, DEBUG statements filtered out)
+            Logger.debug("ReportPage", "Role expansion:", {
+                hasRoleData: !!roleData,
+                hasPolicy: !!roleData?.policy,
+                hasPolicyDetails: !!roleData?.policy?.details,
+                hasRules: !!roleData?.policy?.details?.rules,
+                rulesCount: roleData?.policy?.details?.rules?.length,
+                alreadyInCache: approversCache.has(roleId)
+            });
 
             if (roleData?.policy && !approversCache.has(roleId) && roleData.policy.details.rules) {
                 setLoadingApprovers(prev => new Set(prev).add(roleId));
 
                 try {
                     const client = await getGraphClient();
-                    const approvers = await loadApproversForRole(client, roleData.policy.details.rules);
+                    const approvers = await loadApprovers(client, roleData.policy.details.rules);
 
                     // Store approvers in cache
                     setApproversCache(prev => new Map(prev).set(roleId, approvers));
                 } catch (error) {
-                    console.error("Failed to load approvers", error);
+                    Logger.error("ReportPage", "Failed to load approvers", error);
                 } finally {
                     setLoadingApprovers(prev => {
                         const next = new Set(prev);
@@ -239,6 +239,7 @@ function ReportPageContent() {
                             <button
                                 onClick={() => setIsExportModalOpen(true)}
                                 disabled={rolesData.length === 0}
+                                data-tour="report-export"
                                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                             >
                                 <Download className="h-4 w-4" />
