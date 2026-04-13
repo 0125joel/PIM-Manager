@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set version environment variables
+        run: |
+          RELEASE_DATE=$(node -p "require('./package.json').releaseDate")
+          echo "NEXT_PUBLIC_APP_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_APP_RELEASE_DATE=${RELEASE_DATE}" >> $GITHUB_ENV
+
+      - name: Build
+        run: npm run build
+        # NEXT_PUBLIC_CLIENT_ID is intentionally not set here.
+        # Self-hosted deployments inject the Client ID at deploy time via env-config.js.
+
+      - name: Zip release artifact
+        run: zip -r release.zip out/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release.zip
+          generate_release_notes: true
+
+      - name: Wait for mirror sync to complete
+        env:
+          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
+        run: |
+          REPO="0125joel/PIM-Manager"
+          LOCAL_SHA=$(git rev-parse HEAD~0)
+          echo "Waiting for public repo to have commit ${LOCAL_SHA:0:7}..."
+
+          for i in $(seq 1 30); do
+            REMOTE_SHA=$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha' 2>/dev/null || echo "")
+            if [ "$REMOTE_SHA" = "$LOCAL_SHA" ]; then
+              echo "Mirror sync confirmed after ${i}0 seconds"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::warning::Mirror sync not confirmed after 5 minutes, proceeding anyway"
+            fi
+            sleep 10
+          done
+
+      - name: Publish release to public repo
+        env:
+          GH_TOKEN: ${{ secrets.API_TOKEN_GITHUB }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="0125joel/PIM-Manager"
+
+          # Create the tag on the public repo (pointing to latest commit on main)
+          LATEST_SHA=$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha')
+          gh api "repos/${REPO}/git/refs" \
+            -f ref="refs/tags/${TAG}" \
+            -f sha="${LATEST_SHA}" 2>/dev/null || true
+
+          # Create the release and upload the artifact
+          gh release create "${TAG}" release.zip \
+            --repo "${REPO}" \
+            --title "${TAG}" \
+            --generate-notes
