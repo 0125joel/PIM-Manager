@@ -468,10 +468,8 @@ interface AggregatedData {
       <MobileMenuProvider>              ← Mobile menu state
         <UnifiedPimProvider>            ← Multi-workload state
           <PimDataProvider>             ← Directory Roles data (legacy name)
-            <ViewModeContext>           ← View mode state
-              <GlobalProgressBar />
-              <App />
-            </ViewModeContext>
+            <GlobalProgressBar />
+            <App />
           </PimDataProvider>
         </UnifiedPimProvider>
       </MobileMenuProvider>
@@ -479,6 +477,8 @@ interface AggregatedData {
   </AuthProvider>
 </ThemeProvider>
 ```
+
+> **Note:** `ViewModeProvider` is not part of the global layout. It is applied locally in `app/dashboard/page.tsx` only.
 
 > **Note:** `PimDataProvider` is the exported name from `DirectoryRoleContext.tsx` for backward compatibility.
 
@@ -605,7 +605,7 @@ validateCurrentStep(): boolean {
 - Normalizes duration formats (ISO 8601 ↔ hours/days)
 - Type-safe policy transformations
 
-**Wizard Validation Service** (`src/services/WizardValidationService.ts` - 61 lines):
+**Wizard Validation Service** (`src/services/wizardValidationService.ts`):
 - Cross-step validation rules
 - Business logic validation
 - Prevents invalid configurations
@@ -988,8 +988,8 @@ src/
 │   ├── pimConfigurationService.ts # Policy parsing + write helpers
 │   ├── wizardApplyService.ts     # Bulk policy/assignment writes via Graph API
 │   ├── deltaService.ts           # Incremental Graph API delta updates
-│   ├── CsvParserService.ts       # CSV parse + validate for Bulk mode
-│   ├── WizardValidationService.ts # Cross-step wizard validation rules
+│   ├── csvParserService.ts       # CSV parse + validate for Bulk mode
+│   ├── wizardValidationService.ts # Cross-step wizard validation rules
 │   └── policyParserService.ts    # Parse Graph API policy rule structures
 │
 ├── contexts/
