@@ -2,6 +2,14 @@
 
 ---
 
+## v2.0.1 — 2026-04-13
+
+### Bug Fixes
+
+- **PDF export** — Fixed PDF generation failing due to a Content Security Policy violation. Added `'wasm-unsafe-eval'` to the CSP `script-src` directive, which is required by `@react-pdf/renderer` to instantiate its WebAssembly module. Affected all deployments (SaaS and self-hosted).
+
+---
+
 ## v2.0.0 — 2026-04-12
 
 The biggest update to PIM Manager yet — introducing the **Configure** feature for full read/write PIM management, Azure self-hosted deployment, and stability improvements across the board.

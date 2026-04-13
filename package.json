@@ -1,7 +1,7 @@
 {
   "name": "pim-manager",
-  "version": "2.0.0",
-  "releaseDate": "2026-04-12",
+  "version": "2.0.1",
+  "releaseDate": "2026-04-13",
   "private": true,
   "scripts": {
     "dev": "next dev",
