@@ -118,7 +118,7 @@ See the [LICENSE](LICENSE) file for details.
   <br/>
   <br/>
   <p><strong>Self-Hosted Deployments:</strong></p>
-  <img src="https://img.shields.io/github/downloads/0125joel/PIM-Manager/total/release.zip?style=flat-square&label=deployments&color=48c5fa" alt="Deployments"/>
+  <img src="https://img.shields.io/github/downloads/0125joel/PIM-Manager/total?style=flat-square&label=deployments&color=48c5fa" alt="Deployments"/>
   <br/>
   <br/>
   <p><strong>Unique Visitors:</strong></p>
