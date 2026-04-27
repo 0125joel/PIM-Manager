@@ -17,13 +17,19 @@ The Configure page provides three modes for managing PIM configurations:
 │                      Configure PIM                               │
 │   Manage PIM roles and groups efficiently.                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  [🪄 Wizard]  [⚙ Manual]  [📊 Bulk]                              │
+│ ▌ [🪄] Wizard         Step-by-step guided configuration   [→]   │
+│   Recommended when: New to PIM or bulk changes                   │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Selected mode content appears here                              │
-│                                                                  │
+│   [⚙] Manual         Full control over individual settings [→]  │
+│   Recommended when: Direct access without a guided flow          │
+├─────────────────────────────────────────────────────────────────┤
+│   [📊] Bulk          Upload CSV to configure at scale      [→]  │
+│   Recommended when: You have an existing export to apply         │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> [!NOTE]
+> Each mode is displayed as a horizontal row with a gradient icon. The selected row shows a colored left stripe. Click a row to select it, then click **Continue** to proceed.
 
 ---
 

@@ -17,13 +17,19 @@ De Configuratiepagina biedt drie modi voor het beheren van PIM-configuraties:
 │                    Configure PIM                                 │
 │   Beheer PIM rollen en groepen efficiënt.                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  [🪄 Wizard]  [⚙ Handmatig]  [📊 Bulk]                          │
+│ ▌ [🪄] Wizard        Begeleide stapsgewijze configuratie   [→]  │
+│   Aanbevolen wanneer: Nieuw met PIM of bulk-wijzigingen          │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Geselecteerde modus inhoud verschijnt hier                      │
-│                                                                  │
+│   [⚙] Handmatig     Volledige controle over instellingen   [→]  │
+│   Aanbevolen wanneer: Direct toegang zonder begeleide flow       │
+├─────────────────────────────────────────────────────────────────┤
+│   [📊] Bulk         Upload CSV voor configuratie op schaal  [→]  │
+│   Aanbevolen wanneer: Je hebt een bestaande export om toepassen  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> [!NOTE]
+> Elke modus wordt weergegeven als een horizontale rij met een kleurverloop-icoon. De geselecteerde rij toont een gekleurde linkerstreep. Klik een rij om te selecteren en klik vervolgens op **Doorgaan**.
 
 ---
 
