@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUnifiedPimData } from '@/contexts/UnifiedPimContext';
 import { useToastActions } from '@/contexts/ToastContext';
 import { AdminUnit, ExistingAssignment, ScopeInfo } from './assignmentTypes';
@@ -38,7 +38,10 @@ export function useAssignmentData({ workload, selectedIds, skipScopeFetch }: Use
                 let url: string | null =
                     '/directory/administrativeUnits?$select=id,displayName,description&$top=100';
 
-                while (url) {
+                const MAX_PAGES = 200;
+                let pageCount = 0;
+                while (url && pageCount < MAX_PAGES) {
+                    pageCount++;
                     if (cancelled) return;
                     const endpoint: string = url;
                     const res = await withRetry(
@@ -112,9 +115,22 @@ export function useAssignmentData({ workload, selectedIds, skipScopeFetch }: Use
         return () => { cancelled = true; };
     }, [selectedIds, workload, getGraphClient, skipScopeFetch]);
 
-    // Fetch Existing Assignments
+    // Fetch Existing Assignments — guarded against stale results when the
+    // component unmounts or `selectedIds`/`workload` change mid-flight.
+    // IMPORTANT: re-arm `mountedRef.current` on every mount, otherwise React
+    // StrictMode's mount → unmount → remount cycle in dev leaves it `false`
+    // forever and the loading spinner is never cleared.
+    const fetchTokenRef = useRef(0);
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
     const fetchExistingAssignments = useCallback(async () => {
         if (selectedIds.length === 0) return;
+        const token = ++fetchTokenRef.current;
+        const stale = () => !mountedRef.current || token !== fetchTokenRef.current;
         setIsLoadingAssignments(true);
         try {
             const client = await getGraphClient();
@@ -217,12 +233,12 @@ export function useAssignmentData({ workload, selectedIds, skipScopeFetch }: Use
                 }
             }
 
-            setExistingAssignments(allAssignments);
+            if (!stale()) setExistingAssignments(allAssignments);
         } catch (e) {
             Logger.error("useAssignmentData", "Failed to fetch existing assignments", e);
-            toastError("Failed to load assignments", "An unexpected error occurred while loading existing assignments.");
+            if (!stale()) toastError("Failed to load assignments", "An unexpected error occurred while loading existing assignments.");
         } finally {
-            setIsLoadingAssignments(false);
+            if (!stale()) setIsLoadingAssignments(false);
         }
     }, [selectedIds, workload, getGraphClient, toastError]);
 

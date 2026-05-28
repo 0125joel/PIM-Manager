@@ -160,12 +160,12 @@ export const HELP_CONTENT = {
         },
         wizard: {
             stepsOverview: {
-                title: "Wizard — Steps Overview",
+                title: "Wizard: Steps Overview",
                 description: "The wizard guides you through dynamic steps based on your selections:",
                 checkpointNote: "When configuring both Directory Roles and PIM Groups, a Checkpoint step appears between the two workloads."
             },
             scopeSelection: {
-                title: "Wizard — Step 4: Scope Selection",
+                title: "Wizard, Step 4: Scope Selection",
                 description: "Choose how to initialize your configuration:",
                 startFresh: {
                     title: "Start Fresh",
@@ -181,10 +181,10 @@ export const HELP_CONTENT = {
                 },
                 filteringTitle: "Filtering the list",
                 filteringDescription: "Use the quick-filter pills above the search bar to narrow large role and group lists:",
-                selectAllNote: "\"Select All Visible\" respects active filters — only visible items are selected."
+                selectAllNote: "\"Select All Visible\" respects active filters; only visible items are selected."
             },
             policySettings: {
-                title: "Wizard — Step 5: Policy Settings",
+                title: "Wizard, Step 5: Policy Settings",
                 activationTitle: "Activation Settings",
                 assignmentTitle: "Assignment Expiration",
                 notificationTitle: "Notification Settings",
@@ -192,32 +192,32 @@ export const HELP_CONTENT = {
                 pimGroupsTip: "For PIM Groups, toggle between Member and Owner policies."
             },
             assignments: {
-                title: "Wizard — Step 6: Assignments",
+                title: "Wizard, Step 6: Assignments",
                 createTitle: "Create New Assignments",
                 manageTitle: "Manage Existing Assignments"
             },
             applyProcess: {
-                title: "Wizard — Step 8: Apply Process",
+                title: "Wizard, Step 8: Apply Process",
                 description: "Changes are applied in three phases:",
                 retryTip: "Failed operations can be retried without re-running successful ones."
             }
         },
         manual: {
             title: "Manual Mode",
-            description: "A 3-column freeform editor. No fixed steps — select targets, edit settings, and apply on your terms.",
+            description: "A 3-column freeform editor. No fixed steps: select targets, edit settings, and apply on your terms.",
             column1: {
-                title: "Column 1 — Selector",
+                title: "Column 1: Selector",
                 description: "Pick the workload (Directory Roles or PIM Groups) and select one or more targets. Current settings auto-load for single selections."
             },
             column2: {
-                title: "Column 2 — Policy & Assignment tabs",
+                title: "Column 2: Policy & Assignment tabs",
                 description: "Policy tab: Full activation, assignment, and notification settings. PIM Groups shows both Member and Owner policies. Assignment tab: Create eligible/active assignments, set scope and duration, and manage existing assignments (view, remove)."
             },
             column3: {
-                title: "Column 3 — Staged Queue",
+                title: "Column 3: Staged Queue",
                 description: "Use Stage Changes to queue multiple policy edits before applying them all at once, or use Apply Now to apply immediately to the current selection."
             },
-            permissionsTip: "Write permissions are requested the first time you apply changes — not when you open the page."
+            permissionsTip: "Write permissions are requested the first time you apply changes, not when you open the page."
         },
         bulk: {
             title: "Bulk Mode",

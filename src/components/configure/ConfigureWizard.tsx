@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { useWizardState, WizardProvider, WizardStepId } from '@/hooks/useWizardState';
+import { useWizardState, WizardProvider } from '@/hooks/useWizardState';
 import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 import { WizardTimeline } from './wizard/WizardTimeline';
 import { WizardErrorBoundary } from './wizard/ErrorBoundary';
@@ -101,7 +101,7 @@ function WizardContent() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-280px)] min-h-[500px] bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div id="wizard-card" className="flex h-[calc(100vh-280px)] min-h-[500px] bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <WizardTimeline
                 steps={steps}
                 currentStepIndex={currentStepIndex}

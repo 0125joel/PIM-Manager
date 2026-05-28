@@ -319,7 +319,7 @@ export function CsvUploader({ onFileLoaded, onClear, isLoading, currentFile }: C
                     Export your configuration from the <strong>Report</strong> page, edit it in Excel or Google Sheets, then upload it here.
                 </p>
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                    <strong>Excel tip:</strong> save as <em>CSV UTF-8 (with BOM)</em> via File → Save As — not plain &quot;CSV&quot;.
+                    <strong>Excel tip:</strong> save as <em>CSV UTF-8 (with BOM)</em> via File → Save As, not plain &quot;CSV&quot;.
                     Semicolon-delimited files (European Excel) are automatically detected.
                 </p>
             </div>

@@ -262,7 +262,7 @@ Retry-After: 30
 
 | Mechanism | Implementation |
 |-----------|----------------|
-| **Rate limiting** | 8 concurrent workers, 300ms delay each (optimized) |
+| **Rate limiting** | 8 concurrent workers, 300ms delay (default); policy fetch uses 12 workers, 200ms delay |
 | **Deduplication** | Skips already-fetched policies |
 | **Conservative quota usage** | Uses only 10-22% of available quota |
 

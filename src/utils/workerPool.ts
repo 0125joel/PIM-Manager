@@ -11,6 +11,7 @@
  */
 
 import { Logger } from './logger';
+import type { RateLimiter } from './rateLimiter';
 
 // Helper to add delay for throttling protection
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -78,6 +79,12 @@ export interface WorkerPoolOptions<TItem, TResult> {
      * Uses exponential backoff: 2s, 4s, 8s
      */
     maxRetries?: number;
+
+    /**
+     * Optional rate limiter to enforce Graph API RU (Resource Unit) budget
+     * If provided, each worker acquires permission before processing an item
+     */
+    rateLimiter?: RateLimiter;
 }
 
 /**
@@ -116,7 +123,8 @@ export async function runWorkerPool<TItem, TResult>(
         onItemComplete,
         onItemError,
         signal,
-        maxRetries = 3
+        maxRetries = 3,
+        rateLimiter
     } = options;
 
     const total = items.length;
@@ -171,6 +179,9 @@ export async function runWorkerPool<TItem, TResult>(
             const item = workerItems[i];
 
             try {
+                // Acquire rate-limit permission if limiter is provided
+                await rateLimiter?.acquire(1, signal);
+
                 const result = await processWithRetry(item, workerId);
 
                 if (result !== null) {

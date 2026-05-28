@@ -109,7 +109,7 @@ function detectGroupType(group: any): GroupType {
  *
  * This endpoint requires: PrivilegedAccess.Read.AzureADGroup permission
  */
-async function fetchPimOnboardedResources(client: Client): Promise<{ id: string; displayName: string }[]> {
+export async function fetchPimOnboardedResources(client: Client): Promise<{ id: string; displayName: string }[]> {
     try {
         Logger.debug("PimGroupDataService", "Fetching PIM-onboarded groups via resources endpoint...");
 

@@ -500,6 +500,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 | `src/config/authConfig.ts` | MSAL configuratie | Token opslag, scopes, authority |
 | `src/hooks/useIncrementalConsent.ts` | Consent management | Permission requests, localStorage |
 | `src/utils/workerPool.ts` | Rate limiting | Throttling bescherming, concurrency |
+| `src/utils/rateLimiter.ts` | Sliding-window rate limiter | 500 RU/10s cap, Retry-After header afhandeling |
 | `src/components/UserGroupSearch.tsx` | OData escaping | Input validatie, injectie bescherming |
 | `src/services/directoryRoleService.ts` | Graph API calls | Error handling, data fetching |
 | `next.config.ts` | Build configuratie | Static export, geen server |

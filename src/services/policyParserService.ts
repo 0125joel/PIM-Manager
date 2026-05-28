@@ -1,5 +1,4 @@
 import { PolicySettings } from '@/types/wizard.types';
-import type { NotificationRecipient } from '@/types/shared.types';
 import { DEFAULT_DURATIONS, normalizeDuration } from '@/utils/durationUtils';
 
 /**

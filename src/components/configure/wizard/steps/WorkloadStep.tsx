@@ -3,9 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { WizardStep } from '../WizardStep';
 import { WorkloadType } from '@/types/workload.types';
 import { useWizardState } from '@/hooks/useWizardState';
-import { WorkloadCardProps } from '@/types/wizard.types';
 import { useIncrementalConsent, isWriteConsentGranted } from '@/hooks/useIncrementalConsent';
-import { Users, Shield, Check, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
+import { Users, Shield, Check, AlertTriangle, Loader2 } from 'lucide-react';
 
 export function WorkloadStep({ onNext, onBack }: { onNext: () => void, onBack: () => void }) {
     const { wizardData, updateData } = useWizardState();

@@ -11,7 +11,7 @@ import {
     WorkloadConsentState
 } from '@/types/workload.types';
 import { PimGroupData as PimGroupDataType } from "@/types/pimGroup.types";
-import { fetchAllPimGroupData, syncGroupsWithDelta } from "@/services/pimGroupService";
+import { fetchAllPimGroupData, fetchPimOnboardedResources, syncGroupsWithDelta } from "@/services/pimGroupService";
 import { getStoredGroupDeltaLink, fetchGroupDeltas, clearGroupDeltaLink } from "@/services/deltaService";
 import { useConsentedWorkloads } from "@/hooks/useConsentedWorkloads";
 import { setWorkloadEnabled } from "@/hooks/useIncrementalConsent";
@@ -93,7 +93,7 @@ export interface UnifiedPimContextValue extends UnifiedPimState {
 
     // Actions
     refreshWorkload: (workload: WorkloadType, force?: boolean) => Promise<void>;
-    refreshAllWorkloads: () => Promise<void>;
+    refreshAllWorkloads: (force?: boolean) => Promise<void>;
     enableWorkload: (workload: WorkloadType) => Promise<boolean>;
     disableWorkload: (workload: WorkloadType) => void;
     addSyncHistoryEntry: (entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => void;
@@ -441,6 +441,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                     // Phase 1: Smart Sync (Delta) - only if we have existing data
                     const storedDeltaLink = getStoredGroupDeltaLink();
                     let smartSyncSuccess = false;
+                    let latestSmartSyncData: PimGroupDataType[] | null = null;
 
                     // Match DirectoryRoles behavior: check hasExistingData BEFORE delta fetch
                     if (storedDeltaLink && hasExistingData) {
@@ -477,6 +478,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                                         workload: 'pimGroups'
                                     });
 
+                                    latestSmartSyncData = currentData;
                                     smartSyncSuccess = true;
                                 } else {
                                     Logger.debug("UnifiedPim", `Smart Sync: Processing ${changes.length} changes...`);
@@ -518,12 +520,58 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                                         workload: 'pimGroups'
                                     });
 
+                                    latestSmartSyncData = updatedData;
                                     smartSyncSuccess = true;
                                 }
                             }
                         } catch (err) {
                             if (err instanceof Error && err.message === "Aborted") throw err;
                             Logger.warn("UnifiedPim", "Group Smart Sync failed, falling back to full fetch", err);
+                        }
+                    }
+
+                    // Reconcile newly PIM-onboarded groups: /groups/delta does NOT track PIM
+                    // onboarding events (creating an eligible assignment doesn't change group
+                    // properties). Cross-check the resources endpoint to catch any new groups.
+                    if (smartSyncSuccess && latestSmartSyncData !== null && !signal.aborted) {
+                        try {
+                            const resources = await fetchPimOnboardedResources(client);
+                            const managedIds = new Set(
+                                latestSmartSyncData
+                                    .filter(g => g.isManaged)
+                                    .map(g => g.group.id)
+                            );
+                            const newGroupChanges = resources
+                                .filter(r => !managedIds.has(r.id))
+                                .map(r => ({ id: r.id, "@odata.type": "#microsoft.graph.group", isDeleted: false as const }));
+
+                            if (newGroupChanges.length > 0 && !signal.aborted) {
+                                Logger.debug("UnifiedPim", `Smart Sync: Found ${newGroupChanges.length} newly PIM-onboarded group(s), fetching data...`);
+                                updateWorkloadState(workload, () => ({
+                                    loading: {
+                                        phase: "fetching",
+                                        progress: { current: 0, total: newGroupChanges.length },
+                                        message: `Loading ${newGroupChanges.length} newly onboarded group(s)...`
+                                    }
+                                }));
+
+                                const mergedData = await syncGroupsWithDelta(client, latestSmartSyncData, newGroupChanges);
+
+                                if (!signal.aborted) {
+                                    updateWorkloadState(workload, () => ({
+                                        data: mergedData,
+                                        loading: {
+                                            phase: "complete",
+                                            progress: { current: 100, total: 100 },
+                                            message: `Synced ${newGroupChanges.length} new group(s)`
+                                        },
+                                        lastFetched: new Date().toISOString()
+                                    }));
+                                }
+                            }
+                        } catch (err) {
+                            if (err instanceof Error && err.message === "Aborted") throw err;
+                            Logger.warn("UnifiedPim", "Smart Sync reconciliation check failed (non-fatal)", err);
                         }
                     }
 
@@ -680,7 +728,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
     }, [updateWorkloadState]);
 
     // refreshAllWorkloads: Refresh all enabled workloads in parallel
-    const refreshAllWorkloads = useCallback(async (): Promise<void> => {
+    const refreshAllWorkloads = useCallback(async (force?: boolean): Promise<void> => {
         const enabledWorkloads = Object.entries(state.workloads)
             .filter(([, ws]) => ws.consent.consented)
             .map(([w]) => w as WorkloadType);
@@ -688,7 +736,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         Logger.debug("UnifiedPim", `Refreshing all workloads:`, enabledWorkloads);
 
         await Promise.all(
-            enabledWorkloads.map((workload) => refreshWorkload(workload))
+            enabledWorkloads.map((workload) => refreshWorkload(workload, force))
         );
 
         Logger.debug("UnifiedPim", "All workloads refreshed");

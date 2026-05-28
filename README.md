@@ -59,7 +59,7 @@ Visit **[pimmanager.com](https://pimmanager.com)** — no setup required. Sign i
 Deploy PIM Manager directly into your own Azure environment using Azure Static Web Apps (free tier). No fork or CLI required — everything happens in Azure Portal.
 
 **Prerequisites:**
-1. An [App Registration](docs/en/README.md) in your Microsoft Entra ID tenant with the required permissions
+1. An [App Registration](docs/en/01-introduction.md#microsoft-entra-app-registration) in your Microsoft Entra ID tenant with the required permissions
 2. An Azure subscription
 
 **Deploy:**

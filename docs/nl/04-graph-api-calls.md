@@ -213,7 +213,7 @@ Retry-After: 30
 
 | Mechanisme | Implementatie |
 |------------|---------------|
-| **Rate limiting** | 8 gelijktijdige workers, 300ms vertraging elk (geoptimaliseerd) |
+| **Rate limiting** | 8 gelijktijdige workers, 300ms vertraging (standaard); policy-ophaling gebruikt 12 workers, 200ms vertraging |
 | **Deduplicatie** | Slaat al-opgehaalde policies over |
 | **Conservatief quota gebruik** | Gebruikt slechts 10-22% van beschikbaar quota |
 

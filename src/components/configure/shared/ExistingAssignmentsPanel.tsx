@@ -119,7 +119,7 @@ export function ExistingAssignmentsPanel({
                         </button>
                     </div>
 
-                    <div className="overflow-y-auto p-2 space-y-2 h-full max-h-[400px] bg-zinc-50/50 dark:bg-zinc-900/30">
+                    <div className="overflow-y-auto p-2 space-y-2 flex-1 min-h-0 bg-zinc-50/50 dark:bg-zinc-900/30">
                         {isLoading ? (
                             <div className="flex justify-center p-4">
                                 <RefreshCw className="w-4 h-4 animate-spin text-zinc-400" />

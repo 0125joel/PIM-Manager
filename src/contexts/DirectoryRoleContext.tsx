@@ -55,7 +55,7 @@ interface PimDataContextType extends PimDataState {
     refreshData: () => Promise<void>;
     fetchPolicyForRole: (roleId: string) => Promise<void>;
     // Write operations
-    updatePolicy: (roleId: string, settings: RoleSettings) => Promise<boolean>;
+    updatePolicy: (roleId: string, settings: RoleSettings) => Promise<string[]>;
     createAssignment: (roleId: string, settings: AssignmentSettings) => Promise<any[]>;
     getPolicySettings: (roleId: string) => Promise<{ settings: RoleSettings, policyId: string, rules: any[] } | null>;
 }
@@ -480,8 +480,8 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             concurrentFetchPolicies(
                 client,
                 roleIds,
-                4,
-                500,
+                12,
+                200,
                 handlePolicyProgress, // Adapter needed? func (current, total) -> void. matches.
                 handlePolicyLoaded, // matches
                 undefined // signal
@@ -758,8 +758,8 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
             concurrentFetchPolicies(
                 client,
                 roleIds,
-                4,
-                500,
+                12,
+                200,
                 handlePolicyProgress,
                 handlePolicyLoaded,
                 signal
@@ -827,7 +827,7 @@ export function PimDataProvider({ children }: { children: ReactNode }) {
     }, [state.lastFetched, refreshData]);
 
     // Write operations - wrapped to use shared graph client
-    const updatePolicy = useCallback(async (roleId: string, settings: RoleSettings): Promise<boolean> => {
+    const updatePolicy = useCallback(async (roleId: string, settings: RoleSettings): Promise<string[]> => {
         try {
             const client = await getGraphClient();
             return await updatePimPolicy(client, roleId, settings);

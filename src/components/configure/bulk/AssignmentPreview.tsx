@@ -140,7 +140,7 @@ export function AssignmentPreview({
                             <li key={idx} className="text-sm text-red-700 dark:text-red-400 flex items-start gap-1.5">
                                 <X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                                 <span>
-                                    {error.rowNumber > 0 && <strong>Row {error.rowNumber} — </strong>}
+                                    {error.rowNumber > 0 && <strong>Row {error.rowNumber}: </strong>}
                                     {error.field}: {error.message}
                                 </span>
                             </li>
@@ -161,7 +161,7 @@ export function AssignmentPreview({
                             <li key={idx} className="text-sm text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
                                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                                 <span>
-                                    {warning.rowNumber > 0 && <strong>Row {warning.rowNumber} — </strong>}
+                                    {warning.rowNumber > 0 && <strong>Row {warning.rowNumber}: </strong>}
                                     {warning.field}: {warning.message}
                                 </span>
                             </li>
@@ -322,7 +322,7 @@ export function AssignmentPreview({
                             ? <><strong>Combined import:</strong> rows with <em>Action = add</em> create assignments (skipping <em>Already exists</em>); rows with <em>Action = remove</em> delete assignments (skipping <em>Already removed</em>).</>
                             : <><strong>Add-only import:</strong> rows marked <em>Already exists</em> are skipped automatically.</>
                         }
-                        {" "}<strong>UPN lookup:</strong> only works for users — groups and service principals require a Principal ID.
+                        {" "}<strong>UPN lookup:</strong> only works for users. Groups and service principals require a Principal ID.
                     </p>
                 </div>
             )}

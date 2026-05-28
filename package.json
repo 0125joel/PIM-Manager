@@ -1,7 +1,7 @@
 {
   "name": "pim-manager",
-  "version": "2.0.1",
-  "releaseDate": "2026-04-13",
+  "version": "2.1.0",
+  "releaseDate": "2026-05-28",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -25,6 +25,8 @@
     "recharts": "^3.5.1"
   },
   "devDependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -32,6 +34,7 @@
     "baseline-browser-mapping": "^2.10.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.6",
+    "satori": "^0.26.0",
     "tailwindcss": "^4",
     "typescript": "5.9.3"
   }

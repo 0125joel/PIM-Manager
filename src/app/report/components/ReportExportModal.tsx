@@ -53,7 +53,7 @@ export function ReportExportModal({
         {
             key: "accessRights",
             label: "Access Rights",
-            description: "Role & Group Assignments — bulk import compatible (Role ID, Group ID, Principal ID included)",
+            description: "Role & Group Assignments, bulk import compatible (Role ID, Group ID, Principal ID included)",
             icon: Users,
             hasData: filteredRoles.length > 0
         },

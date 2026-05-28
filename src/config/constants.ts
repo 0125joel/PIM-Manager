@@ -11,7 +11,10 @@ export const PIM_URLS = {
     roleManagementPolicies: '/policies/roleManagementPolicies',
     alerts: 'https://graph.microsoft.com/beta/identityGovernance/roleManagementAlerts/alerts',
     // PIM Groups endpoints
+    groupEligibilityScheduleRequests: '/identityGovernance/privilegedAccess/group/eligibilityScheduleRequests',
     groupAssignmentScheduleRequests: '/identityGovernance/privilegedAccess/group/assignmentScheduleRequests',
+    groupEligibilitySchedules: '/identityGovernance/privilegedAccess/group/eligibilitySchedules',
+    groupAssignmentSchedules: '/identityGovernance/privilegedAccess/group/assignmentSchedules',
 };
 
 // Re-export expiration options from centralized utility

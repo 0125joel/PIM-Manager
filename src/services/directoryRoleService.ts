@@ -16,6 +16,7 @@ import {
 import { detectScopeType, enrichScopeInfo } from "@/utils/scopeUtils";
 import { runWorkerPool } from "@/utils/workerPool";
 import { withRetry } from "@/utils/retryUtils";
+import { graphRateLimiter } from "@/utils/rateLimiter";
 import { Logger } from "../utils/logger";
 import { getRolePolicy } from "@/services/pimConfigurationService";
 
@@ -77,13 +78,19 @@ async function fetchAllPages<T>(
         allItems.push(...(response.value || []));
         nextLink = response["@odata.nextLink"] || null;
 
-        // Fetch remaining pages
-        while (nextLink) {
+        // Fetch remaining pages — cap at MAX_PAGES to guard against malformed nextLink cycles
+        const MAX_PAGES = 200; // 200 × 100 items = 20 000 max; well above any real tenant
+        let pageCount = 0;
+        while (nextLink && pageCount < MAX_PAGES) {
+            pageCount++;
             await delay(100); // Small delay between pages to avoid throttling
             const link = nextLink;
             const nextResponse = await withRetry(() => client.api(link).get(), 3, 1000, `directoryRole nextLink ${endpoint}`);
             allItems.push(...(nextResponse.value || []));
             nextLink = nextResponse["@odata.nextLink"] || null;
+        }
+        if (pageCount >= MAX_PAGES) {
+            Logger.warn("directoryRole", `fetchAllPages reached MAX_PAGES (${MAX_PAGES}) for ${endpoint} — result may be incomplete`);
         }
 
         return allItems;
@@ -238,81 +245,82 @@ interface EnrichableAssignment {
 }
 
 /**
- * Enriches assignments with scope information
- * Uses caching to avoid duplicate API calls for the same scope
+ * Enriches assignments with scope information.
+ * Uses caching to avoid duplicate API calls for the same scope.
+ * Unique non-tenant-wide scopes are fetched in parallel via the worker pool.
+ *
+ * Pass `sharedScopeCache` to dedupe lookups across multiple assignment lists
+ * (assignments, eligibilities, schedules) within a single refresh.
  */
 export async function enrichAssignmentsWithScope<T extends EnrichableAssignment>(
     client: Client,
-    assignments: T[]
+    assignments: T[],
+    sharedScopeCache?: Map<string, ScopeInfo>
 ): Promise<T[]> {
     if (!assignments || assignments.length === 0) return assignments;
 
-    const scopeCache = new Map<string, ScopeInfo>();
-    const enrichedAssignments: T[] = [];
+    const scopeCache = sharedScopeCache ?? new Map<string, ScopeInfo>();
 
     Logger.debug("ScopeEnrichment", `Enriching ${assignments.length} assignments with scope info`);
 
+    // Pass 1: resolve tenant-wide and already-cached scopes immediately, collect unique non-tenant-wide scopes
+    const pendingScopes = new Map<string, T>(); // cacheKey -> sample assignment for the lookup
+
     for (const assignment of assignments) {
         const { directoryScopeId, appScopeId } = assignment;
-
-        // Create cache key
         const cacheKey = `${directoryScopeId}|${appScopeId || ""}`;
 
-        // Check cache first
-        if (scopeCache.has(cacheKey)) {
-            enrichedAssignments.push({
-                ...assignment,
-                scopeInfo: scopeCache.get(cacheKey)
-            });
-            continue;
-        }
+        if (scopeCache.has(cacheKey)) continue;
 
-        // Detect basic scope type (fast, no API call)
         const scopeType = detectScopeType(directoryScopeId, appScopeId);
-
-        // For tenant-wide, no need to enrich
         if (scopeType === "tenant-wide") {
-            const scopeInfo = {
-                type: "tenant-wide" as const,
+            scopeCache.set(cacheKey, {
+                type: "tenant-wide",
                 displayName: "Tenant-wide",
                 id: "/"
-            };
-            scopeCache.set(cacheKey, scopeInfo);
-            enrichedAssignments.push({
-                ...assignment,
-                scopeInfo
             });
             continue;
         }
 
-        // For other types, enrich with API call (but only if not already in directoryScope)
-        try {
-            const scopeInfo = await enrichScopeInfo(client, assignment);
-            scopeCache.set(cacheKey, scopeInfo);
-            enrichedAssignments.push({
-                ...assignment,
-                scopeInfo
-            });
-        } catch (error) {
-            Logger.warn("directoryRole", `Failed to enrich scope for ${directoryScopeId}:`, error);
-            // Fallback: use basic detection
-            const fallbackInfo = {
-                type: scopeType,
-                displayName: directoryScopeId,
-                id: directoryScopeId
-            };
-            scopeCache.set(cacheKey, fallbackInfo);
-            enrichedAssignments.push({
-                ...assignment,
-                scopeInfo: fallbackInfo
-            });
+        if (!pendingScopes.has(cacheKey)) {
+            pendingScopes.set(cacheKey, assignment);
         }
-
-        // Small delay to avoid throttling
-        await delay(50);
     }
 
-    Logger.debug("ScopeEnrichment", `Enriched ${enrichedAssignments.length} assignments, ${scopeCache.size} unique scopes`);
+    // Pass 2: parallel-fetch unique non-tenant-wide scopes via worker pool
+    if (pendingScopes.size > 0) {
+        const items = Array.from(pendingScopes.entries());
+        await runWorkerPool<[string, T], void>({
+            items,
+            workerCount: 8,
+            delayMs: 300,
+            processor: async ([cacheKey, sampleAssignment]) => {
+                // Re-check cache inside processor to avoid duplicate work when running in parallel
+                if (scopeCache.has(cacheKey)) return;
+
+                try {
+                    const scopeInfo = await enrichScopeInfo(client, sampleAssignment);
+                    scopeCache.set(cacheKey, scopeInfo);
+                } catch (error) {
+                    Logger.warn("directoryRole", `Failed to enrich scope for ${sampleAssignment.directoryScopeId}:`, error);
+                    scopeCache.set(cacheKey, {
+                        type: detectScopeType(sampleAssignment.directoryScopeId, sampleAssignment.appScopeId),
+                        displayName: sampleAssignment.directoryScopeId,
+                        id: sampleAssignment.directoryScopeId
+                    });
+                }
+            },
+            rateLimiter: graphRateLimiter
+        });
+    }
+
+    // Pass 3: map all assignments to their resolved scope info
+    const enrichedAssignments = assignments.map(assignment => {
+        const cacheKey = `${assignment.directoryScopeId}|${assignment.appScopeId || ""}`;
+        return { ...assignment, scopeInfo: scopeCache.get(cacheKey) };
+    });
+
+    Logger.debug("ScopeEnrichment", `Enriched ${enrichedAssignments.length} assignments, ${scopeCache.size} unique scopes (${pendingScopes.size} fetched this pass)`);
     return enrichedAssignments;
 }
 
@@ -328,7 +336,7 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
                     .api(PIM_URLS.roleDefinitions)
                     .version("beta")
                     .header("Accept-Language", GRAPH_LOCALE)
-                    .select("id,displayName,description,isBuiltIn,isPrivileged,templateId,resourceScopes")
+                    .select("id,displayName,description,isBuiltIn,isPrivileged,isEnabled,templateId,resourceScopes,rolePermissions,version")
                     .get(),
                 3, 1000, 'getRoleDefinitions'
             );
@@ -343,7 +351,7 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
                     .api(PIM_URLS.roleDefinitions)
                     .version("beta")
                     .header("Accept-Language", GRAPH_LOCALE)
-                    .select("id,displayName,description,isBuiltIn,templateId,resourceScopes")
+                    .select("id,displayName,description,isBuiltIn,isEnabled,templateId,resourceScopes,rolePermissions,version")
                     .get(),
                 3, 1000, 'getRoleDefinitions:fallback'
             );
@@ -393,6 +401,9 @@ export async function concurrentFetchPolicies(
         return policyMap;
     }
 
+    const tPoolStart = performance.now();
+    const callLatencies: number[] = [];
+
     // Use universal worker pool
     const { results } = await runWorkerPool<string, any>({
         items: unfetchedRoleIds,
@@ -400,6 +411,7 @@ export async function concurrentFetchPolicies(
         delayMs: delayMs,
         signal,
         processor: async (roleId, workerId) => {
+            const tCall = performance.now();
             try {
                 // v1.0 is available for roleManagementPolicyAssignments
                 const response = await withRetry(
@@ -412,6 +424,8 @@ export async function concurrentFetchPolicies(
                         .get(),
                     3, 1000, 'concurrentFetchPolicies'
                 );
+
+                callLatencies.push(performance.now() - tCall);
 
                 if (response.value?.length > 0) {
                     const policy = response.value[0];
@@ -426,6 +440,7 @@ export async function concurrentFetchPolicies(
                 policyCache.set(roleId, null); // Cache null to prevent retry loops
                 return null;
             } catch (error: unknown) {
+                callLatencies.push(performance.now() - tCall);
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 policyCache.set(roleId, null); // Cache null even on error to prevent retry loops
                 onPolicyLoaded?.(roleId, null, errorMsg); // Report error via callback
@@ -435,11 +450,25 @@ export async function concurrentFetchPolicies(
         onProgress: (current, total) => {
             // Adjust progress to include cached items
             onProgress?.(cachedCount + current, roleIds.length);
-        }
+        },
+        rateLimiter: graphRateLimiter
     });
 
     // Persist cache to SessionStorage after batch completion
     savePolicyCacheToStorage();
+
+    const totalMs = Math.round(performance.now() - tPoolStart);
+    if (callLatencies.length > 0) {
+        const sorted = [...callLatencies].sort((a, b) => a - b);
+        const avg = Math.round(sorted.reduce((s, n) => s + n, 0) / sorted.length);
+        const p50 = Math.round(sorted[Math.floor(sorted.length * 0.5)]);
+        const p95 = Math.round(sorted[Math.floor(sorted.length * 0.95)]);
+        const max = Math.round(sorted[sorted.length - 1]);
+        Logger.info("PerfTiming",
+            `[5] policy worker pool: ${totalMs}ms wall-clock | ${callLatencies.length} calls, ${concurrency} workers, ${delayMs}ms delay | latency avg=${avg}ms p50=${p50}ms p95=${p95}ms max=${max}ms`);
+    } else {
+        Logger.info("PerfTiming", `[5] policy worker pool: ${totalMs}ms (no calls made)`);
+    }
 
     Logger.debug('DirectoryRoleService', `Completed fetching policies: ${policyMap.size}/${roleIds.length} resolved`);
     return policyMap;
@@ -718,6 +747,10 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
     onProgress?: (current: number, total: number, status: string) => void,
     signal?: AbortSignal
 ): Promise<RoleDetailData[]> {
+    const tStart = performance.now();
+    const phase = (label: string, since: number) =>
+        Logger.info("PerfTiming", `${label}: ${Math.round(performance.now() - since)}ms (total ${Math.round(performance.now() - tStart)}ms)`);
+
     try {
         Logger.info("DirectoryRoleService", "Fetching all roles (Optimized/Deferred Policies)...");
         clearPolicyCache();
@@ -727,51 +760,54 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
 
         if (signal?.aborted) throw new Error("Aborted");
 
+        const tDef = performance.now();
         const definitions = await getRoleDefinitions(client);
+        phase(`[1] roleDefinitions (${definitions.length} roles)`, tDef);
 
         onProgress?.(30, 100, `Found ${definitions.length} roles. Fetching assignments...`);
 
         if (signal?.aborted) throw new Error("Aborted");
 
         // Step 2: Parallel fetch for Assignment Data
-        // We run these in parallel to save time
+        // Promise.all over a fixed set of differently-typed calls — not a runWorkerPool candidate.
+        // The rate limiter in rateLimiter.ts handles throttling at the Graph call level.
+        const tBulk = performance.now();
         const [assignments, eligibilities, assignmentSchedules] = await Promise.all([
-            // v1.0 for roleAssignments
             fetchAllPages<any>(client, PIM_URLS.roleAssignments, {
                 version: "v1.0",
                 expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId"
             }),
-            // beta for eligibility schedules
             fetchAllPages<any>(client, PIM_URLS.roleEligibilitySchedules, {
                 version: "beta",
                 expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId,scheduleInfo,status"
             }),
-            // beta for assignment schedules
             fetchAllPages<any>(client, PIM_URLS.roleAssignmentSchedules, {
                 version: "beta",
                 select: "id,roleDefinitionId,principalId,directoryScopeId,scheduleInfo,assignmentType"
             })
         ]);
+        phase(`[2] bulk schedules (assignments=${assignments.length}, eligibilities=${eligibilities.length}, schedules=${assignmentSchedules.length})`, tBulk);
 
         if (signal?.aborted) throw new Error("Aborted");
 
-        // Step 3: Enrich with Scope Info (Parallel for maximum speed)
+        // Step 3: Enrich with Scope Info — shared cache across the three lists
         onProgress?.(50, 100, "Enriching scope information (Optimized)...");
 
-        const [enrichedAssignments, enrichedEligibilities, enrichedSchedules] = await Promise.all([
-            enrichAssignmentsWithScope(client, assignments),
-            enrichAssignmentsWithScope(client, eligibilities),
-            enrichAssignmentsWithScope(client, assignmentSchedules)
-        ]);
+        const tScope = performance.now();
+        const sharedScopeCache = new Map<string, ScopeInfo>();
+        const enrichedAssignments = await enrichAssignmentsWithScope(client, assignments, sharedScopeCache);
+        const enrichedEligibilities = await enrichAssignmentsWithScope(client, eligibilities, sharedScopeCache);
+        const enrichedSchedules = await enrichAssignmentsWithScope(client, assignmentSchedules, sharedScopeCache);
+        phase(`[3] scope enrichment (${sharedScopeCache.size} unique scopes)`, tScope);
 
         if (signal?.aborted) throw new Error("Aborted");
 
         // Step 4: Map to RoleDetailData
-        // Now using the correct structure definition for RoleDetailData
         onProgress?.(70, 100, "Processing roles...");
 
+        const tMap = performance.now();
         const roles: RoleDetailData[] = definitions.map(def => {
             return {
                 definition: def,
@@ -780,12 +816,13 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
                     eligible: enrichedEligibilities.filter(e => e.roleDefinitionId === def.id),
                     active: enrichedSchedules.filter(s => s.roleDefinitionId === def.id)
                 },
-                // Policy is deferred - loaded later by the context/component
                 policy: null
             };
         });
+        phase(`[4] map to RoleDetailData`, tMap);
 
         Logger.info("DirectoryRoleService", `Processed ${roles.length} roles. Starting background policy fetch...`);
+        Logger.info("PerfTiming", `[SUMMARY] bulk-fetch phase complete in ${Math.round(performance.now() - tStart)}ms`);
 
         return roles;
 

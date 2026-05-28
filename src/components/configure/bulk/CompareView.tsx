@@ -16,6 +16,7 @@ import {
     HelpCircle
 } from "lucide-react";
 import { ParsedRolePolicyRow, ParsedGroupPolicyRow, ValidationError } from "@/types/csvParser.types";
+import { isHighRiskRoleName } from "@/utils/policyPreflight";
 
 // Change item representing a difference between current and desired state
 export interface ChangeItem {
@@ -155,6 +156,17 @@ export function CompareView({
     const selectedCount = changes.filter(c => selectedChanges.has(c.id)).length;
     const totalCount = changes.length;
 
+    // Preflight: highlight when the CSV touches built-in privileged roles so the
+    // user verifies before applying tenant-wide changes.
+    const highRiskRoleNames = useMemo(() => {
+        if (csvType !== "rolePolicies") return [] as string[];
+        const names = new Set<string>();
+        for (const c of changes) {
+            if (isHighRiskRoleName(c.name)) names.add(c.name);
+        }
+        return Array.from(names);
+    }, [changes, csvType]);
+
     // No changes and no unresolvable rows
     if (changes.length === 0 && notFoundNames.length === 0 && errors.length === 0) {
         return (
@@ -174,12 +186,28 @@ export function CompareView({
 
     return (
         <div className="space-y-4">
+            {/* Preflight: privileged roles touched by the CSV */}
+            {highRiskRoleNames.length > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                        <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            Privileged roles in this CSV
+                        </h4>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            {highRiskRoleNames.slice(0, 5).join(", ")}
+                            {highRiskRoleNames.length > 5 ? `, +${highRiskRoleNames.length - 5} more` : ""}. Verify the changes before applying.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Limitations callout — role policies */}
             {csvType === "rolePolicies" && totalCount > 0 && (
                 <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                     <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
                     <div className="text-xs text-blue-700 dark:text-blue-300 space-y-0.5">
-                        <p><strong>Not configurable via CSV:</strong> Approvers and Authentication Context (Conditional Access) cannot be set via CSV — use Wizard mode for these settings.</p>
+                        <p><strong>Not configurable via CSV:</strong> Approvers and Authentication Context (Conditional Access) cannot be set via CSV. Use Wizard mode for these settings.</p>
                     </div>
                 </div>
             )}

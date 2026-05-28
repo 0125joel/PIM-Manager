@@ -322,7 +322,7 @@ function parseRolePolicies(rows: string[][], headers: string[]): ParseResult<Par
             result.warnings.push({
                 rowNumber,
                 field: "Role ID",
-                message: "Role ID not provided — matching by name is less reliable (names can change). Export from Report page to get stable IDs.",
+                message: "Role ID not provided; matching by name is less reliable (names can change). Export from Report page to get stable IDs.",
                 severity: "warning"
             });
         }
@@ -406,7 +406,7 @@ function parseGroupPolicies(rows: string[][], headers: string[]): ParseResult<Pa
             result.warnings.push({
                 rowNumber,
                 field: "Group ID",
-                message: "Group ID not provided — matching by name is less reliable (names can change). Export from Report page to get stable IDs.",
+                message: "Group ID not provided; matching by name is less reliable (names can change). Export from Report page to get stable IDs.",
                 severity: "warning"
             });
         }
@@ -446,9 +446,25 @@ function parseRoleAssignments(rows: string[][], headers: string[]): ParseResult<
         const rawType = getValue("assignment type").toLowerCase().trim();
         const assignmentType: "eligible" | "active" =
             rawType === "active" ? "active" : "eligible";
+        if (rawType && rawType !== "active" && rawType !== "eligible") {
+            result.warnings.push({
+                rowNumber,
+                field: "Assignment Type",
+                message: `Unrecognised value "${rawType}"; defaulting to "eligible". Use "eligible" or "active".`,
+                severity: "warning"
+            });
+        }
 
         const rawAction = getValue("action").toLowerCase().trim();
         const action: "add" | "remove" = rawAction === "remove" ? "remove" : "add";
+        if (rawAction && rawAction !== "add" && rawAction !== "remove") {
+            result.warnings.push({
+                rowNumber,
+                field: "Action",
+                message: `Unrecognised value "${rawAction}"; defaulting to "add". Use "add" or "remove".`,
+                severity: "warning"
+            });
+        }
 
         const parsedRow: ParsedRoleAssignmentRow = {
             roleId: getValue("role id"),
@@ -474,7 +490,7 @@ function parseRoleAssignments(rows: string[][], headers: string[]): ParseResult<
             result.warnings.push({
                 rowNumber,
                 field: "Role ID",
-                message: "Role ID not provided — matching by name is less reliable (names can change).",
+                message: "Role ID not provided; matching by name is less reliable (names can change).",
                 severity: "warning"
             });
         }
@@ -482,14 +498,14 @@ function parseRoleAssignments(rows: string[][], headers: string[]): ParseResult<
             result.errors.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only — groups and service principals require a Principal ID.",
+                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only. Groups and service principals require a Principal ID.",
                 severity: "error"
             });
         } else if (!parsedRow.principalId) {
             result.warnings.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID not provided — UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
+                message: "Principal ID not provided. UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
                 severity: "warning"
             });
         }
@@ -537,13 +553,37 @@ function parseGroupAssignments(rows: string[][], headers: string[]): ParseResult
         const rawType = getValue("assignment type").toLowerCase().trim();
         const assignmentType: "eligible" | "active" =
             rawType === "active" ? "active" : "eligible";
+        if (rawType && rawType !== "active" && rawType !== "eligible") {
+            result.warnings.push({
+                rowNumber,
+                field: "Assignment Type",
+                message: `Unrecognised value "${rawType}"; defaulting to "eligible". Use "eligible" or "active".`,
+                severity: "warning"
+            });
+        }
 
         const rawAccessType = getValue("access type").toLowerCase().trim();
         const accessType: "member" | "owner" =
             rawAccessType === "owner" ? "owner" : "member";
+        if (rawAccessType && rawAccessType !== "owner" && rawAccessType !== "member") {
+            result.warnings.push({
+                rowNumber,
+                field: "Access Type",
+                message: `Unrecognised value "${rawAccessType}"; defaulting to "member". Use "member" or "owner".`,
+                severity: "warning"
+            });
+        }
 
         const rawAction = getValue("action").toLowerCase().trim();
         const action: "add" | "remove" = rawAction === "remove" ? "remove" : "add";
+        if (rawAction && rawAction !== "add" && rawAction !== "remove") {
+            result.warnings.push({
+                rowNumber,
+                field: "Action",
+                message: `Unrecognised value "${rawAction}"; defaulting to "add". Use "add" or "remove".`,
+                severity: "warning"
+            });
+        }
 
         const parsedRow: ParsedGroupAssignmentRow = {
             groupId: getValue("group id"),
@@ -570,7 +610,7 @@ function parseGroupAssignments(rows: string[][], headers: string[]): ParseResult
             result.warnings.push({
                 rowNumber,
                 field: "Group ID",
-                message: "Group ID not provided — matching by name is less reliable (names can change).",
+                message: "Group ID not provided; matching by name is less reliable (names can change).",
                 severity: "warning"
             });
         }
@@ -578,14 +618,14 @@ function parseGroupAssignments(rows: string[][], headers: string[]): ParseResult
             result.errors.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only — groups and service principals require a Principal ID.",
+                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only. Groups and service principals require a Principal ID.",
                 severity: "error"
             });
         } else if (!parsedRow.principalId) {
             result.warnings.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID not provided — UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
+                message: "Principal ID not provided. UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
                 severity: "warning"
             });
         }
@@ -656,7 +696,7 @@ function parseRoleAssignmentRemovals(rows: string[][], headers: string[]): Parse
             result.warnings.push({
                 rowNumber,
                 field: "Role ID",
-                message: "Role ID not provided — matching by name is less reliable (names can change).",
+                message: "Role ID not provided; matching by name is less reliable (names can change).",
                 severity: "warning"
             });
         }
@@ -664,14 +704,14 @@ function parseRoleAssignmentRemovals(rows: string[][], headers: string[]): Parse
             result.errors.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only — groups and service principals require a Principal ID.",
+                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only. Groups and service principals require a Principal ID.",
                 severity: "error"
             });
         } else if (!parsedRow.principalId) {
             result.warnings.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID not provided — UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
+                message: "Principal ID not provided. UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
                 severity: "warning"
             });
         }
@@ -738,7 +778,7 @@ function parseGroupAssignmentRemovals(rows: string[][], headers: string[]): Pars
             result.warnings.push({
                 rowNumber,
                 field: "Group ID",
-                message: "Group ID not provided — matching by name is less reliable (names can change).",
+                message: "Group ID not provided; matching by name is less reliable (names can change).",
                 severity: "warning"
             });
         }
@@ -746,14 +786,14 @@ function parseGroupAssignmentRemovals(rows: string[][], headers: string[]): Pars
             result.errors.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only — groups and service principals require a Principal ID.",
+                message: "Principal ID (Object ID) is required. UPN is accepted as a fallback for users only. Groups and service principals require a Principal ID.",
                 severity: "error"
             });
         } else if (!parsedRow.principalId) {
             result.warnings.push({
                 rowNumber,
                 field: "Principal ID",
-                message: "Principal ID not provided — UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
+                message: "Principal ID not provided. UPN fallback will be attempted, but this only works for users. Groups and service principals must use Principal ID.",
                 severity: "warning"
             });
         }

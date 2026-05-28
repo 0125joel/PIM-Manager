@@ -25,7 +25,7 @@ export function useNavigationGuard(
 
     // Handle browser back/forward buttons (popstate)
     useEffect(() => {
-        const handlePopState = (e: PopStateEvent) => {
+        const handlePopState = () => {
             if (isDirtyRef.current) {
                 const confirmed = window.confirm(message);
                 if (!confirmed) {

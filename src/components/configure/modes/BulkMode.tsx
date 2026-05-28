@@ -31,6 +31,7 @@ import { ProgressModal, ProgressStep } from "@/components/ProgressModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { WorkloadType } from '@/types/workload.types';
 import { Logger } from "@/utils/logger";
+import { escapeODataString } from "@/utils/odataUtils";
 
 interface BulkModeProps {
     onBack: () => void;
@@ -93,18 +94,17 @@ export function BulkMode({ onBack }: BulkModeProps) {
     const [canCloseProgress, setCanCloseProgress] = useState(false);
     const [progressTitle, setProgressTitle] = useState("Applying Changes");
 
-    // Recheck write consent when settings modal closes
+    // Recheck write consent whenever the settings modal opens/closes.
+    // Consent advancing the step is gated on a parsed CSV being present, so
+    // opening the modal without a CSV doesn't surprise-jump to the compare step.
     useEffect(() => {
         if (!detectedWorkload) return;
-        const id = setTimeout(() => {
-            const granted = isWriteConsentGranted(detectedWorkload);
-            setMissingWriteConsent(!granted);
-            if (granted) {
-                setStep(prev => prev === "upload" ? "compare" : prev);
-            }
-        }, 0);
-        return () => clearTimeout(id);
-    }, [showSettingsModal, detectedWorkload]);
+        const granted = isWriteConsentGranted(detectedWorkload);
+        setMissingWriteConsent(!granted);
+        if (granted && parseResult?.success) {
+            setStep(prev => prev === "upload" ? "compare" : prev);
+        }
+    }, [showSettingsModal, detectedWorkload, parseResult]);
 
     // Build current data map from loaded roles and groups (for policy diff view)
     const currentDataMap = useMemo(() => {
@@ -296,6 +296,75 @@ export function BulkMode({ onBack }: BulkModeProps) {
         return map;
     }, [parseResult, rolesData, groupsData]);
 
+    // Bulk policy CSVs only carry activation-side fields (MFA, justification,
+    // approval, max activation duration). Those don't create the "permanent
+    // assignment no longer allowed" or "end-date exceeds new max" conflicts
+    // that wizard/manual modes worry about (admin-side rules), so the per-row
+    // detectPolicyConflicts pre-check is intentionally NOT wired here.
+    //
+    // What we DO surface is the activation-side impact: turning on Require MFA
+    // or Require approval via a CSV silently changes how existing eligible
+    // users will activate. Compute a high-level count and render a pill.
+    const bulkActivationImpact = useMemo(() => {
+        if (!parseResult) return null;
+        if (parseResult.csvType !== "rolePolicies" && parseResult.csvType !== "groupPolicies") return null;
+
+        let mfaWillBeAdded = 0;
+        let approvalWillBeAdded = 0;
+        let total = 0;
+
+        if (parseResult.csvType === "rolePolicies") {
+            for (const row of parseResult.rows as ParsedRolePolicyRow[]) {
+                const current = currentDataMap.get(row.roleId) || currentDataMap.get(row.roleName.toLowerCase());
+                if (!current) continue;
+                const cur = current as Record<string, unknown>;
+                total++;
+                if (selectedChanges.has(`${row.roleName}-mfaRequired`) && row.mfaRequired && !cur.mfaRequired) mfaWillBeAdded++;
+                if (selectedChanges.has(`${row.roleName}-approvalRequired`) && row.approvalRequired && !cur.approvalRequired) approvalWillBeAdded++;
+            }
+        } else {
+            for (const row of parseResult.rows as ParsedGroupPolicyRow[]) {
+                const current = currentDataMap.get(row.groupId) || currentDataMap.get(row.groupName.toLowerCase());
+                if (!current) continue;
+                const cur = current as Record<string, unknown>;
+                total++;
+                if (selectedChanges.has(`${row.groupName}-memberMfa`) && row.memberMfa && !cur.memberMfa) mfaWillBeAdded++;
+                if (selectedChanges.has(`${row.groupName}-ownerMfa`) && row.ownerMfa && !cur.ownerMfa) mfaWillBeAdded++;
+                if (selectedChanges.has(`${row.groupName}-memberApproval`) && row.memberApproval && !cur.memberApproval) approvalWillBeAdded++;
+                if (selectedChanges.has(`${row.groupName}-ownerApproval`) && row.ownerApproval && !cur.ownerApproval) approvalWillBeAdded++;
+            }
+        }
+        if (mfaWillBeAdded === 0 && approvalWillBeAdded === 0) return null;
+        return { mfaWillBeAdded, approvalWillBeAdded, total };
+    }, [parseResult, selectedChanges, currentDataMap]);
+
+    // Default-unselect rows we already know will be rejected (permanent blocked
+    // by policy, or already-existing assignments). Runs once per parse signature
+    // and only ever DE-selects, so user overrides survive.
+    const blockedDeselectAppliedRef = React.useRef<string | null>(null);
+    useEffect(() => {
+        if (!parseResult) {
+            blockedDeselectAppliedRef.current = null;
+            return;
+        }
+        const key = `${parseResult.csvType}:${parseResult.rows.length}`;
+        if (blockedDeselectAppliedRef.current === key) return;
+        if (rowStatuses.size === 0) return;
+        const blocked = new Set<number>();
+        for (const [rn, status] of rowStatuses) {
+            if (status === "permanent-blocked" || status === "already-removed" || status === "exists") {
+                blocked.add(rn);
+            }
+        }
+        blockedDeselectAppliedRef.current = key;
+        if (blocked.size === 0) return;
+        setSelectedRows(prev => {
+            const next = new Set(prev);
+            for (const rn of blocked) next.delete(rn);
+            return next;
+        });
+    }, [parseResult, rowStatuses]);
+
     // Count of unique targets with at least one selected change
     const uniqueTargetCount = useMemo(() => {
         if (!parseResult) return 0;
@@ -355,10 +424,18 @@ export function BulkMode({ onBack }: BulkModeProps) {
                     );
                 }
 
-                // Assignment and removal CSVs: auto-select all rows
+                // Assignment and removal CSVs: auto-select all rows EXCEPT those
+                // we already know will fail (permanent requested but the role's
+                // policy forbids it). Users can still tick them manually to force.
                 if (result.csvType === "roleAssignments" || result.csvType === "groupAssignments" ||
                     result.csvType === "roleAssignmentRemovals" || result.csvType === "groupAssignmentRemovals") {
-                    const allRowNumbers = new Set((result.rows as AnyParsedRow[]).map(r => r.rowNumber));
+                    const rows = result.rows as AnyParsedRow[];
+                    // We don't have rowStatuses computed yet here (it depends on
+                    // currentDataMap + parseResult), but we can detect explicit
+                    // "permanent" duration on add rows and exclude them when we
+                    // know the policy forbids it. The simpler heuristic: leave
+                    // all selected and let the inline status badge guide the user.
+                    const allRowNumbers = new Set(rows.map(r => r.rowNumber));
                     setSelectedRows(allRowNumbers);
                     setStep("compare");
                     const noun = (result.csvType === "roleAssignmentRemovals" || result.csvType === "groupAssignmentRemovals") ? "removal" : "assignment";
@@ -558,7 +635,7 @@ export function BulkMode({ onBack }: BulkModeProps) {
 
                 if (!roleData) {
                     updateStep(row.roleName, "error");
-                    results.push({ id: row.roleName, name: row.roleName, field: "Policy settings", success: false, message: "Role not found in loaded data — refresh data and retry" });
+                    results.push({ id: row.roleName, name: row.roleName, field: "Policy settings", success: false, message: "Role not found in loaded data. Refresh data and retry." });
                     continue;
                 }
 
@@ -616,7 +693,7 @@ export function BulkMode({ onBack }: BulkModeProps) {
 
                 if (!groupData) {
                     updateStep(row.groupName, "error");
-                    results.push({ id: row.groupName, name: row.groupName, field: "Policy settings", success: false, message: "Group not found in loaded data — refresh data and retry" });
+                    results.push({ id: row.groupName, name: row.groupName, field: "Policy settings", success: false, message: "Group not found in loaded data. Refresh data and retry." });
                     continue;
                 }
 
@@ -708,8 +785,8 @@ export function BulkMode({ onBack }: BulkModeProps) {
         const steps: ProgressStep[] = rows.map(row => ({
             id: String(row.rowNumber),
             label: isRoleAssignments
-                ? `${(row as ParsedRoleAssignmentRow).roleName || (row as ParsedRoleAssignmentRow).roleId} — ${row.principalUPN || row.principalId}`
-                : `${(row as ParsedGroupAssignmentRow).groupName || (row as ParsedGroupAssignmentRow).groupId} — ${row.principalUPN || row.principalId}`,
+                ? `${(row as ParsedRoleAssignmentRow).roleName || (row as ParsedRoleAssignmentRow).roleId} / ${row.principalUPN || row.principalId}`
+                : `${(row as ParsedGroupAssignmentRow).groupName || (row as ParsedGroupAssignmentRow).groupId} / ${row.principalUPN || row.principalId}`,
             status: "pending" as const,
             details: `${row.action === "remove" ? "Remove" : "Add"} ${row.assignmentType}`,
         }));
@@ -738,13 +815,13 @@ export function BulkMode({ onBack }: BulkModeProps) {
                     let principalId = row.principalId;
                     if (!principalId && row.principalUPN) {
                         const res = await graphClient.api("/users")
-                            .filter(`userPrincipalName eq '${row.principalUPN}'`)
+                            .filter(`userPrincipalName eq '${escapeODataString(row.principalUPN)}'`)
                             .select("id")
                             .get() as { value: { id: string }[] };
                         if (!res.value?.length) throw new Error(`User not found via UPN: ${row.principalUPN}. For groups or service principals, provide a Principal ID instead.`);
                         principalId = res.value[0].id;
                     }
-                    if (!principalId) throw new Error("No Principal ID (Object ID) provided. UPN fallback is supported for users only — groups and service principals require a Principal ID.");
+                    if (!principalId) throw new Error("No Principal ID (Object ID) provided. UPN fallback is supported for users only. Groups and service principals require a Principal ID.");
 
                     const durationDays = row.durationDays;
                     const isPermanent = durationDays === "permanent";
@@ -906,8 +983,8 @@ export function BulkMode({ onBack }: BulkModeProps) {
         const steps: ProgressStep[] = rows.map(row => ({
             id: String(row.rowNumber),
             label: isRoleRemovals
-                ? `${(row as ParsedRoleAssignmentRemovalRow).roleName || (row as ParsedRoleAssignmentRemovalRow).roleId} — ${row.principalUPN || row.principalId}`
-                : `${(row as ParsedGroupAssignmentRemovalRow).groupName || (row as ParsedGroupAssignmentRemovalRow).groupId} — ${row.principalUPN || row.principalId}`,
+                ? `${(row as ParsedRoleAssignmentRemovalRow).roleName || (row as ParsedRoleAssignmentRemovalRow).roleId} / ${row.principalUPN || row.principalId}`
+                : `${(row as ParsedGroupAssignmentRemovalRow).groupName || (row as ParsedGroupAssignmentRemovalRow).groupId} / ${row.principalUPN || row.principalId}`,
             status: "pending" as const,
             details: `Remove ${row.assignmentType} assignment`,
         }));
@@ -935,13 +1012,13 @@ export function BulkMode({ onBack }: BulkModeProps) {
                     let principalId = row.principalId;
                     if (!principalId && row.principalUPN) {
                         const res = await graphClient.api("/users")
-                            .filter(`userPrincipalName eq '${row.principalUPN}'`)
+                            .filter(`userPrincipalName eq '${escapeODataString(row.principalUPN)}'`)
                             .select("id")
                             .get() as { value: { id: string }[] };
                         if (!res.value?.length) throw new Error(`User not found via UPN: ${row.principalUPN}. For groups or service principals, provide a Principal ID instead.`);
                         principalId = res.value[0].id;
                     }
-                    if (!principalId) throw new Error("No Principal ID (Object ID) provided. UPN fallback is supported for users only — groups and service principals require a Principal ID.");
+                    if (!principalId) throw new Error("No Principal ID (Object ID) provided. UPN fallback is supported for users only. Groups and service principals require a Principal ID.");
 
                     if (isRoleRemovals) {
                         const roleRow = row as ParsedRoleAssignmentRemovalRow;
@@ -1077,7 +1154,7 @@ export function BulkMode({ onBack }: BulkModeProps) {
                 const resourceName = isRole
                     ? ((row as ParsedRoleAssignmentRow).roleName || (row as ParsedRoleAssignmentRow).roleId)
                     : ((row as ParsedGroupAssignmentRow).groupName || (row as ParsedGroupAssignmentRow).groupId);
-                const label = `${resourceName} — ${row.principalUPN || row.principalId}`;
+                const label = `${resourceName} / ${row.principalUPN || row.principalId}`;
                 if (failedLabels.has(label)) retryRowNumbers.add(row.rowNumber);
             });
             setSelectedRows(retryRowNumbers);
@@ -1161,14 +1238,14 @@ export function BulkMode({ onBack }: BulkModeProps) {
                                 <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                                     <h4 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center gap-2">
                                         <XCircle className="h-4 w-4 flex-shrink-0" />
-                                        {parseResult.errors.length} validation error{parseResult.errors.length !== 1 ? 's' : ''} — fix and re-upload
+                                        {parseResult.errors.length} validation error{parseResult.errors.length !== 1 ? 's' : ''}: fix and re-upload
                                     </h4>
                                     <ul className="space-y-1">
                                         {parseResult.errors.map((error, idx) => (
                                             <li key={idx} className="text-sm text-red-700 dark:text-red-400 flex items-start gap-1.5">
                                                 <X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                                                 <span>
-                                                    {error.rowNumber > 0 && <strong>Row {error.rowNumber} — </strong>}
+                                                    {error.rowNumber > 0 && <strong>Row {error.rowNumber}: </strong>}
                                                     {error.field}: {error.message}
                                                 </span>
                                             </li>
@@ -1228,6 +1305,37 @@ export function BulkMode({ onBack }: BulkModeProps) {
                                 <Info className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
                                 <p className="text-xs text-amber-700 dark:text-amber-300">
                                     <strong>PIM Groups not loaded.</strong> Enable the PIM Groups workload using the chip at the top of the page and wait for data to load. Without it, all rows show as <em>Not found</em> and group data cannot be verified before applying.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Activation-side impact of bulk policy changes (MFA / approval newly required) */}
+                        {bulkActivationImpact && (
+                            <div className="mb-4 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                                <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                <div className="text-xs text-amber-700 dark:text-amber-300">
+                                    <strong>Existing eligible users will experience changes at next activation.</strong>{" "}
+                                    {bulkActivationImpact.mfaWillBeAdded > 0 && (
+                                        <>{bulkActivationImpact.mfaWillBeAdded} target{bulkActivationImpact.mfaWillBeAdded === 1 ? "" : "s"} will newly require MFA; users without registered MFA will fail to activate. </>
+                                    )}
+                                    {bulkActivationImpact.approvalWillBeAdded > 0 && (
+                                        <>{bulkActivationImpact.approvalWillBeAdded} target{bulkActivationImpact.approvalWillBeAdded === 1 ? "" : "s"} will newly require approval, so activations will queue. </>
+                                    )}
+                                    Existing assignments are not removed or modified by this bulk apply.
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Policy CSV scope note — only a subset of columns is actually applied. */}
+                        {parseResult && (parseResult.csvType === "rolePolicies" || parseResult.csvType === "groupPolicies") && (
+                            <div className="mb-4 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                                <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-blue-700 dark:text-blue-300">
+                                    <strong>Bulk policy scope:</strong>{" "}
+                                    {parseResult.csvType === "rolePolicies"
+                                        ? <>This mode applies <em>Max Activation Duration</em>, <em>MFA Required</em>, <em>Justification Required</em> and <em>Approval Required</em>. Other CSV columns (expiration, notifications, ticketing) are ignored. Use the Wizard or Manual mode to configure those.</>
+                                        : <>This mode applies <em>Member/Owner Max Duration</em>, <em>Member/Owner MFA</em> and <em>Member/Owner Approval</em>. Other CSV columns (expiration, notifications) are ignored. Use the Wizard or Manual mode to configure those.</>
+                                    }
                                 </p>
                             </div>
                         )}

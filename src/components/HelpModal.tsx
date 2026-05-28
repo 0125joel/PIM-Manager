@@ -1082,20 +1082,20 @@ function ConfigureHelp() {
                     <div className="space-y-2">
                         <div className="flex items-center gap-3 p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded">
                             <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Upload</strong> — Select CSV type and upload your file. Use template buttons to download the correct format.</span>
+                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Upload:</strong> Select CSV type and upload your file. Use template buttons to download the correct format.</span>
                         </div>
                         <div className="flex items-center gap-3 p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded">
                             <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Compare / Preview</strong> — Policy CSVs show a diff of current vs desired settings. Assignment CSVs show a row-by-row preview with validation errors.</span>
+                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Compare / Preview:</strong> Policy CSVs show a diff of current vs desired settings. Assignment CSVs show a row-by-row preview with validation errors.</span>
                         </div>
                         <div className="flex items-center gap-3 p-2 bg-zinc-50 dark:bg-zinc-800/50 rounded">
                             <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Select & Apply</strong> — Choose which rows to apply, then confirm. Failed rows can be retried individually.</span>
+                            <span className="text-sm text-zinc-700 dark:text-zinc-300"><strong>Select & Apply:</strong> Choose which rows to apply, then confirm. Failed rows can be retried individually.</span>
                         </div>
                     </div>
                     <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
                         <p><strong>Action column (add / remove):</strong> Each row in an assignment CSV can have <code>Action = add</code> (default, creates the assignment) or <code>Action = remove</code> (deletes the assignment). Rows already matching the desired state are skipped automatically.</p>
-                        <p><strong>Export → Edit → Import roundtrip:</strong> Export assignments from the Report page — the CSV already contains Role ID / Group ID and Principal ID columns with <code>Action = add</code>. Change rows you want to delete to <code>Action = remove</code>, then upload to Bulk mode.</p>
+                        <p><strong>Export → Edit → Import roundtrip:</strong> Export assignments from the Report page. The CSV already contains Role ID / Group ID and Principal ID columns with <code>Action = add</code>. Change rows you want to delete to <code>Action = remove</code>, then upload to Bulk mode.</p>
                         <p><strong>UPN vs Principal ID:</strong> UPN lookup only works for users. Groups and service principals require a Principal ID (Object ID).</p>
                         <p><strong>Permanent assignments:</strong> Set <em>Duration Days</em> to <code>permanent</code>. The policy must allow no-expiration; rows where permanent is blocked show a <em>Permanent not allowed</em> status badge.</p>
                     </div>
@@ -1184,7 +1184,7 @@ function WizardStepItem({ number, title, description }: { number: number; title:
             </span>
             <div>
                 <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{title}</span>
-                <span className="text-sm text-zinc-500 dark:text-zinc-400"> — {description}</span>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">: {description}</span>
             </div>
         </div>
     );

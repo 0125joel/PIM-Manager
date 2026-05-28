@@ -4,6 +4,15 @@ import React, { useState, useCallback } from 'react';
 import { Logger } from '@/utils/logger';
 import { X, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { PolicySettings, AssignmentConfig, AssignmentRemoval } from '@/hooks/useWizardState';
+
+export interface AssignmentStagePayload {
+    /** Optional new-assignment config (omitted when the user only stages removals) */
+    config?: AssignmentConfig;
+    /** Whether permanent is policy-allowed for the chosen assignment type */
+    allowPermanent?: boolean;
+    /** Optional removals to stage alongside (or instead of) new assignments */
+    removals?: AssignmentRemoval[];
+}
 import { PrincipalSelector, Principal } from './PrincipalSelector';
 import { AssignmentScopePicker } from './AssignmentScopePicker';
 import { AssignmentTypeCard } from './AssignmentTypeCard';
@@ -20,6 +29,7 @@ import {
     applyDirectoryRoleRemovals,
     applyGroupRemovals,
 } from '@/services/wizardApplyService';
+import { toLocalDateTimeInputValue } from '@/utils/durationUtils';
 
 interface AssignmentPanelProps {
     selectedIds: string[];
@@ -32,6 +42,10 @@ interface AssignmentPanelProps {
     onApplied?: (results: ApplyOperationResult[]) => void;
     /** When true, renders a consent banner and disables the Apply button */
     disabled?: boolean;
+    /** Optional — when provided, a "Stage" button appears next to Apply that
+     *  hands the assembled payload to the parent (for Manual mode's batched
+     *  apply workflow). The panel resets after staging. */
+    onStage?: (payload: AssignmentStagePayload) => void;
 }
 
 type ApplyStatus = "idle" | "applying" | "done";
@@ -42,15 +56,13 @@ interface ApplyResult {
     operations: ApplyOperationResult[];
 }
 
-export function AssignmentPanel({ selectedIds, workload, policies, ownerPolicies, onClose, onApplied, disabled }: AssignmentPanelProps) {
+export function AssignmentPanel({ selectedIds, workload, policies, ownerPolicies, onClose, onApplied, disabled, onStage }: AssignmentPanelProps) {
     const { getGraphClient } = useUnifiedPimData();
     const toast = useToastActions();
     const isGroups = workload === "pimGroups";
 
     // ── Local Assignment State ───────────────────────────────────────────────
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    const defaultStart = now.toISOString().slice(0, 16);
+    const defaultStart = toLocalDateTimeInputValue();
 
     const [assignments, setAssignments] = useState<LocalAssignmentState>({
         members: [],
@@ -171,6 +183,43 @@ export function AssignmentPanel({ selectedIds, workload, policies, ownerPolicies
 
     const canApply = (assignments.members.length > 0 || removals.length > 0) && applyStatus === "idle";
 
+    const handleStage = useCallback(() => {
+        if (!onStage) return;
+        const hasNewAssignments = assignments.members.length > 0;
+        const hasRemovals = removals.length > 0;
+        if (!hasNewAssignments && !hasRemovals) return;
+
+        let config: AssignmentConfig | undefined;
+        let allowPermanent: boolean | undefined;
+        if (hasNewAssignments) {
+            config = {
+                principalIds: assignments.members.map(m => m.id),
+                principalNames: Object.fromEntries(
+                    assignments.members.filter(m => m.displayName).map(m => [m.id, m.displayName as string])
+                ),
+                assignmentType: assignments.type,
+                duration: assignments.duration,
+                startDateTime: assignments.startDate,
+                endDateTime: assignments.duration === "bounded" ? assignments.endDate : undefined,
+                justification: assignments.justification || undefined,
+                accessType: isGroups ? assignments.groupRole : undefined,
+                directoryScopeId: !isGroups ? assignments.scopeId : undefined,
+            };
+            const effective = isGroups && assignments.groupRole === "owner"
+                ? (ownerPolicies ?? policies)
+                : policies;
+            allowPermanent = assignments.type === "eligible"
+                ? (effective?.allowPermanentEligible ?? true)
+                : (effective?.allowPermanentActive ?? true);
+        }
+
+        onStage({ config, allowPermanent, removals: hasRemovals ? [...removals] : undefined });
+
+        // Reset form so the user can stage another batch
+        setAssignments(prev => ({ ...prev, members: [], justification: "" }));
+        setRemovals([]);
+    }, [onStage, assignments, removals, isGroups, policies, ownerPolicies]);
+
     // Effective policies for DurationSettingsCard (owner policy when groupRole === "owner")
     const effectivePolicies = isGroups && assignments.groupRole === "owner"
         ? (ownerPolicies ?? policies)
@@ -272,6 +321,7 @@ export function AssignmentPanel({ selectedIds, workload, policies, ownerPolicies
                                 label="Who needs access?"
                                 addLabel="+ Add members"
                                 description="Search for users or groups to assign."
+                                showRoleAssignableWarning={workload === "directoryRoles"}
                             />
                             {assignments.members.length === 0 && removals.length === 0 && (
                                 <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md">
@@ -291,24 +341,35 @@ export function AssignmentPanel({ selectedIds, workload, policies, ownerPolicies
                             onUpdate={updateState}
                         />
 
-                        {/* Apply Button */}
-                        <button
-                            onClick={handleApply}
-                            disabled={!canApply || !!disabled}
-                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                        >
-                            {applyStatus === "applying" ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Applying...
-                                </>
-                            ) : (
-                                <>
-                                    Apply Assignments
-                                    {removals.length > 0 && ` + ${removals.length} removal${removals.length !== 1 ? 's' : ''}`}
-                                </>
+                        {/* Apply / Stage Buttons */}
+                        <div className="flex gap-2">
+                            {onStage && (
+                                <button
+                                    onClick={handleStage}
+                                    disabled={!canApply}
+                                    className="flex-1 py-2.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-200 dark:hover:bg-amber-800/50 disabled:opacity-50 font-medium rounded-lg transition-colors"
+                                >
+                                    Stage Changes
+                                </button>
                             )}
-                        </button>
+                            <button
+                                onClick={handleApply}
+                                disabled={!canApply || !!disabled}
+                                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                                {applyStatus === "applying" ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Applying...
+                                    </>
+                                ) : (
+                                    <>
+                                        Apply Now
+                                        {removals.length > 0 && ` + ${removals.length} removal${removals.length !== 1 ? 's' : ''}`}
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Right: Existing Assignments */}

@@ -16,6 +16,20 @@ import { Logger } from '@/utils/logger';
  */
 
 /**
+ * Format a Date as the local-time value expected by <input type="datetime-local">.
+ * Returns `YYYY-MM-DDTHH:mm` in the user's local timezone (no Z suffix).
+ *
+ * Why we don't just use `.toISOString().slice(0,16)`: toISOString emits UTC,
+ * which differs from local clock time everywhere except UTC. Mutating a Date
+ * with `setMinutes(getMinutes() - getTimezoneOffset())` and then formatting as
+ * ISO is fragile across DST transitions.
+ */
+export function toLocalDateTimeInputValue(date: Date = new Date()): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
  * Normalize duration values from Graph API to standard format.
  * Graph API sometimes returns P365D instead of P1Y.
  */
@@ -309,4 +323,31 @@ export function minIsoDuration(a: string | undefined, b: string | undefined): st
 export function isoDurationToLabel(duration: string | null | undefined): string {
     if (!duration) return "1 Year";
     return formatDuration(duration);
+}
+
+/**
+ * Add an ISO 8601 duration to a Date and return the result.
+ *
+ * Handles Y / M / W / D / H / Minutes components found in PIM policy durations.
+ * Approximate: uses calendar arithmetic for Y/M (so a "P1M" addition lands on
+ * the same day-of-month next month, with JS Date overflow rules) and exact
+ * arithmetic for D/H/min.
+ *
+ * Returns `null` if the input duration is missing/unparseable, so callers can
+ * treat "no cap" the same as "no max attribute" on the HTML input.
+ */
+export function addIsoDurationToDate(base: Date, iso: string | undefined): Date | null {
+    if (!iso) return null;
+    const m = iso.match(/^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+    if (!m) return null;
+    const [, y, mo, w, d, h, mn, s] = m;
+    const out = new Date(base.getTime());
+    if (y) out.setFullYear(out.getFullYear() + parseInt(y, 10));
+    if (mo) out.setMonth(out.getMonth() + parseInt(mo, 10));
+    if (w) out.setDate(out.getDate() + parseInt(w, 10) * 7);
+    if (d) out.setDate(out.getDate() + parseInt(d, 10));
+    if (h) out.setHours(out.getHours() + parseInt(h, 10));
+    if (mn) out.setMinutes(out.getMinutes() + parseInt(mn, 10));
+    if (s) out.setSeconds(out.getSeconds() + parseInt(s, 10));
+    return out;
 }

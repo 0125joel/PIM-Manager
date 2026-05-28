@@ -2,6 +2,35 @@
 
 ---
 
+## v2.1.0 — 2026-05-28
+
+### Reliability
+
+- **Throttle-Aware Graph Client** — Sliding-window rate limiter (500 RU/10s cap) wraps all Graph API calls. Respects `Retry-After` headers and holds new requests when the budget is exhausted, preventing cascading 429 errors under tenant-level throttling.
+- **Policy Preflight Validation** — Detects incoherent settings before any write is attempted: approval enabled without approvers configured, activation duration exceeding the max assignment duration, conflicting constraint combinations. Shown as inline warnings in the configure flow.
+- **Policy Conflict Detection** — Identifies existing PIM assignments that would violate a pending policy change (for example, active assignments that exceed a new max eligible duration). Surfaced in the Review and Apply steps.
+- Policy fetch concurrency raised from 8 workers / 300ms to 12 workers / 200ms, reducing full-tenant policy load time by approximately 30%.
+
+### Configure Improvements
+
+- ReviewStep and ApplyStep expanded with conflict and preflight warnings, per-operation detail, and improved error surfacing.
+- ManualMode staged apply queue redesigned; policy auto-load on target selection; per-target progress tracking improved.
+- AssignmentPanel: duplicate-assignment guard added; existing assignment removal flow improved.
+- Graph API error codes now translated to user-friendly messages in the apply flow.
+
+### Bug Fixes
+
+- Pending schedule request checks now use shared filters and a consistent logging context, preventing false "already has a pending request" rejections on rapid successive applies.
+- Approval mode requirements enforced for PIM Groups role assignments (was silently creating invalid requests).
+- ReportExportModal: CSV export column alignment corrected.
+
+### Infrastructure
+
+- Azure Static Web App deployment workflow pinned to `ubuntu-22.04`; `ubuntu-latest` (now 24.04) caused `StaticSitesClient` binary failures due to a glibc version mismatch.
+- README: App Registration prerequisite link corrected to point directly to the prerequisites section in the introduction docs.
+
+---
+
 ## v2.0.1 — 2026-04-13
 
 ### Bug Fixes

@@ -9,7 +9,7 @@ import { useUnifiedPimData } from '@/contexts/UnifiedPimContext';
 import { usePimData } from '@/hooks/usePimData';
 import { PimGroupData } from '@/types/pimGroup.types';
 import { parseGraphPolicy } from '@/services/policyParserService';
-import { isoToApproxDays, minIsoDuration } from '@/utils/durationUtils';
+import { minIsoDuration, toLocalDateTimeInputValue } from '@/utils/durationUtils';
 import { Logger } from '@/utils/logger';
 
 // Sub-components (shared)
@@ -65,9 +65,7 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
     // --- Local Assignment State ---
     const [assignments, setAssignments] = useState<LocalAssignmentState>(() => {
         const saved = currentConfig.assignments;
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        const defaultStart = now.toISOString().slice(0, 16);
+        const defaultStart = toLocalDateTimeInputValue();
 
         if (saved) {
             return {
@@ -95,7 +93,6 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
 
     // --- Scope Display State ---
     const [scopeDetails, setScopeDetails] = useState<ScopeDetail[]>([]);
-    const [isLoadingScope, setIsLoadingScope] = useState(false);
 
     // --- Data Hook ---
     const {
@@ -180,8 +177,14 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
 
     // --- Sync to Wizard Context ---
     useEffect(() => {
+        const principalNames = assignments.members.reduce<Record<string, string>>((acc, m) => {
+            if (m.displayName) acc[m.id] = m.displayName;
+            return acc;
+        }, {});
+
         const globalConfig: AssignmentConfig = {
             principalIds: assignments.members.map(m => m.id),
+            principalNames,
             assignmentType: assignments.type,
             duration: assignments.duration,
             startDateTime: assignments.startDate,
@@ -219,13 +222,26 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
         setRemovals(prev => prev.filter(r => r.assignmentId !== assignmentId));
     };
 
+    // A2: gate Next when justification is required by policy but empty.
+    // Mirrors the logic in DurationSettingsCard so the visual + the gate stay
+    // in sync. Wizard configType "assignment" mode skips justification.
+    const effectivePolicy = currentPolicies ?? loadedPolicies;
+    const justificationRequired = wizardData.configType !== 'assignment'
+        && assignments.type === 'active'
+        && effectivePolicy?.requireJustificationOnActiveAssignment === true;
+    const justificationMissing = justificationRequired && assignments.justification.trim() === "";
+
+    const noMembersAndNoRemovals = assignments.members.length === 0 && removals.length === 0;
+    const nextDisabled = noMembersAndNoRemovals
+        || (assignments.members.length > 0 && justificationMissing);
+
     return (
         <WizardStep
             title={isGroups ? "Group Assignments" : "Role Assignments"}
             description="Assign users or groups to configuration"
             onNext={onNext}
             onBack={onBack}
-            isNextDisabled={assignments.members.length === 0 && removals.length === 0}
+            isNextDisabled={nextDisabled}
         >
             <div className="flex gap-6 h-full items-start">
                 {/* Left Column: Configuration */}
@@ -243,7 +259,7 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
                     {/* Scope Header */}
                     <ScopeHeader
                         isGroups={isGroups}
-                        isLoading={isLoadingScope}
+                        isLoading={false}
                         scopeDetails={scopeDetails}
                         selectedCount={selectedIds.length}
                     />
@@ -267,6 +283,7 @@ export const AssignmentsStep = React.memo(function AssignmentsStep({ workload, o
                             label="Who needs access?"
                             addLabel="+ Add members"
                             description="Search for users or groups to assign."
+                            showRoleAssignableWarning={workload === "directoryRoles"}
                         />
                         {assignments.members.length === 0 && removals.length === 0 && (
                             <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md">

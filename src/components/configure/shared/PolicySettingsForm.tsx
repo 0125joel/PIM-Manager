@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { PolicySettings } from '@/hooks/useWizardState';
-import { Shield, Clock, Key, CheckCircle, Users, Info, Ticket, Bell } from 'lucide-react';
+import { Shield, Clock, Key, Users, Info, Ticket, Bell, CheckCircle } from 'lucide-react';
 import { Toggle } from '@/components/ui/Toggle';
 import { DurationSlider } from '@/components/ui/DurationSlider';
 import { PrincipalSelector } from './PrincipalSelector';
@@ -72,12 +72,16 @@ export function PolicySettingsForm({
     isLoading = false,
 }: PolicySettingsFormProps) {
     const isGroups = workload === "pimGroups";
+    const editingOwner = isGroups && accessType === "owner";
 
-    // The policy currently being displayed/edited
-    const policy = isGroups && accessType === "owner" && ownerValue ? ownerValue : value;
+    // The policy currently being displayed/edited. When editing the owner tab but
+    // no owner policy was supplied, fall back to DEFAULT_POLICY_SETTINGS — NOT to
+    // the member `value`, otherwise the first owner edit silently inherits member
+    // values and corrupts the owner policy on apply.
+    const policy = editingOwner ? (ownerValue ?? DEFAULT_POLICY_SETTINGS) : value;
 
     const updatePolicy = (updates: Partial<PolicySettings>) => {
-        if (isGroups && accessType === "owner" && onOwnerChange) {
+        if (editingOwner && onOwnerChange) {
             onOwnerChange({ ...policy, ...updates });
         } else {
             onChange({ ...value, ...updates });

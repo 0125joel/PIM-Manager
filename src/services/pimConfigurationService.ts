@@ -7,6 +7,7 @@ import {
     parseHours,
     hoursToIso,
     toIsoDuration,
+    toGraphDuration,
     formatDuration,
     DEFAULT_DURATIONS,
     isoDurationToLabel
@@ -494,7 +495,12 @@ function cleanRuleForPatch(rule: any): any {
     if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule") {
         cleaned.isExpirationRequired = rule.isExpirationRequired;
         if (rule.maximumDuration) {
-            cleaned.maximumDuration = rule.maximumDuration;
+            // The beta rule-update endpoint is strict about ISO duration form
+            // for expiration rules — calendar units (P1Y, P6M) sometimes get
+            // rejected with InvalidPolicyRule. Convert to days-only form, which
+            // is what the Azure Portal sends and what the wizard's bulk-rule
+            // path already does (mapPolicyToRuleUpdates uses toGraphDuration).
+            cleaned.maximumDuration = toGraphDuration(rule.maximumDuration);
         }
     } else if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule") {
         cleaned.enabledRules = rule.enabledRules || [];
@@ -538,62 +544,6 @@ function cleanRuleForPatch(rule: any): any {
 }
 
 /**
- * @deprecated Use cleanRuleForPatch instead
- * Sanitizes rules before sending to Graph API by removing properties that aren't accepted.
- * Graph API is strict about what properties it accepts in PATCH requests.
- */
-function sanitizeRulesForPatch(rules: any[]): any[] {
-    return rules.map(rule => cleanRuleForPatch(rule));
-}
-
-/**
- * Creates a minimal rule representation with only required properties
- * Used for bulk updates to include unchanged rules
- *
- * CRITICAL: Preserves the exact target from the original rule.
- * The target is semantically locked to the rule ID and must not be modified.
- */
-function createMinimalRule(rule: PimRule): any {
-    const minimal: any = {
-        "@odata.type": rule["@odata.type"],
-        id: rule.id,
-        target: {
-            "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
-            caller: rule.target?.caller || "Admin",
-            operations: rule.target?.operations || ["All"],
-            level: rule.target?.level || "Eligibility",
-            inheritableSettings: rule.target?.inheritableSettings || [],
-            enforcedSettings: rule.target?.enforcedSettings || []
-        }
-    };
-
-    // Include type-specific required properties from original rule
-    const ruleType = rule["@odata.type"];
-
-    if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule") {
-        minimal.isExpirationRequired = rule.isExpirationRequired;
-        if (rule.maximumDuration) {
-            minimal.maximumDuration = rule.maximumDuration;
-        }
-    } else if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule") {
-        minimal.enabledRules = rule.enabledRules || [];
-    } else if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule") {
-        minimal.notificationType = rule.notificationType;
-        minimal.recipientType = rule.recipientType;
-        minimal.notificationLevel = rule.notificationLevel;
-        minimal.isDefaultRecipientsEnabled = rule.isDefaultRecipientsEnabled;
-        minimal.notificationRecipients = rule.notificationRecipients || [];
-    } else if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule") {
-        minimal.setting = rule.setting || { isApprovalRequired: false };
-    } else if (ruleType === "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule") {
-        minimal.isEnabled = rule.isEnabled || false;
-        minimal.claimValue = rule.claimValue || null;
-    }
-
-    return minimal;
-}
-
-/**
  * Updates PIM policy for a role using INDIVIDUAL rule PATCH operations
  * This is the recommended approach per Microsoft documentation:
  * https://learn.microsoft.com/en-us/graph/api/unifiedrolemanagementpolicyrule-update
@@ -601,7 +551,7 @@ function createMinimalRule(rule: PimRule): any {
  * Each changed rule is updated separately via:
  * PATCH /policies/roleManagementPolicies/{policyId}/rules/{ruleId}
  */
-export async function updatePimPolicy(client: Client, roleId: string, newSettings: RoleSettings) {
+export async function updatePimPolicy(client: Client, roleId: string, newSettings: RoleSettings): Promise<string[]> {
     try {
         const currentData = await getRolePolicy(client, roleId);
         if (!currentData) throw new Error(`Could not fetch current policy for role ${roleId}`);
@@ -628,13 +578,28 @@ export async function updatePimPolicy(client: Client, roleId: string, newSetting
 
         if (rulesToUpdate.length === 0) {
             Logger.debug("pimConfiguration", `[updatePimPolicy] No changes needed for policy ${policyId}`);
-            return true;
+            return [];
         }
 
         // Update each rule individually (per Microsoft docs recommendation)
         Logger.info("pimConfiguration", `[updatePimPolicy] Updating ${rulesToUpdate.length} rules individually for policy ${policyId}`);
 
-        for (const { original, updated } of rulesToUpdate) {
+        // Sort to prevent MfaAndAcrsConflict: Graph rejects any transient state
+        // where both MFA and an authentication context are simultaneously enabled.
+        // - Disabling AuthContext must come BEFORE enabling MFA.
+        // - Enabling AuthContext must come AFTER disabling MFA (Enablement rule).
+        const authContextType = "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule";
+        rulesToUpdate.sort((a, b) => {
+            const orderOf = (item: { updated: Record<string, unknown> }) => {
+                if (item.updated["@odata.type"] !== authContextType) return 1;
+                return item.updated["isEnabled"] === true ? 2 : 0;
+            };
+            return orderOf(a) - orderOf(b);
+        });
+
+        const ruleFailures: Array<{ ruleId: string; error: unknown }> = [];
+
+        for (const { updated } of rulesToUpdate) {
             const cleanedRule = cleanRuleForPatch(updated);
 
             Logger.debug("pimConfiguration", `[updatePimPolicy] Updating rule ${cleanedRule.id}`,
@@ -659,22 +624,57 @@ export async function updatePimPolicy(client: Client, roleId: string, newSetting
                 Logger.error("pimConfiguration", `[updatePimPolicy] PATCH failed for rule ${cleanedRule.id}`);
                 Logger.error("pimConfiguration", `Error code: ${patchError.code || 'unknown'}`);
                 Logger.error("pimConfiguration", `Error message: ${patchError.message}`);
-                Logger.error("pimConfiguration", `Failed payload:`, JSON.stringify(cleanedRule, null, 2));
-                throw patchError;
+                Logger.debug("pimConfiguration", `Failed payload: ${JSON.stringify(cleanedRule)}`);
+                ruleFailures.push({ ruleId: cleanedRule.id, error: patchError });
+                // Continue with remaining rules instead of aborting — surfacing
+                // every failed rule is more useful than only the first.
             }
         }
 
-        // Verification delay
+        // Best-effort verification — never let a read failure turn an otherwise
+        // successful PATCH sequence into a fake "failed" result.
         await delay(1000);
-        const verified = await getRolePolicy(client, roleId);
-        if (!verified) throw new Error("Verification failed after update");
+        try {
+            const verified = await getRolePolicy(client, roleId);
+            if (!verified) {
+                Logger.warn("pimConfiguration", `[updatePimPolicy] Verification fetch returned null for role ${roleId} — PATCHes already succeeded, continuing.`);
+            }
+        } catch (verifyError) {
+            Logger.warn("pimConfiguration", `[updatePimPolicy] Verification fetch threw for role ${roleId} — PATCHes already succeeded.`, verifyError);
+        }
+
+        const updatedRuleIds = rulesToUpdate.map(r => r.updated.id as string);
+
+        if (ruleFailures.length > 0) {
+            // Compose a PolicyRuleUpdateError so callers can map per-rule errors.
+            const err = new PolicyRuleUpdateError(
+                `Failed to update ${ruleFailures.length} of ${rulesToUpdate.length} policy rules for role ${roleId}`,
+                ruleFailures
+            );
+            Logger.error("pimConfiguration", err.message);
+            throw err;
+        }
 
         Logger.info("pimConfiguration", `[updatePimPolicy] Successfully updated ${rulesToUpdate.length} rules for role ${roleId}`);
-        return true;
+        return updatedRuleIds;
 
     } catch (error: any) {
         Logger.error("pimConfiguration", `Failed to update policy for role ${roleId}`, error);
         throw error;
+    }
+}
+
+/**
+ * Thrown by `updatePimPolicy` when one or more individual rule PATCHes failed.
+ * The original errors are preserved per rule so callers can surface "which
+ * setting Microsoft rejected" instead of a single opaque message.
+ */
+export class PolicyRuleUpdateError extends Error {
+    readonly ruleFailures: Array<{ ruleId: string; error: unknown }>;
+    constructor(message: string, ruleFailures: Array<{ ruleId: string; error: unknown }>) {
+        super(message);
+        this.name = "PolicyRuleUpdateError";
+        this.ruleFailures = ruleFailures;
     }
 }
 
@@ -760,8 +760,10 @@ function calculateRuleUpdate(rule: PimRule, newSettings: RoleSettings): any | nu
         if (rule["@odata.type"] === "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule") {
             const newIsExp = !newSettings.assignment.allowPermanentEligible;
             const newDur = newSettings.assignment.allowPermanentEligible ? null : toIsoDuration(newSettings.assignment.expireEligibleAfter);
-
-            if (rule.isExpirationRequired !== newIsExp || rule.maximumDuration !== newDur) {
+            // Normalise undefined → null on both sides so we don't emit a no-op PATCH
+            // every apply when the rule originally omitted maximumDuration.
+            const currentDur = rule.maximumDuration ?? null;
+            if (rule.isExpirationRequired !== newIsExp || currentDur !== newDur) {
                 updated.isExpirationRequired = newIsExp;
                 // CRITICAL: Only include maximumDuration when expiration is required
                 // If expiration is NOT required, we must REMOVE maximumDuration from the object
@@ -789,8 +791,8 @@ function calculateRuleUpdate(rule: PimRule, newSettings: RoleSettings): any | nu
         if (rule["@odata.type"] === "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule") {
             const newIsExp = !newSettings.assignment.allowPermanentActive;
             const newDur = newSettings.assignment.allowPermanentActive ? null : toIsoDuration(newSettings.assignment.expireActiveAfter);
-
-            if (rule.isExpirationRequired !== newIsExp || rule.maximumDuration !== newDur) {
+            const currentDur = rule.maximumDuration ?? null;
+            if (rule.isExpirationRequired !== newIsExp || currentDur !== newDur) {
                 updated.isExpirationRequired = newIsExp;
                 // CRITICAL: Only include maximumDuration when expiration is required
                 // If expiration is NOT required, we must REMOVE maximumDuration from the object
@@ -839,7 +841,7 @@ function calculateRuleUpdate(rule: PimRule, newSettings: RoleSettings): any | nu
 function calculateNotificationChanges(currentRule: any, blockSetting: any): any | null {
     // Determine which setting applies based on recipientType
     const recipientType = currentRule.recipientType;
-    Logger.info("pimConfiguration", `[NotificationUpdate] Processing rule ${currentRule.id} with recipientType: ${recipientType}`);
+    Logger.debug("pimConfiguration", `[NotificationUpdate] Processing rule ${currentRule.id} with recipientType: ${recipientType}`);
 
     // Map recipientType to our settings key
     // Note: "Requestor" is used for BOTH activation and assignment notifications
@@ -853,7 +855,7 @@ function calculateNotificationChanges(currentRule: any, blockSetting: any): any 
     else if (recipientType === "Approver") settingKey = "approver";
 
     if (!settingKey || !blockSetting?.[settingKey]) {
-        Logger.info("pimConfiguration", `[NotificationUpdate] No matching settings for ${recipientType}, skipping`);
+        Logger.debug("pimConfiguration", `[NotificationUpdate] No matching settings for ${recipientType}, skipping`);
         return null; // No matching settings
     }
 
@@ -880,10 +882,10 @@ function calculateNotificationChanges(currentRule: any, blockSetting: any): any 
     const recipientsChanged = JSON.stringify(currentAdditionalRecipients.sort()) !==
         JSON.stringify(newAdditionalRecipients.sort());
 
-    Logger.info("pimConfiguration", `[NotificationUpdate] ${recipientType}: criticalOnly=${setting.criticalOnly}, notificationLevel=${newNotificationLevel} (current=${currentNotificationLevel}), criticalChanged=${criticalChanged}, enabledChanged=${enabledChanged}, recipientsChanged=${recipientsChanged}`);
+    Logger.debug("pimConfiguration", `[NotificationUpdate] ${recipientType}: criticalOnly=${setting.criticalOnly}, notificationLevel=${newNotificationLevel} (current=${currentNotificationLevel}), criticalChanged=${criticalChanged}, enabledChanged=${enabledChanged}, recipientsChanged=${recipientsChanged}`);
 
     if (!criticalChanged && !enabledChanged && !recipientsChanged) {
-        Logger.info("pimConfiguration", `[NotificationUpdate] No changes detected for ${recipientType}`);
+        Logger.debug("pimConfiguration", `[NotificationUpdate] No changes detected for ${recipientType}`);
         return null; // No changes needed
     }
 
@@ -900,7 +902,7 @@ function calculateNotificationChanges(currentRule: any, blockSetting: any): any 
         "target": currentRule.target // Include complete target object
     };
 
-    Logger.info("pimConfiguration", `[NotificationUpdate] Returning complete rule for ${recipientType}:`, JSON.stringify(completeRule, null, 2));
+    Logger.debug("pimConfiguration", `[NotificationUpdate] Returning complete rule for ${recipientType}:`, JSON.stringify(completeRule, null, 2));
     return completeRule;
 }
 
@@ -947,166 +949,21 @@ function calculateApprovalChanges(currentRule: any, activationSettings: any): an
             escalationApprovers: []
         }];
     } else if (!newApproval) {
+        // Disabling approval: keep all required stage fields populated. Spreading
+        // an undefined `currentSetting.approvalStages?.[0]` yields an incomplete
+        // stage object that Graph rejects with "Value cannot be null".
+        const prevStage = currentSetting.approvalStages?.[0] ?? {};
         settingDelta.approvalStages = [{
-            ...currentSetting.approvalStages?.[0],
-            primaryApprovers: []
+            approvalStageTimeOutInDays: prevStage.approvalStageTimeOutInDays ?? 1,
+            isApproverJustificationRequired: prevStage.isApproverJustificationRequired ?? true,
+            escalationTimeInMinutes: prevStage.escalationTimeInMinutes ?? 0,
+            isEscalationEnabled: prevStage.isEscalationEnabled ?? false,
+            primaryApprovers: [],
+            escalationApprovers: prevStage.escalationApprovers ?? []
         }];
     }
 
     return { setting: settingDelta };
-}
-
-// Helper to update notification rules
-function updateNotificationRule(updatedRule: any, currentRule: any, blockSetting: any, onChange: () => void) {
-    // Defensive: ensure currentRecipients is always an array
-    let rawRecipients = currentRule.recipientType || [];
-    if (!Array.isArray(rawRecipients)) {
-        rawRecipients = typeof rawRecipients === 'string' ? [rawRecipients] : [];
-    }
-    const currentRecipients: string[] = rawRecipients;
-    const newRecipients: string[] = [];
-
-    // Priority for determining shared settings (Additional/Critical)
-    // If a rule targets multiple, we prioritize Admin > Assignee/Requestor > Approver
-    let primarySetting: any = null;
-
-    // Check Admin
-    if (currentRecipients.includes("Admin")) {
-        // Only keep if enabled in UI
-        if (blockSetting.admin?.isEnabled) {
-            newRecipients.push("Admin");
-            if (!primarySetting) primarySetting = blockSetting.admin;
-        }
-    }
-
-    // Check Assignee/Requestor
-    // Matches "Requestor" string in Graph
-    if (currentRecipients.includes("Requestor")) {
-        const setting = blockSetting.requestor || blockSetting.assignee;
-        if (setting?.isEnabled) {
-            newRecipients.push("Requestor");
-            if (!primarySetting) primarySetting = setting;
-        }
-    }
-
-    // Check Approver
-    if (currentRecipients.includes("Approver")) {
-        if (blockSetting.approver?.isEnabled) {
-            newRecipients.push("Approver");
-            if (!primarySetting) primarySetting = blockSetting.approver;
-        }
-    }
-
-    const recipientsChanged = JSON.stringify([...currentRecipients].sort()) !== JSON.stringify([...newRecipients].sort());
-
-    // Check additional/critical settings
-    // If we have a primary setting, we enforce its values on this rule
-    let additionalChanged = false;
-    let criticalChanged = false;
-
-    if (primarySetting) {
-        // Defensive: ensure these are always arrays
-        let currentAdditional = currentRule.additionalRecipients || [];
-        if (!Array.isArray(currentAdditional)) {
-            currentAdditional = typeof currentAdditional === 'string' ? [currentAdditional] : [];
-        }
-        let newAdditional = primarySetting.additionalRecipients || [];
-        if (!Array.isArray(newAdditional)) {
-            newAdditional = typeof newAdditional === 'string' ? [newAdditional] : [];
-        }
-
-        additionalChanged = JSON.stringify([...currentAdditional].sort()) !== JSON.stringify([...newAdditional].sort());
-
-        // FIXED MAPPING: criticalOnly → notificationLevel, not isDefaultRecipientsEnabled
-        const currentNotificationLevel = currentRule.notificationLevel || "All";
-        const newNotificationLevel = primarySetting.criticalOnly === true ? "Critical" : "All";
-
-        if (currentNotificationLevel !== newNotificationLevel) criticalChanged = true;
-
-        // Graph API uses 'notificationRecipients' not 'additionalRecipients'
-        if (additionalChanged) updatedRule.notificationRecipients = newAdditional;
-        if (criticalChanged) updatedRule.notificationLevel = newNotificationLevel;
-    }
-
-    if (recipientsChanged) {
-        updatedRule.recipientType = newRecipients;
-    }
-
-    if (recipientsChanged || additionalChanged || criticalChanged) {
-        onChange();
-    }
-}
-
-// Helper to update approval rules
-function updateApprovalRule(updatedRule: any, currentRule: any, activationSettings: any, onChange: () => void) {
-    if (activationSettings.requireApproval) {
-        let needsUpdate = false;
-        const currentSetting = currentRule.setting || {};
-
-        if (!currentSetting.isApprovalRequired) needsUpdate = true;
-
-        // Check approver changes
-        const stage = currentSetting.approvalStages?.[0];
-        const currentApprovers = stage ? (stage.primaryApprovers || []) : (currentSetting.primaryApprovers || []);
-        const newApprovers = activationSettings.approvers;
-
-        if (currentApprovers.length !== newApprovers.length) {
-            needsUpdate = true;
-        } else {
-            const currentIds = (currentApprovers || []).map((a: any) => a.id).sort();
-            const newIds = (newApprovers || []).map((a: any) => a.id).sort();
-            if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) needsUpdate = true;
-        }
-
-        if (needsUpdate) {
-            if (newApprovers.length === 0) return; // Cannot enable without approvers
-
-            const newSetting = { ...currentSetting };
-            newSetting.isApprovalRequired = true;
-
-            // Filter out approvers without valid ID and map to Graph format
-            const mappedApprovers = newApprovers
-                .filter((a: any) => a.id && typeof a.id === 'string' && a.id.length > 0)
-                .map((a: any) => ({
-                    "@odata.type": a.type === "group" ? "#microsoft.graph.groupMembers" : "#microsoft.graph.singleUser",
-                    id: a.id,
-                    isBackup: false
-                }));
-
-            // If no valid approvers after filtering, skip the update
-            if (mappedApprovers.length === 0) return;
-
-            if (newSetting.approvalStages && newSetting.approvalStages.length > 0) {
-                newSetting.approvalStages[0].primaryApprovers = mappedApprovers;
-            } else {
-                newSetting.approvalStages = [{
-                    approvalStageTimeOutInDays: 1,
-                    isApproverJustificationRequired: true,
-                    escalationTimeInMinutes: 0,
-                    isEscalationEnabled: false,
-                    primaryApprovers: mappedApprovers,
-                    escalationApprovers: []
-                }];
-            }
-
-            delete newSetting["@odata.type"];
-            updatedRule.setting = newSetting;
-            onChange();
-        }
-
-    } else {
-        // Disable approval
-        if (currentRule.setting?.isApprovalRequired) {
-            const newSetting = { ...currentRule.setting };
-            newSetting.isApprovalRequired = false;
-            if (newSetting.approvalStages && newSetting.approvalStages.length > 0) {
-                newSetting.approvalStages[0].primaryApprovers = [];
-            }
-            delete newSetting["@odata.type"];
-            updatedRule.setting = newSetting;
-            onChange();
-        }
-    }
 }
 
 /**

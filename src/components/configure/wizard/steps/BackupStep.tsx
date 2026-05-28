@@ -7,10 +7,11 @@ import {
     useRefreshAllWorkloads,
     useWorkloadData
 } from '@/hooks/usePimSelectors';
-import { AlertCircle, Check, Download, RefreshCw, Loader2, Save } from 'lucide-react';
+import { Download, RefreshCw, Loader2, Save } from 'lucide-react';
 import { Logger } from '@/utils/logger';
 import { RoleDetailData } from '@/types/directoryRole.types';
 import { PimGroupData } from '@/types/pimGroup.types';
+import { usePimData } from '@/contexts/DirectoryRoleContext';
 
 /**
  * BackupStep - First step in configuration wizard
@@ -29,6 +30,7 @@ export function BackupStep({ onNext }: { onNext: () => void }) {
     const refreshAllWorkloads = useRefreshAllWorkloads();
     const directoryRolesData = useWorkloadData<RoleDetailData>("directoryRoles");
     const pimGroupsData = useWorkloadData<PimGroupData>("pimGroups");
+    const { authenticationContexts } = usePimData();
 
     // Derived state
     const isLoading = isDirectoryRolesLoading || isPimGroupsLoading;
@@ -42,7 +44,7 @@ export function BackupStep({ onNext }: { onNext: () => void }) {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            await refreshAllWorkloads();
+            await refreshAllWorkloads(true);
         } catch (error) {
             Logger.error("BackupStep", "Failed to refresh", error);
         } finally {
@@ -59,7 +61,8 @@ export function BackupStep({ onNext }: { onNext: () => void }) {
             },
             data: {
                 directoryRoles: directoryRolesData,
-                groups: pimGroupsData
+                groups: pimGroupsData,
+                authenticationContexts: authenticationContexts
             }
         };
 
@@ -160,7 +163,7 @@ export function BackupStep({ onNext }: { onNext: () => void }) {
                                 type="checkbox"
                                 checked={isVerified}
                                 onChange={(e) => setIsVerified(e.target.checked)}
-                                className="w-5 h-5 border-2 border-amber-400 rounded text-amber-600 focus:ring-amber-500 focus:ring-offset-amber-50 dark:focus:ring-offset-ziinc-900 transition-colors"
+                                className="w-5 h-5 border-2 border-amber-400 rounded text-amber-600 focus:ring-amber-500 focus:ring-offset-amber-50 dark:focus:ring-offset-zinc-900 transition-colors"
                             />
                         </div>
                         <div className="flex-1">

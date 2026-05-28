@@ -2,9 +2,25 @@
 import { SecurityAlert } from '@/types/securityAlerts.types';
 import { GRAPH_LOCALE } from "@/config/constants";
 import { Logger } from "@/utils/logger";
+import { withRetry } from "@/utils/retryUtils";
 
 const ALERTS_ENDPOINT = "https://graph.microsoft.com/beta/identityGovernance/roleManagementAlerts/alerts";
 const ALERTS_FILTER = "scopeId eq '/' and scopeType eq 'DirectoryRole'";
+
+/**
+ * Error shape that `withRetry` understands: it inspects `statusCode` to decide
+ * retryability and `responseHeaders` to honor `Retry-After` on 429s. Raw `fetch`
+ * doesn't throw on non-2xx, so we synthesize this shape ourselves.
+ */
+class HttpError extends Error {
+    statusCode: number;
+    responseHeaders: Headers;
+    constructor(status: number, statusText: string, headers: Headers) {
+        super(`HTTP ${status}: ${statusText}`);
+        this.statusCode = status;
+        this.responseHeaders = headers;
+    }
+}
 
 /**
  * Fetches PIM security alerts from Microsoft Graph API (beta)
@@ -14,23 +30,27 @@ export async function fetchSecurityAlerts(accessToken: string): Promise<Security
     try {
         const url = `${ALERTS_ENDPOINT}?$filter=${encodeURIComponent(ALERTS_FILTER)}&$expand=alertDefinition,alertConfiguration`;
 
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-                'Accept-Language': GRAPH_LOCALE,
-            },
-        });
+        const data = await withRetry(async () => {
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept-Language': GRAPH_LOCALE,
+                },
+            });
 
-        if (response.status === 403) {
-            throw new Error('PERMISSION_DENIED');
-        }
+            // 403 is not retryable and is handled specially by the caller
+            if (response.status === 403) {
+                throw new Error('PERMISSION_DENIED');
+            }
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+            if (!response.ok) {
+                throw new HttpError(response.status, response.statusText, response.headers);
+            }
 
-        const data = await response.json();
+            return response.json();
+        }, 3, 1000, 'fetchSecurityAlerts');
+
         const alerts: SecurityAlert[] = data.value || [];
 
         return alerts

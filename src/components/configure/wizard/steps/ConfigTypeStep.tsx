@@ -68,7 +68,7 @@ function TypeCard({
 }: {
     title: string,
     description: string,
-    icon: any,
+    icon: React.ComponentType<{ className?: string }>,
     isSelected: boolean,
     onClick: () => void
 }) {

@@ -13,30 +13,59 @@ import { PimGroupData } from "@/types/pimGroup.types";
 import { useGraphClient } from "@/hooks/usePimSelectors";
 import { PolicySettings } from "@/hooks/useWizardState";
 import { parseGraphPolicy } from "@/services/policyParserService";
-import { ApplyOperationResult } from "@/types/wizard.types";
+import { ApplyOperationResult, AssignmentConfig } from "@/types/wizard.types";
 import {
     applyDirectoryRolePolicies,
     applyGroupPolicies,
+    applyDirectoryRoleRemovals,
+    applyGroupRemovals,
+    applyDirectoryRoleAssignments,
+    applyGroupAssignments,
 } from "@/services/wizardApplyService";
+import { detectPolicyConflicts, PolicyConflict } from "@/utils/policyConflicts";
+import { AssignmentRemoval } from "@/types/wizard.types";
 
 import { GroupSelector } from "@/components/configure/shared/GroupSelector";
 import { PolicySettingsForm, DEFAULT_POLICY_SETTINGS } from "@/components/configure/shared/PolicySettingsForm";
-import { AssignmentPanel } from "@/components/configure/shared/AssignmentPanel";
+import { AssignmentPanel, AssignmentStagePayload } from "@/components/configure/shared/AssignmentPanel";
+import { PreflightWarnings } from "@/components/configure/shared/PreflightWarnings";
+import {
+    isHighRiskRoleName,
+    detectPolicyExtensions,
+    isScratchPermanentRiskyOnPrivileged,
+    formatExtensionLine,
+} from "@/utils/policyPreflight";
 import { ConfigureWorkloadType as WorkloadType } from '@/types/workload.types';
 import { Logger } from "@/utils/logger";
 
-interface StagedChange {
+interface StagedPolicyChange {
     id: string;
+    kind: "policy";
     targetId: string;
     targetName: string;
     workload: WorkloadType;
-    type: "policy";
     /** Member policy (or only policy for directoryRoles) */
     settings: PolicySettings;
     /** Owner policy (pimGroups only) */
     ownerSettings?: PolicySettings;
     timestamp: number;
 }
+
+interface StagedAssignmentChange {
+    id: string;
+    kind: "assignment";
+    workload: WorkloadType;
+    /** Targets the assignment/removal will be created on. For removals we use
+     *  targetIds[0] only, matching AssignmentPanel's runtime behavior. */
+    targetIds: string[];
+    targetNames: string[];
+    config?: AssignmentConfig;
+    allowPermanent?: boolean;
+    removals?: AssignmentRemoval[];
+    timestamp: number;
+}
+
+type StagedChange = StagedPolicyChange | StagedAssignmentChange;
 
 interface ManualModeProps {
     onBack: () => void;
@@ -74,6 +103,15 @@ export function ManualMode({ onBack }: ManualModeProps) {
     const [rolesWriteConsent, setRolesWriteConsent] = useState(false);
     const [groupsWriteConsent, setGroupsWriteConsent] = useState(false);
 
+    // Conflict modal state — populated when a policy apply would leave existing
+    // assignments in violation (Microsoft does not retroactively reconcile).
+    const [conflictModal, setConflictModal] = useState<{
+        conflicts: PolicyConflict[];
+        onApplyOnly: () => void;
+        onApplyAndRemove: () => void;
+        onCancel: () => void;
+    } | null>(null);
+
     // ── Data Hooks ───────────────────────────────────────────────────────────
     const { rolesData, loading: rolesLoading, getPolicySettings } = usePimData();
     const { workloads, refreshWorkload } = useUnifiedPimData();
@@ -102,6 +140,36 @@ export function ManualMode({ onBack }: ManualModeProps) {
 
     // Per-tab consent gate (used for "Apply Now" + consent banner)
     const missingWriteConsent = workload === "directoryRoles" ? !rolesWriteConsent : !groupsWriteConsent;
+
+    // ── Preflight: surface Microsoft-rejection risks for selected target(s) ──
+    // Mirrors the wizard's ReviewStep callouts so admins see the same warnings
+    // before they stage or apply policy changes in Manual mode.
+    const preflight = useMemo(() => {
+        if (workload !== "directoryRoles" || selectedIds.length === 0) {
+            return { hasHighRiskTargets: false, scratchRiskyOnPrivileged: false, extensionLines: [] as string[] };
+        }
+        const items = selectedIds.map(id => ({
+            id,
+            name: rolesData?.find(r => r.definition.id === id)?.definition.displayName || id,
+        }));
+        const hasHighRiskTargets = items.some(it => isHighRiskRoleName(it.name));
+        const offenders = [];
+        for (const it of items) {
+            const r = rolesData?.find(x => x.definition.id === it.id);
+            const rules = r?.policy?.details?.rules;
+            if (!rules) continue;
+            offenders.push(...detectPolicyExtensions(it.name, parseGraphPolicy({ rules }), memberSettings));
+        }
+        return {
+            hasHighRiskTargets,
+            scratchRiskyOnPrivileged: isScratchPermanentRiskyOnPrivileged({
+                configSource,
+                policies: memberSettings,
+                hasHighRiskTargets,
+            }),
+            extensionLines: offenders.map(formatExtensionLine),
+        };
+    }, [workload, selectedIds, rolesData, memberSettings, configSource]);
 
     // Consent needed to apply staged changes — checks every workload present in the queue
     const stagedMissingConsent = useMemo(() => {
@@ -210,10 +278,10 @@ export function ManualMode({ onBack }: ManualModeProps) {
 
             return {
                 id: `${id}-${Date.now()}`,
+                kind: "policy" as const,
                 targetId: id,
                 targetName,
                 workload,
-                type: "policy" as const,
                 settings: { ...memberSettings },
                 ownerSettings: workload === "pimGroups" ? { ...ownerSettings } : undefined,
                 timestamp: Date.now()
@@ -222,13 +290,38 @@ export function ManualMode({ onBack }: ManualModeProps) {
 
         setStagedChanges(prev => {
             const existingIds = new Set(selectedIds);
-            const filtered = prev.filter(c => !existingIds.has(c.targetId) || c.workload !== workload);
+            // Drop any prior policy stage for the same targets in this workload;
+            // assignment stages survive (they're independent).
+            const filtered = prev.filter(c => c.kind !== "policy" || !existingIds.has(c.targetId) || c.workload !== workload);
             return [...filtered, ...newChanges];
         });
 
         toast.success(
             "Changes Staged",
             `${selectedIds.length} ${workload === "directoryRoles" ? "role" : "group"}(s) ready for apply`
+        );
+    };
+
+    const handleStageAssignments = (payload: AssignmentStagePayload) => {
+        if (selectedIds.length === 0) return;
+        const targetNames = selectedIds.map(id => getTargetName(id));
+        const change: StagedAssignmentChange = {
+            id: `assign-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            kind: "assignment",
+            workload,
+            targetIds: [...selectedIds],
+            targetNames,
+            config: payload.config,
+            allowPermanent: payload.allowPermanent,
+            removals: payload.removals,
+            timestamp: Date.now(),
+        };
+        setStagedChanges(prev => [...prev, change]);
+        const memberCount = payload.config?.principalIds.length ?? 0;
+        const removalCount = payload.removals?.length ?? 0;
+        toast.success(
+            "Assignment Changes Staged",
+            `${memberCount} new · ${removalCount} removal${removalCount === 1 ? "" : "s"} queued`
         );
     };
 
@@ -241,18 +334,66 @@ export function ManualMode({ onBack }: ManualModeProps) {
         toast.info("Staged Changes Cleared", "All pending changes have been removed");
     };
 
+    // Convert PolicyConflict objects to the AssignmentRemoval shape that the
+    // apply service expects.
+    const conflictsToRemovalsByTarget = (conflicts: PolicyConflict[]): Map<string, AssignmentRemoval[]> => {
+        const map = new Map<string, AssignmentRemoval[]>();
+        for (const c of conflicts) {
+            const list = map.get(c.targetId) ?? [];
+            list.push({
+                assignmentId: c.assignmentId,
+                principalId: c.principalId,
+                roleDefinitionId: c.roleDefinitionId ?? "",
+                directoryScopeId: c.directoryScopeId ?? "/",
+                assignmentType: c.assignmentType,
+                groupId: c.groupId,
+            });
+            map.set(c.targetId, list);
+        }
+        return map;
+    };
+
+    const getTargetName = (id: string) =>
+        workload === "directoryRoles"
+            ? rolesData?.find(r => r.definition.id === id)?.definition.displayName || id
+            : groupsData?.find(g => g.group.id === id)?.group.displayName || id;
+
     // ── Direct Apply ─────────────────────────────────────────────────────────
     const handleDirectApply = async () => {
+        if (selectedIds.length === 0) return;
+
+        // Conflict precheck against the pending policy
+        try {
+            const client = await getGraphClient();
+            const nameMap = new Map(selectedIds.map(id => [id, getTargetName(id)]));
+            const conflicts = await detectPolicyConflicts(client, {
+                workload,
+                selectedIds,
+                nameMap,
+                pendingPolicy: memberSettings,
+                pendingOwnerPolicy: workload === "pimGroups" ? ownerSettings : undefined,
+            });
+            if (conflicts.length > 0) {
+                setConflictModal({
+                    conflicts,
+                    onApplyOnly: () => { setConflictModal(null); void runDirectApply(undefined); },
+                    onApplyAndRemove: () => { setConflictModal(null); void runDirectApply(conflictsToRemovalsByTarget(conflicts)); },
+                    onCancel: () => setConflictModal(null),
+                });
+                return;
+            }
+        } catch (err) {
+            Logger.warn("ManualMode", "Conflict precheck failed — proceeding without it", err);
+        }
+        await runDirectApply(undefined);
+    };
+
+    const runDirectApply = async (removalsByTarget?: Map<string, AssignmentRemoval[]>) => {
         if (selectedIds.length === 0) return;
 
         setShowProgress(true);
         setProgressTitle("Applying Configuration");
         setCanCloseProgress(false);
-
-        const getTargetName = (id: string) =>
-            workload === "directoryRoles"
-                ? rolesData?.find(r => r.definition.id === id)?.definition.displayName || id
-                : groupsData?.find(g => g.group.id === id)?.group.displayName || id;
 
         const steps: ProgressStep[] = selectedIds.map(id => ({
             id,
@@ -288,12 +429,34 @@ export function ManualMode({ onBack }: ManualModeProps) {
                     }
 
                     const failed = results.filter(r => !r.success).length;
-                    steps[i].status = failed === 0 ? "success" : "error";
+
+                    // Apply conflict-removals for this target, if requested
+                    let removalsFailed = 0;
+                    let removalsApplied = 0;
+                    const targetRemovals = removalsByTarget?.get(id) ?? [];
+                    if (targetRemovals.length > 0) {
+                        try {
+                            const removalResult = workload === "directoryRoles"
+                                ? await applyDirectoryRoleRemovals(client, id, targetRemovals)
+                                : await applyGroupRemovals(client, id, targetRemovals);
+                            removalsApplied = removalResult.removalsCompleted;
+                            removalsFailed = removalResult.removalsFailed;
+                        } catch (rerr) {
+                            Logger.error("ManualMode", `Conflict removals failed for ${getTargetName(id)}`, rerr);
+                            removalsFailed = targetRemovals.length;
+                        }
+                    }
+
+                    steps[i].status = failed === 0 && removalsFailed === 0 ? "success" : "error";
                     steps[i].details = failed > 0
                         ? `${failed} operation(s) failed`
-                        : workload === "directoryRoles" ? "Role policy updated" : "Group policies updated";
+                        : removalsFailed > 0
+                            ? `Policy applied; ${removalsFailed} conflict removal(s) failed`
+                            : removalsApplied > 0
+                                ? `Policy applied; ${removalsApplied} conflict(s) removed`
+                                : workload === "directoryRoles" ? "Role policy updated" : "Group policies updated";
 
-                    if (failed === 0) totalSucceeded++;
+                    if (failed === 0 && removalsFailed === 0) totalSucceeded++;
                     else totalFailed++;
                 } catch (err) {
                     Logger.error("ManualMode", `Failed to apply ${getTargetName(id)}`, err);
@@ -336,15 +499,73 @@ export function ManualMode({ onBack }: ManualModeProps) {
     const handleApplyAllStaged = async () => {
         if (stagedChanges.length === 0) return;
 
+        // Conflict precheck — detect against the union of all staged changes.
+        // We group by workload, then per-target pass the staged policy through.
+        try {
+            const client = await getGraphClient();
+            // Conflict precheck only applies to policy stages — assignment stages
+            // don't tighten a policy, so they can't strand existing assignments.
+            const policyStages = stagedChanges.filter((c): c is StagedPolicyChange => c.kind === "policy");
+            const roleChanges = policyStages.filter(c => c.workload === "directoryRoles");
+            const groupChanges = policyStages.filter(c => c.workload === "pimGroups");
+            const allConflicts: PolicyConflict[] = [];
+
+            for (const c of roleChanges) {
+                const nm = new Map([[c.targetId, c.targetName]]);
+                const conflicts = await detectPolicyConflicts(client, {
+                    workload: "directoryRoles",
+                    selectedIds: [c.targetId],
+                    nameMap: nm,
+                    pendingPolicy: c.settings,
+                });
+                allConflicts.push(...conflicts);
+            }
+            for (const c of groupChanges) {
+                const nm = new Map([[c.targetId, c.targetName]]);
+                const conflicts = await detectPolicyConflicts(client, {
+                    workload: "pimGroups",
+                    selectedIds: [c.targetId],
+                    nameMap: nm,
+                    pendingPolicy: c.settings,
+                    pendingOwnerPolicy: c.ownerSettings,
+                });
+                allConflicts.push(...conflicts);
+            }
+
+            if (allConflicts.length > 0) {
+                setConflictModal({
+                    conflicts: allConflicts,
+                    onApplyOnly: () => { setConflictModal(null); void runApplyAllStaged(undefined); },
+                    onApplyAndRemove: () => { setConflictModal(null); void runApplyAllStaged(conflictsToRemovalsByTarget(allConflicts)); },
+                    onCancel: () => setConflictModal(null),
+                });
+                return;
+            }
+        } catch (err) {
+            Logger.warn("ManualMode", "Staged conflict precheck failed — proceeding without it", err);
+        }
+        await runApplyAllStaged(undefined);
+    };
+
+    const runApplyAllStaged = async (removalsByTarget?: Map<string, AssignmentRemoval[]>) => {
+        if (stagedChanges.length === 0) return;
+
         setShowProgress(true);
         setProgressTitle("Applying All Staged Changes");
         setCanCloseProgress(false);
 
+        const describeChange = (c: StagedChange) =>
+            c.kind === "policy"
+                ? `${c.workload === "directoryRoles" ? "Role" : "Group"} policy update`
+                : `Assignment update (${c.config?.principalIds.length ?? 0} new, ${c.removals?.length ?? 0} removed)`;
+        const stepLabel = (c: StagedChange) =>
+            c.kind === "policy" ? c.targetName : c.targetNames.join(", ");
+
         const steps: ProgressStep[] = stagedChanges.map(c => ({
             id: c.id,
-            label: c.targetName,
+            label: stepLabel(c),
             status: "pending" as const,
-            details: `${c.workload === "directoryRoles" ? "Role" : "Group"} policy update`
+            details: describeChange(c),
         }));
         setProgressSteps([...steps]);
 
@@ -360,27 +581,74 @@ export function ManualMode({ onBack }: ManualModeProps) {
                 setProgressSteps([...steps]);
 
                 try {
-                    let results: ApplyOperationResult[];
+                    let results: ApplyOperationResult[] = [];
+                    let detailMessage = "Applied";
 
-                    if (change.workload === "directoryRoles") {
-                        results = await applyDirectoryRolePolicies(client, [change.targetId], change.settings);
+                    if (change.kind === "policy") {
+                        if (change.workload === "directoryRoles") {
+                            results = await applyDirectoryRolePolicies(client, [change.targetId], change.settings);
+                        } else {
+                            // Apply member always; only apply owner when explicitly staged,
+                            // otherwise we'd overwrite the existing owner policy with member settings.
+                            const memberResults = await applyGroupPolicies(client, [change.targetId], change.settings, "member");
+                            const ownerResults = change.ownerSettings
+                                ? await applyGroupPolicies(client, [change.targetId], change.ownerSettings, "owner")
+                                : [];
+                            results = [...memberResults, ...ownerResults];
+                        }
+
+                        // Run conflict-removals for this staged target, if requested
+                        let removalsFailed = 0;
+                        let removalsApplied = 0;
+                        const targetRemovals = removalsByTarget?.get(change.targetId) ?? [];
+                        if (targetRemovals.length > 0) {
+                            try {
+                                const removalResult = change.workload === "directoryRoles"
+                                    ? await applyDirectoryRoleRemovals(client, change.targetId, targetRemovals)
+                                    : await applyGroupRemovals(client, change.targetId, targetRemovals);
+                                removalsApplied = removalResult.removalsCompleted;
+                                removalsFailed = removalResult.removalsFailed;
+                            } catch (rerr) {
+                                Logger.error("ManualMode", `Conflict removals failed for ${change.targetName}`, rerr);
+                                removalsFailed = targetRemovals.length;
+                            }
+                        }
+
+                        const failed = results.filter(r => !r.success).length;
+                        detailMessage = failed > 0
+                            ? `${failed} operation(s) failed`
+                            : removalsFailed > 0
+                                ? `Policy applied; ${removalsFailed} conflict removal(s) failed`
+                                : removalsApplied > 0
+                                    ? `Policy applied; ${removalsApplied} conflict(s) removed`
+                                    : "Applied";
+                        steps[i].status = failed === 0 && removalsFailed === 0 ? "success" : "error";
                     } else {
-                        // Intentionally not wrapped — applyGroupPolicies handles retry internally
-                        const [memberResults, ownerResults] = await Promise.all([
-                            applyGroupPolicies(client, [change.targetId], change.settings, "member"),
-                            applyGroupPolicies(client, [change.targetId], change.ownerSettings || change.settings, "owner"),
-                        ]);
-                        results = [...memberResults, ...ownerResults];
+                        // Assignment stage — dispatch new assignments + staged removals
+                        if (change.config) {
+                            const createResults = change.workload === "directoryRoles"
+                                ? await applyDirectoryRoleAssignments(client, change.targetIds, change.config, change.allowPermanent ?? true)
+                                : await applyGroupAssignments(client, change.targetIds, change.config, change.allowPermanent ?? true);
+                            results.push(...createResults);
+                        }
+                        if (change.removals && change.removals.length > 0) {
+                            const removalTarget = change.targetIds[0];
+                            const removalResult = change.workload === "directoryRoles"
+                                ? await applyDirectoryRoleRemovals(client, removalTarget, change.removals)
+                                : await applyGroupRemovals(client, removalTarget, change.removals);
+                            results.push(...removalResult.operations);
+                        }
+                        const failed = results.filter(r => !r.success).length;
+                        detailMessage = failed > 0 ? `${failed} operation(s) failed` : "Applied";
+                        steps[i].status = failed === 0 ? "success" : "error";
                     }
 
-                    const failed = results.filter(r => !r.success).length;
-                    steps[i].status = failed === 0 ? "success" : "error";
-                    steps[i].details = failed > 0 ? `${failed} operation(s) failed` : "Applied";
-
-                    if (failed === 0) totalSucceeded++;
+                    steps[i].details = detailMessage;
+                    if (steps[i].status === "success") totalSucceeded++;
                     else totalFailed++;
                 } catch (err) {
-                    Logger.error("ManualMode", `Failed to apply ${change.targetName}`, err);
+                    const label = stepLabel(change);
+                    Logger.error("ManualMode", `Failed to apply ${label}`, err);
                     steps[i].status = "error";
                     steps[i].details = "Failed";
                     totalFailed++;
@@ -475,8 +743,11 @@ export function ManualMode({ onBack }: ManualModeProps) {
                     )}
                 </div>
 
-                {/* Column 2: Policy Settings / Assignments (tabbed) */}
-                <div className="xl:col-span-1">
+                {/* Column 2: Policy Settings / Assignments (tabbed).
+                    Assignments tab expands to take the remaining grid width —
+                    AssignmentPanel renders an inner two-column form and gets
+                    squeezed in a single grid column. */}
+                <div className={activeTab === "assignments" ? "xl:col-span-2" : "xl:col-span-1"}>
                     {selectedIds.length === 0 ? (
                         <div className="bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-8 text-center">
                             <Shield className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
@@ -525,10 +796,11 @@ export function ManualMode({ onBack }: ManualModeProps) {
                                 </div>
                             </div>
 
-                            {/* Tab: Policy Settings */}
-                            {activeTab === "policy" && (
-                                <>
-                                    <PolicySettingsForm
+                            {/* Tab: Policy Settings — kept mounted so switching
+                                tabs preserves AssignmentPanel's internal state
+                                (selected members, duration, dates, etc.) */}
+                            <div className={activeTab === "policy" ? "space-y-4" : "hidden"}>
+                                <PolicySettingsForm
                                         value={memberSettings}
                                         onChange={setMemberSettings}
                                         workload={workload}
@@ -538,6 +810,11 @@ export function ManualMode({ onBack }: ManualModeProps) {
                                         onOwnerChange={workload === "pimGroups" ? setOwnerSettings : undefined}
                                         configSource={configSource}
                                         isLoading={isLoadingSettings}
+                                    />
+                                    <PreflightWarnings
+                                        hasHighRiskTargets={preflight.hasHighRiskTargets}
+                                        scratchRiskyOnPrivileged={preflight.scratchRiskyOnPrivileged}
+                                        extensionLines={preflight.extensionLines}
                                     />
                                     <div className="flex gap-2">
                                         <button
@@ -555,11 +832,10 @@ export function ManualMode({ onBack }: ManualModeProps) {
                                             Apply Now
                                         </button>
                                     </div>
-                                </>
-                            )}
+                            </div>
 
-                            {/* Tab: Assignments */}
-                            {activeTab === "assignments" && (
+                            {/* Tab: Assignments — also kept mounted to preserve state */}
+                            <div className={activeTab === "assignments" ? "" : "hidden"}>
                                 <AssignmentPanel
                                     selectedIds={selectedIds}
                                     workload={workload}
@@ -571,13 +847,16 @@ export function ManualMode({ onBack }: ManualModeProps) {
                                         void refreshWorkload(workload);
                                         setReloadTrigger(t => t + 1);
                                     }}
+                                    onStage={handleStageAssignments}
                                 />
-                            )}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* Column 3: Staged Changes */}
+                {/* Column 3: Staged Changes — policy flow only; hide on
+                    Assignments tab so col 2 can expand. */}
+                {activeTab === "policy" && (
                 <div className="xl:col-span-1">
                     <StagedChangesPanel
                         changes={stagedChanges}
@@ -587,6 +866,7 @@ export function ManualMode({ onBack }: ManualModeProps) {
                         disabled={stagedMissingConsent}
                     />
                 </div>
+                )}
             </div>
 
             {/* Modals */}
@@ -602,6 +882,72 @@ export function ManualMode({ onBack }: ManualModeProps) {
                 onClose={() => setShowProgress(false)}
                 canClose={canCloseProgress}
             />
+
+            <ConflictModal modal={conflictModal} />
+        </div>
+    );
+}
+
+// ── Conflict Modal ───────────────────────────────────────────────────────────
+function ConflictModal({ modal }: { modal: {
+    conflicts: PolicyConflict[];
+    onApplyOnly: () => void;
+    onApplyAndRemove: () => void;
+    onCancel: () => void;
+} | null }) {
+    if (!modal) return null;
+    const { conflicts, onApplyOnly, onApplyAndRemove, onCancel } = modal;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-xl mx-auto overflow-hidden">
+                <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                        {conflicts.length} existing assignment{conflicts.length === 1 ? "" : "s"} will violate the new policy
+                    </h3>
+                </div>
+                <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        Microsoft PIM does not retroactively reconcile assignments when a policy is tightened. Choose how to proceed:
+                    </p>
+                    <ul className="space-y-1.5">
+                        {conflicts.slice(0, 8).map(c => (
+                            <li key={`${c.targetId}:${c.assignmentId}`} className="text-xs p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded">
+                                <div className="font-medium text-zinc-900 dark:text-zinc-100">{c.principalDisplayName}</div>
+                                <div className="text-zinc-500 dark:text-zinc-400">
+                                    {c.targetName} · {c.assignmentType}{c.accessType ? ` · ${c.accessType}` : ""}
+                                </div>
+                                <div className="text-orange-700 dark:text-orange-300 mt-0.5">{c.detail}</div>
+                            </li>
+                        ))}
+                        {conflicts.length > 8 && (
+                            <li className="text-xs text-zinc-500 italic">
+                                +{conflicts.length - 8} more
+                            </li>
+                        )}
+                    </ul>
+                </div>
+                <div className="p-4 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-end gap-2">
+                    <button
+                        onClick={onCancel}
+                        className="px-3 py-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onApplyOnly}
+                        className="px-3 py-1.5 text-sm font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/40 border border-orange-200 dark:border-orange-800 rounded-md"
+                    >
+                        Apply policy only
+                    </button>
+                    <button
+                        onClick={onApplyAndRemove}
+                        className="px-3 py-1.5 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md"
+                    >
+                        Apply &amp; remove {conflicts.length} assignment{conflicts.length === 1 ? "" : "s"}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
@@ -644,34 +990,40 @@ function StagedChangesPanel({ changes, onRemove, onClearAll, onApplyAll, disable
                 </button>
             </div>
             <div className="max-h-[300px] overflow-y-auto p-2 space-y-2">
-                {changes.map(change => (
-                    <div
-                        key={change.id}
-                        className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            {change.workload === "directoryRoles"
-                                ? <Shield className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                                : <Users className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            }
-                            <div className="min-w-0">
-                                <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                                    {change.targetName}
-                                </div>
-                                <div className="text-xs text-amber-600 dark:text-amber-400">
-                                    Policy update staged
-                                    {change.workload === "pimGroups" && " (member + owner)"}
+                {changes.map(change => {
+                    const isPolicy = change.kind === "policy";
+                    const label = isPolicy ? change.targetName : change.targetNames.join(", ");
+                    const subtitle = isPolicy
+                        ? `Policy update staged${change.workload === "pimGroups" ? " (member + owner)" : ""}`
+                        : `Assignments staged · ${change.config?.principalIds.length ?? 0} new, ${change.removals?.length ?? 0} removed`;
+                    return (
+                        <div
+                            key={change.id}
+                            className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
+                        >
+                            <div className="flex items-center gap-3 min-w-0">
+                                {change.workload === "directoryRoles"
+                                    ? <Shield className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                    : <Users className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                }
+                                <div className="min-w-0">
+                                    <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                                        {label}
+                                    </div>
+                                    <div className="text-xs text-amber-600 dark:text-amber-400">
+                                        {subtitle}
+                                    </div>
                                 </div>
                             </div>
+                            <button
+                                onClick={() => onRemove(change.id)}
+                                className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => onRemove(change.id)}
-                            className="p-1 text-zinc-400 hover:text-red-500 transition-colors"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             <div className="p-4 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
                 <button

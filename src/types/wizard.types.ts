@@ -48,6 +48,12 @@ export interface PolicySettings {
 
 export interface AssignmentConfig {
     principalIds: string[];
+    /**
+     * Optional display-name lookup for principalIds. Used by ApplyStep to render
+     * friendly per-target labels in the results UI instead of raw GUIDs. Lossy
+     * by design — IDs without an entry fall back to the GUID.
+     */
+    principalNames?: Record<string, string>;
     assignmentType: "eligible" | "active";
     duration?: string;
     startDateTime?: string;

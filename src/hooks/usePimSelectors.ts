@@ -175,7 +175,7 @@ export function useRefreshWorkload(workload: WorkloadType): (force?: boolean) =>
 /**
  * Get stable refresh all function
  */
-export function useRefreshAllWorkloads(): () => Promise<void> {
+export function useRefreshAllWorkloads(): (force?: boolean) => Promise<void> {
     const context = useUnifiedPimData();
     return context.refreshAllWorkloads;
 }

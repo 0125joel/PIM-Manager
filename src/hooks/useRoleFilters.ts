@@ -585,10 +585,13 @@ export function useRoleFilters(rolesData: RoleDetailData[], groupsData: PimGroup
     }, [searchTerm, filterUser, filterRoleType, filterPrivileged, filterHasAssignments, filterAssignmentType, filterMemberType, filterDuration, filterAssignmentCount, filterPimConfigured, filterApprovalRequired, filterMfaRequired, filterJustificationRequired, filterMaxDuration, filterScopeType, filterGroupType, filterAccessType]);
 
     // Helper to update URL parameter (single value)
-    const updateURLParam = useCallback((paramName: string, value: string) => {
+    // deleteValue: the value treated as "default/empty" — triggers param deletion instead of storage.
+    // Most filters use 'all' as the default (no URL param = show all), but hasAssignments defaults to
+    // 'yes', so its deleteValue must be 'yes' to allow explicitly storing 'all' in the URL.
+    const updateURLParam = useCallback((paramName: string, value: string, deleteValue: string = 'all') => {
         if (!searchParams) return;
         const params = new URLSearchParams(searchParams.toString());
-        if (value === 'all' || !value || (paramName === 'unmanaged' && value === 'show')) {
+        if (value === deleteValue || !value || (paramName === 'unmanaged' && value === 'show')) {
             params.delete(paramName);
         } else {
             params.set(paramName, value);
@@ -619,7 +622,8 @@ export function useRoleFilters(rolesData: RoleDetailData[], groupsData: PimGroup
     const setFilterDuration = useCallback((value: RoleFilterState['filterDuration']) => updateURLParam('duration', value), [updateURLParam]);
     const setFilterPrivileged = useCallback((value: RoleFilterState['filterPrivileged']) => updateURLParam('privileged', value), [updateURLParam]);
     const setFilterPimConfigured = useCallback((value: RoleFilterState['filterPimConfigured']) => updateURLParam('pimConfigured', value), [updateURLParam]);
-    const setFilterHasAssignments = useCallback((value: RoleFilterState['filterHasAssignments']) => updateURLParam('hasAssignments', value), [updateURLParam]);
+    // 'yes' is the default (no param = yes), so store 'all' explicitly when the user picks it
+    const setFilterHasAssignments = useCallback((value: RoleFilterState['filterHasAssignments']) => updateURLParam('hasAssignments', value, 'yes'), [updateURLParam]);
     // Multi-select setters (array-based)
     const setFilterAssignmentCount = useCallback((value: string[]) => updateURLParamArray('assignmentCount', value), [updateURLParamArray]);
     const setFilterApprovalRequired = useCallback((value: RoleFilterState['filterApprovalRequired']) => updateURLParam('approval', value), [updateURLParam]);
