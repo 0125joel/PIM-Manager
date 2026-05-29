@@ -60,7 +60,21 @@ Before clicking Deploy, you need:
 > Create the App Registration first, but leave the Redirect URI blank for now. You will add it after deployment once you know your Static Web App URL.
 
 > [!TIP]
-> If deployment fails with `SequencerJob exceeded max allowed time: 1200 seconds` listing `Microsoft.ContainerInstance` and `Microsoft.Storage`, the resource providers above were not registered in time. Run the two `az provider register` commands, confirm both report `Registered` with `az provider show --namespace <name> --query registrationState -o tsv`, then redeploy.
+> **`SequencerJob exceeded max allowed time: 1200 seconds` (RPs to register: `Microsoft.Storage`, `Microsoft.ContainerInstance`).**
+> This is Azure's resource-provider registration step, which runs *before* the template's resources are created and waits up to 20 minutes (a fixed Azure limit, not configurable) for the providers to reach `Registered`. The error means one of them, usually `Microsoft.Storage`, did not finish in time. `az provider register` is asynchronous and returns immediately, so registering and redeploying right away does not help. Fix it as follows:
+>
+> 1. Confirm you are on the subscription you are deploying into: `az account show -o table` (switch with `az account set --subscription <id>` if needed).
+> 2. Register and wait for completion: `az provider register --namespace Microsoft.Storage --wait`
+> 3. Verify it actually reports `Registered` (not `Registering`): `az provider show --namespace Microsoft.Storage --query registrationState -o tsv`
+> 4. Only once it says `Registered`, redeploy.
+>
+> If `Microsoft.Storage` stays in `Registering` for more than ~20 minutes, the subscription is hitting the known Azure issue where storage registration gets stuck. Force it to re-run by unregistering and re-registering, then wait again:
+> ```bash
+> az provider unregister --namespace Microsoft.Storage
+> az provider register --namespace Microsoft.Storage --wait
+> az provider show --namespace Microsoft.Storage --query registrationState -o tsv
+> ```
+> If it is still stuck after that, it is a platform-side problem on the subscription (open an Azure support request, or try a different subscription). It cannot be worked around from the deployment template, because the template requires a storage account and that always needs `Microsoft.Storage` registered.
 
 ### Deploy
 
