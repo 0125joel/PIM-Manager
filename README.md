@@ -60,7 +60,11 @@ Deploy PIM Manager directly into your own Azure environment using Azure Static W
 
 **Prerequisites:**
 1. An [App Registration](docs/en/01-introduction.md#microsoft-entra-app-registration) in your Microsoft Entra ID tenant with the required permissions
-2. An Azure subscription
+2. An Azure subscription with the `Microsoft.Storage` and `Microsoft.ContainerInstance` resource providers registered. The template runs a one-time deployment script (in an Azure Container Instance) to publish the app, so both providers must be registered first. If they are not, register them and wait for completion before deploying:
+   ```bash
+   az provider register --namespace Microsoft.Storage --wait
+   az provider register --namespace Microsoft.ContainerInstance --wait
+   ```
 
 **Deploy:**
 
