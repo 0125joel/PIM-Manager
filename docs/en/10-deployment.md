@@ -49,9 +49,18 @@ The Managed Identity in the ARM template is a separate concern: it only exists t
 Before clicking Deploy, you need:
 
 1. An **Azure subscription** with permission to create resources in a Resource Group
-2. An **App Registration** in your Entra ID tenant — see [App Registration](#app-registration) below
+2. The `Microsoft.Storage` and `Microsoft.ContainerInstance` **resource providers registered** on the subscription. The template runs a one-time deployment script inside an Azure Container Instance (backed by a storage account) to publish the app, so both providers must be registered first. Most subscriptions already have them; if not, register them once and wait for completion before deploying:
+   ```bash
+   az provider register --namespace Microsoft.Storage --wait
+   az provider register --namespace Microsoft.ContainerInstance --wait
+   ```
+   Registering a provider requires Contributor or Owner on the subscription (Reader cannot register).
+3. An **App Registration** in your Entra ID tenant — see [App Registration](#app-registration) below
 
 > Create the App Registration first, but leave the Redirect URI blank for now. You will add it after deployment once you know your Static Web App URL.
+
+> [!TIP]
+> If deployment fails with `SequencerJob exceeded max allowed time: 1200 seconds` listing `Microsoft.ContainerInstance` and `Microsoft.Storage`, the resource providers above were not registered in time. Run the two `az provider register` commands, confirm both report `Registered` with `az provider show --namespace <name> --query registrationState -o tsv`, then redeploy.
 
 ### Deploy
 
