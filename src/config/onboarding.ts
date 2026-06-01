@@ -1,8 +1,8 @@
-import { LucideIcon, Shield, LayoutDashboard, Puzzle, Wrench, FileDown, Filter, Download, Wand2, Settings, FileSpreadsheet } from "lucide-react";
+import { LucideIcon, Shield, LayoutDashboard, Puzzle, Wrench, FileDown, Filter, Download, Wand2, Settings, FileSpreadsheet, AlertTriangle, Zap } from "lucide-react";
 
 // Manually bumped when there are noteworthy features to announce.
 // Not every release needs highlights — only bump when there's something worth showing.
-export const FEATURE_HIGHLIGHTS_VERSION = "2.0";
+export const FEATURE_HIGHLIGHTS_VERSION = "2.1";
 
 export interface TourGuideItem {
     text: string;
@@ -134,63 +134,64 @@ export const ONBOARDING_STEPS: TourStep[] = [
 // ---------------------------------------------------------------------------
 export const HIGHLIGHT_STEPS: TourStep[] = [
     {
-        id: "hl-configure-intro",
+        id: "hl-policy-preflight",
         target: "configure-modes",
         page: "/configure",
-        title: "New: Configure PIM at Scale",
-        description: "The biggest addition to PIM Manager \u2014 a full configuration engine with three modes.",
+        title: "New: Policy Preflight Validation",
+        description: "PIM Manager now catches incoherent settings before any write is attempted.",
+        icon: AlertTriangle,
+        guides: [
+            { text: "Approval enabled without approvers configured is flagged before you apply" },
+            { text: "Activation duration exceeding the max assignment duration is detected and shown inline" },
+            { text: "Conflicting constraint combinations are surfaced as warnings in the configure flow" },
+            { text: "Preflight runs automatically in Wizard and Manual mode before the apply step" },
+            { text: "Fixing a warning is optional but recommended to avoid Graph API rejections" },
+        ],
+        tooltipPosition: "bottom",
+    },
+    {
+        id: "hl-policy-conflict-detection",
+        target: "configure-modes",
+        page: "/configure",
+        title: "New: Policy Conflict Detection",
+        description: "Existing assignments that would violate a pending policy change are now identified before apply.",
+        icon: Shield,
+        guides: [
+            { text: "Active assignments exceeding a new max eligible duration are surfaced at Review step" },
+            { text: "Conflicts are shown per-assignment so you can decide whether to proceed" },
+            { text: "Apply step repeats conflict warnings before executing writes" },
+            { text: "Works for both Directory Roles and PIM Groups in Wizard and Manual mode" },
+            { text: "No change is blocked outright: you retain full control over what gets applied" },
+        ],
+        tooltipPosition: "bottom",
+    },
+    {
+        id: "hl-throttle-aware-client",
+        target: "configure-modes",
+        page: "/configure",
+        title: "Improved: Throttle-Aware Graph Client",
+        description: "A sliding-window rate limiter now wraps all Graph API calls to prevent cascading 429 errors.",
+        icon: Zap,
+        guides: [
+            { text: "A 500 RU/10s cap matches the Microsoft Graph tenant-level throttle budget" },
+            { text: "Retry-After headers are respected: new requests pause automatically when the budget is exhausted" },
+            { text: "Eliminates the cascading retry storms that could occur on large tenants" },
+            { text: "No configuration needed: the limiter is active by default for all apply operations" },
+        ],
+        tooltipPosition: "bottom",
+    },
+    {
+        id: "hl-friendly-graph-errors",
+        target: "configure-modes",
+        page: "/configure",
+        title: "Improved: Friendly Graph API Error Messages",
+        description: "Raw Graph API error codes are now translated to clear, actionable messages in the apply flow.",
         icon: Wrench,
         guides: [
-            { text: "Wizard \u2014 guided step-by-step flow with backup, preview, and per-rule progress tracking" },
-            { text: "Manual \u2014 direct policy and assignment management with a staged changes workflow" },
-            { text: "Bulk \u2014 upload a CSV to configure many roles or groups at once, with compare view and selective apply" },
-            { text: "Write permissions are requested only when you enter Configure \u2014 not at login" },
-            { text: "Your account needs Privileged Role Administrator or equivalent to apply changes" },
-        ],
-        tooltipPosition: "bottom",
-    },
-    {
-        id: "hl-pim-groups",
-        target: "workload-chips",
-        page: "/dashboard",
-        title: "New: PIM Groups Workload",
-        description: "Enable the PIM Groups workload to manage group-based privileged access alongside Directory Roles.",
-        icon: Puzzle,
-        guides: [
-            { text: "Click the PIM Groups chip to grant consent and load group data" },
-            { text: "Member and Owner policies are managed separately per group" },
-            { text: "Dashboard and Report pages show unified stats across both workloads once enabled" },
-            { text: "Consent is remembered across sessions \u2014 you only need to grant it once" },
-        ],
-        tooltipPosition: "bottom",
-    },
-    {
-        id: "hl-pdf-export",
-        target: "dashboard-export-pdf",
-        page: "/dashboard",
-        title: "New: Dashboard PDF Export",
-        description: "Export a polished PDF report of your PIM security posture for stakeholders and compliance.",
-        icon: FileDown,
-        guides: [
-            { text: "Choose which sections to include: stat cards, charts, and assignment tables" },
-            { text: "Metadata such as tenant ID, user, and report timestamp are included automatically" },
-            { text: "Export reflects your current workload selection and view mode" },
-            { text: "Useful for periodic governance reviews or audit evidence" },
-        ],
-        tooltipPosition: "bottom",
-    },
-    {
-        id: "hl-report-filters",
-        target: "report-filters",
-        page: "/report",
-        title: "Improved: Advanced Report Filtering",
-        description: "Multi-select filters let you slice your assignment data precisely across all workloads.",
-        icon: Filter,
-        guides: [
-            { text: "Filter by role type, assignment type, MFA requirement, approval, scope, and more" },
-            { text: "Select multiple values simultaneously for each filter dimension" },
-            { text: "Active filter count is shown on the button \u2014 click Reset to clear all at once" },
-            { text: "Filters apply across both Directory Roles and PIM Groups in a single view" },
+            { text: "Error codes like RoleAssignmentExists or PolicyViolation show a plain-language explanation" },
+            { text: "Actionable guidance is shown alongside each error so you know what to fix" },
+            { text: "Applies to all apply operations in Wizard, Manual, and Bulk modes" },
+            { text: "Technical error codes are still logged to the browser console for debugging" },
         ],
         tooltipPosition: "bottom",
     },

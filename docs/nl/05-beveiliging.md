@@ -246,7 +246,7 @@ export async function runWorkerPool<TItem, TResult>(
 
 ### Input Validatie
 
-**OData Injectie Bescherming** (`src/components/UserGroupSearch.tsx`):
+**OData Injectie Bescherming** (`src/utils/odataUtils.ts`):
 ```typescript
 function escapeODataString(str: string): string {
   return str.replace(/'/g, "''");  // Escape single quotes
@@ -258,7 +258,7 @@ const filter = `startswith(displayName,'${escapeODataString(debouncedQuery)}')`;
 **Type Safety:**
 - TypeScript strict mode ingeschakeld
 - Runtime validatie bij API grenzen
-- Zod schemas voor complexe datastructuren
+- Strikte TypeScript types voor alle API response shapes
 
 **Error Handling:**
 ```typescript
@@ -413,10 +413,10 @@ if (!isAuthenticated) {
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'unsafe-inline' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -424,7 +424,7 @@ Content-Security-Policy:
 ```
 
 > [!NOTE]
-> `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'unsafe-inline'` in `script-src` is vereist omdat Next.js static export inline RSC hydration scripts (`self.__next_f.push`) injecteert die niet te vermijden zijn. Het inline theme-script wordt geladen vanuit `/theme-init.js` (via `next/script`), maar de Next.js runtime hydration vereist nog steeds `'unsafe-inline'`.
+> `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'wasm-unsafe-eval'` in `script-src` is vereist door `@react-pdf/renderer` om zijn WebAssembly module te initialiseren (nodig voor PDF export). `'unsafe-inline'` in `script-src` is vereist omdat Next.js static export inline RSC hydration scripts (`self.__next_f.push`) injecteert die niet te vermijden zijn. Het inline theme-script wordt geladen vanuit `/theme-init.js` (via `next/script`), maar de Next.js runtime hydration vereist nog steeds `'unsafe-inline'`.
 
 **Aanvullende Headers:**
 ```
@@ -501,7 +501,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 | `src/hooks/useIncrementalConsent.ts` | Consent management | Permission requests, localStorage |
 | `src/utils/workerPool.ts` | Rate limiting | Throttling bescherming, concurrency |
 | `src/utils/rateLimiter.ts` | Sliding-window rate limiter | 500 RU/10s cap, Retry-After header afhandeling |
-| `src/components/UserGroupSearch.tsx` | OData escaping | Input validatie, injectie bescherming |
+| `src/utils/odataUtils.ts` | OData escaping | Input validatie, injectie bescherming |
 | `src/services/directoryRoleService.ts` | Graph API calls | Error handling, data fetching |
 | `next.config.ts` | Build configuratie | Static export, geen server |
 
