@@ -8,8 +8,8 @@ Dit document legt de functies en functionaliteit van de Configuratiepagina uit, 
 
 De Configuratiepagina biedt drie modi voor het beheren van PIM-configuraties:
 
-1. **Wizard Modus** — Een begeleide stapsgewijze procedure voor bulk-configuratie
-2. **Handmatige Modus** — Directe toegang tot rol/groep-selectie en instellingenformulieren, met gestaagde wijzigingen
+1. **Wizard Modus** — Stapsgewijze begeleide configuratie met validatie en preview bij elke stap
+2. **Handmatige Modus** — Volledige controle over individuele rol- en groepsinstellingen met automatisch laden van de huidige configuratie
 3. **Bulk Modus** — CSV-gebaseerde batchconfiguratie voor beleid en toewijzingen voor alle vier CSV-types (Rol Policies, Groep Policies, Rol Toewijzingen, Groep Toewijzingen)
 
 ```

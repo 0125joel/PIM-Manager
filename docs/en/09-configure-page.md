@@ -8,8 +8,8 @@ This document explains the features and functionality of the Configure page, whe
 
 The Configure page provides three modes for managing PIM configurations:
 
-1. **Wizard Mode** — A guided step-by-step process for bulk configuration
-2. **Manual Mode** — Direct access to role/group selection and settings forms, with staged changes
+1. **Wizard Mode** — Step-by-step guided configuration with validation and preview at each stage
+2. **Manual Mode** — Full control over individual role and group settings with auto-load of current configuration
 3. **Bulk Mode** — CSV-based batch configuration for rapid policy and assignment changes across all four CSV types (Role Policies, Group Policies, Role Assignments, Group Assignments)
 
 ```
