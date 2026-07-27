@@ -198,6 +198,8 @@ The review step shows:
 - Assignments to be created
 - Assignments to be removed
 - High-risk role warnings
+- **Policy conflict warnings** — existing assignments that would violate the new policy settings (for example, active assignments that exceed a new maximum eligible duration)
+- **Preflight warnings** — incoherent settings detected before applying (for example, approval required with no approvers configured, or activation duration exceeding the maximum assignment duration)
 
 > [!IMPORTANT]
 > Review carefully — changes will be applied to all selected roles/groups.
@@ -215,8 +217,9 @@ Execute the configuration changes.
 
 **Features:**
 - Real-time progress indicator
+- Policy conflict and preflight warnings surfaced before execution begins
 - Success/failure status per operation
-- Detailed error messages
+- User-friendly error messages (Graph API errors translated to readable descriptions)
 - Retry failed operations button
 - Expandable operation details
 
@@ -565,4 +568,4 @@ Example standards:
 
 ---
 
-*Last updated: March 8, 2026*
+*Last updated: July 27, 2026*

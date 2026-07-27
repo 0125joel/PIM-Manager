@@ -198,6 +198,8 @@ De review stap toont:
 - Toewijzingen die worden gemaakt
 - Toewijzingen die worden verwijderd
 - Waarschuwingen voor hoog-risico rollen
+- **Conflictwaarschuwingen voor beleid** — bestaande toewijzingen die de nieuwe beleidsinstellingen zouden overtreden (bijvoorbeeld actieve toewijzingen die een nieuwe maximale eligible duur overschrijden)
+- **Preflight-waarschuwingen** — incoherente instellingen gedetecteerd voor toepassing (bijvoorbeeld goedkeuring vereist zonder geconfigureerde goedkeurders, of activatieduur die de maximale toewijzingsduur overschrijdt)
 
 > [!IMPORTANT]
 > Controleer zorgvuldig — wijzigingen worden toegepast op alle geselecteerde rollen/groepen.
@@ -215,8 +217,9 @@ Voer de configuratiewijzigingen uit.
 
 **Functies:**
 - Realtime voortgangsindicator
+- Beleidconflict- en preflight-waarschuwingen getoond voor de uitvoering begint
 - Succes/faal status per operatie
-- Gedetailleerde foutmeldingen
+- Gebruiksvriendelijke foutmeldingen (Graph API-fouten vertaald naar leesbare beschrijvingen)
 - Herprobeer gefaalde operaties knop
 - Uitvouwbare operatiedetails
 
@@ -565,4 +568,4 @@ Voorbeeld standaarden:
 
 ---
 
-*Laatst bijgewerkt: 8 maart 2026*
+*Laatst bijgewerkt: 27 juli 2026*
