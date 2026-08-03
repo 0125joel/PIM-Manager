@@ -691,7 +691,7 @@ async function runWorkerPool<TItem, TResult>({
 
 | Workload / Operation | Workers | Delay | Rationale |
 |----------------------|---------|-------|-----------|
-| Directory Roles — policy fetch | 8 | 300ms | Optimized for speed while respecting API limits |
+| Directory Roles — policy fetch | 12 | 200ms | Raised from 8/300ms in v2.1.0; reduces full-tenant policy load time by ~30% |
 | PIM Groups — main data fetch | 3 | 500ms | Conservative to protect group API quota |
 | PIM Groups — unmanaged groups | 5 | 200ms | Moderate load for supplementary data |
 | PIM Groups — full refresh | 8 | 300ms | Maximum throughput for explicit user-triggered refresh |
@@ -1022,7 +1022,7 @@ src/
     ├── retryUtils.ts             # withRetry() exponential backoff for 429/5xx
     ├── durationUtils.ts          # ISO 8601 duration parsing + formatting
     ├── etagCache.ts              # ETag-based HTTP caching
-    ├── scopeUtils.ts             # Scope type detection (7 scope types)
+    ├── scopeUtils.ts             # Scope type detection (6 scope types)
     ├── logger.ts                 # Structured logging with dynamic levels
     ├── authContextApi.ts         # Fetch Conditional Access auth contexts
     ├── alertFormatting.ts        # Security alert icons + colors

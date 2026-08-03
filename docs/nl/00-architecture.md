@@ -686,7 +686,7 @@ async function runWorkerPool<TItem, TResult>({
 
 | Workload / Operatie | Workers | Delay | Rationale |
 |---------------------|---------|-------|-----------|
-| Directory Roles — policy fetch | 8 | 300ms | Geoptimaliseerd, blijft binnen quota (10-22%) |
+| Directory Roles — policy fetch | 12 | 200ms | Verhoogd van 8/300ms in v2.1.0; verkort full-tenant policy laadtijd met ~30% |
 | PIM Groups — hoofddata fetch | 3 | 500ms | Conservatief ter bescherming van group API quota |
 | PIM Groups — onbeheerde groepen | 5 | 200ms | Matige belasting voor aanvullende data |
 | PIM Groups — volledige refresh | 8 | 300ms | Maximale doorvoer bij expliciete gebruikersinitiatief |
@@ -701,8 +701,8 @@ async function runWorkerPool<TItem, TResult>({
 | Small (<50) | 3,500 RU | ~3 RU/req | ~116 req/sec | 26 req/sec (22%) |
 
 **Berekening huidige gebruik:**
-- 8 workers × 3.33 req/sec (1 request per 300ms) = ~26 req/sec totaal
-- Conservatief en veilig voor alle tenant groottes
+- 12 workers × 5 req/sec (1 request per 200ms) = ~60 req/sec totaal (policy fetch)
+- Standaard worker pool (8/300ms) gebruikt ~26 req/sec voor overige operaties
 
 ---
 
@@ -827,7 +827,7 @@ De applicatie binnen het externe ecosysteem:
 
 | Attribuut | Requirement | Hoe bereikt |
 |-----------|-------------|-------------|
-| **Performance** | Initial load < 15s, policies < 5s (50 roles) | Geoptimaliseerde worker pool (8 workers, 300ms), progressive loading |
+| **Performance** | Initial load < 15s, policies < 5s (50 roles) | Geoptimaliseerde worker pool (policy fetch: 12 workers, 200ms; standaard: 8/300ms), progressive loading |
 | **Scalability** | Support 1000+ roles, 100+ groups | Pagination, lazy loading |
 | **Availability** | 99.99% uptime | Static hosting (Cloudflare edge) |
 | **Security** | Minimale permissions, no data storage | MSAL, incremental consent, client-side only |
@@ -1024,7 +1024,7 @@ src/
     ├── retryUtils.ts             # withRetry() exponentiële backoff voor 429/5xx
     ├── durationUtils.ts          # ISO 8601 duration parsing + formattering
     ├── etagCache.ts              # ETag-gebaseerde HTTP caching
-    ├── scopeUtils.ts             # Scope type detectie (7 scope types)
+    ├── scopeUtils.ts             # Scope type detectie (6 scope types)
     ├── logger.ts                 # Gestructureerde logging met dynamische niveaus
     ├── authContextApi.ts         # Haal Conditional Access auth contexten op
     ├── alertFormatting.ts        # Security alert iconen + kleuren
