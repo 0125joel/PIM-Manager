@@ -44,3 +44,6 @@ debug.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/visual-output/
+
+.claude/settings.local.json

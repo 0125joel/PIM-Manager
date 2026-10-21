@@ -1,22 +1,24 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { GRAPH_LOCALE } from "@/config/constants";
-import { Principal } from "@/types/directoryRole.types";
-import {
-    PimGroup,
-    GroupPimAssignment,
-    PimGroupData,
-    GroupType,
-    computeGroupStats,
-    GroupEligibilityScheduleInstance,
-    GroupAssignmentScheduleInstance,
-    GroupPimPolicy,
-    GroupPimSettings,
-    GROUP_POLICY_ROLE_IDS,
-    extractGroupPolicySettings
-} from "@/types/pimGroup.types";
+import { PimGroup, PimGroupData, GroupPimAssignment, GroupType, computeGroupStats, GroupEligibilityScheduleInstance, GroupAssignmentScheduleInstance, GroupPimPolicy, GroupPimSettings, GROUP_POLICY_ROLE_IDS, extractGroupPolicySettings } from "@/types/pimGroup.types";
 import { runWorkerPool } from "@/utils/workerPool";
 import { withRetry } from "@/utils/retryUtils";
+import { graphRateLimiter } from "@/utils/rateLimiter";
+import { fetchUserTypes } from "@/services/directoryRoleService";
+import { applyUserTypes, collectUserCandidateIds } from "@/utils/userTypeUtils";
+import { canKeepApprovers } from "@/utils/policyApprovers";
+
+/**
+ * Resource units per processor (Microsoft Graph throttling limits: a request costs 1, `$expand` adds 1, `$select` takes 1 off,
+ * `groups/{id}/members` costs 3). The full per-group fetch is details (1), eligibility (1), assignments (1) and the policy
+ * assignment with `$expand` (2); the smart refresh re-reads the two schedule lists and the policies, not the details.
+ */
+const COST_FULL_GROUP = 5;
+const COST_GROUP_REFRESH = 4;
+const COST_GROUP_MEMBER_COUNT = 3;
 import { Logger } from "@/utils/logger";
+import { getErrorStatusCode } from "@/utils/errorUtils";
+import { isForbiddenRead } from "@/utils/policyReadAccess";
 
 /**
  * Service for fetching PIM for Groups data from Microsoft Graph API
@@ -64,25 +66,33 @@ async function fetchAllPages<T>(
         allItems.push(...(response.value || []));
         nextLink = response["@odata.nextLink"] || null;
 
-        while (nextLink) {
+        // Cap the page walk to guard against malformed nextLink cycles (same guard as directoryRoleService)
+        const MAX_PAGES = 200;
+        let pageCount = 0;
+        while (nextLink && pageCount < MAX_PAGES) {
+            pageCount++;
             await delay(100);
             const link = nextLink;
             const nextResponse = await withRetry(() => client.api(link).get(), 3, 1000, `pimGroup nextLink ${endpoint}`);
             allItems.push(...(nextResponse.value || []));
             nextLink = nextResponse["@odata.nextLink"] || null;
         }
+        if (pageCount >= MAX_PAGES) {
+            Logger.warn("pimGroup", `fetchAllPages reached MAX_PAGES (${MAX_PAGES}) for ${endpoint}, result may be incomplete`);
+        }
 
         return allItems;
     } catch (error) {
+        // Never hand back the pages read so far as if they were everything: the caller decides what a failure means
         Logger.error("pimGroup", `Failed to fetch all pages for ${endpoint}:`, error);
-        return allItems;
+        throw error;
     }
 }
 
 /**
  * Detect group type from Graph API response
  */
-function detectGroupType(group: any): GroupType {
+function detectGroupType(group: { groupTypes?: string[]; mailEnabled?: boolean; securityEnabled?: boolean }): GroupType {
     if (group.groupTypes?.includes("Unified")) {
         return "m365";
     }
@@ -109,7 +119,7 @@ function detectGroupType(group: any): GroupType {
  *
  * This endpoint requires: PrivilegedAccess.Read.AzureADGroup permission
  */
-export async function fetchPimOnboardedResources(client: Client): Promise<{ id: string; displayName: string }[]> {
+async function fetchPimOnboardedResources(client: Client): Promise<{ id: string; displayName: string }[]> {
     try {
         Logger.debug("PimGroupDataService", "Fetching PIM-onboarded groups via resources endpoint...");
 
@@ -137,10 +147,13 @@ export async function fetchPimOnboardedResources(client: Client): Promise<{ id: 
         }));
 
     } catch (error: unknown) {
-        // If this endpoint fails, fall back to the old method as backup
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        Logger.warn("PimGroupDataService", "Beta resources endpoint failed, falling back to role-assignable filter:", errorMessage);
-        return fetchRoleAssignableGroupsFallback(client);
+        // Only an endpoint that does not exist falls back to the old method; a throttled or failed read must not
+        // quietly change what "onboarded" means, so it fails the load (the pools above retry before it gets here)
+        if (getErrorStatusCode(error) === 404) {
+            Logger.warn("PimGroupDataService", "Beta resources endpoint not found, falling back to role-assignable filter");
+            return fetchRoleAssignableGroupsFallback(client);
+        }
+        throw error;
     }
 }
 
@@ -164,7 +177,7 @@ async function fetchRoleAssignableGroupsFallback(client: Client): Promise<{ id: 
         return groups;
     } catch (error) {
         Logger.error("pimGroup", "Fallback also failed:", error);
-        return [];
+        throw error;
     }
 }
 
@@ -188,9 +201,10 @@ async function fetchEligibilityInstancesForGroup(
         );
         return instances;
     } catch (error) {
-        // Log but don't throw - some groups might not have PIM enabled
+        // A group without PIM data answers with an empty list or 404; any other failure is a failure, not "no assignments"
+        if (getErrorStatusCode(error) === 404) return [];
         Logger.warn("pimGroup", `Failed to fetch eligibility instances for group ${groupId}:`, error);
-        return [];
+        throw error;
     }
 }
 
@@ -213,10 +227,20 @@ async function fetchAssignmentInstancesForGroup(
         );
         return instances;
     } catch (error) {
-        // Log but don't throw - some groups might not have PIM enabled
+        // A group without PIM data answers with an empty list or 404; any other failure is a failure, not "no assignments"
+        if (getErrorStatusCode(error) === 404) return [];
         Logger.warn("pimGroup", `Failed to fetch assignment instances for group ${groupId}:`, error);
-        return [];
+        throw error;
     }
+}
+
+/**
+ * Graph answers `null`, not `false`, for a group that is not role-assignable (tenant test of 2026-10-03, on
+ * `/me/ownedObjects` and on `/groups/{id}`). After a successful read of the group the property is therefore
+ * known: true or not. Only a group that was never read keeps `undefined` ("unknown").
+ */
+export function readIsAssignableToRole(value: boolean | null | undefined): boolean {
+    return value === true;
 }
 
 /**
@@ -227,7 +251,7 @@ async function fetchGroupDetails(client: Client, groupId: string): Promise<PimGr
         const group = await withRetry(
             () => client.api(`/groups/${groupId}`)
                 .version("v1.0")
-                .select("id,displayName,description,mail,mailEnabled,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,isAssignableToRole")
+                .select("id,displayName,description,mail,mailEnabled,securityEnabled,groupTypes,membershipRule,membershipRuleProcessingState,isAssignableToRole,onPremisesSyncEnabled,isManagementRestricted")
                 .header("Accept-Language", GRAPH_LOCALE)
                 .get(),
             3, 1000, 'fetchGroupDetails'
@@ -243,11 +267,14 @@ async function fetchGroupDetails(client: Client, groupId: string): Promise<PimGr
             securityEnabled: group.securityEnabled,
             membershipRule: group.membershipRule,
             membershipRuleProcessingState: group.membershipRuleProcessingState,
-            isAssignableToRole: group.isAssignableToRole
+            isAssignableToRole: readIsAssignableToRole(group.isAssignableToRole),
+            onPremisesSyncEnabled: group.onPremisesSyncEnabled === true,
+            isManagementRestricted: group.isManagementRestricted === true,
         };
     } catch (error) {
+        if (getErrorStatusCode(error) === 404) return null; // the group is gone
         Logger.error("pimGroup", `Failed to fetch group details for ${groupId}:`, error);
-        return null;
+        throw error;
     }
 }
 
@@ -255,6 +282,267 @@ async function fetchGroupDetails(client: Client, groupId: string): Promise<PimGr
  * Progress callback type
  */
 export type PimGroupProgressCallback = (current: number, total: number, status: string) => void;
+
+/**
+ * Map eligibility and assignment schedule instances to the app's assignment shape
+ */
+export function buildGroupAssignments(
+    eligibilityInstances: GroupEligibilityScheduleInstance[],
+    assignmentInstances: GroupAssignmentScheduleInstance[]
+): GroupPimAssignment[] {
+    const assignments: GroupPimAssignment[] = [];
+
+    for (const instance of eligibilityInstances) {
+        assignments.push({
+            id: instance.id,
+            groupId: instance.groupId,
+            principalId: instance.principalId,
+            principal: instance.principal,
+            accessType: instance.accessId,
+            assignmentType: "eligible",
+            memberType: instance.memberType,
+            status: instance.status,
+            startDateTime: instance.startDateTime,
+            endDateTime: instance.endDateTime,
+            scheduleInfo: instance.scheduleInfo
+        });
+    }
+
+    for (const instance of assignmentInstances) {
+        // Graph documents assignmentType as "assigned" (direct assignment) or "activated" (through activation
+        // of an eligibility). Permanent is an assigned instance without an end; an activated one always has an end.
+        const origin = instance.assignmentType?.toLowerCase();
+        const isPermanent = !instance.endDateTime && origin === "assigned";
+        assignments.push({
+            id: instance.id,
+            groupId: instance.groupId,
+            principalId: instance.principalId,
+            principal: instance.principal,
+            accessType: instance.accessId,
+            assignmentType: isPermanent ? "permanent" : "active",
+            assignmentOrigin: origin === "assigned" || origin === "activated" ? origin : undefined,
+            memberType: instance.memberType,
+            status: instance.status,
+            startDateTime: instance.startDateTime,
+            endDateTime: instance.endDateTime
+        });
+    }
+
+    return assignments;
+}
+
+/**
+ * Complete data for one PIM-onboarded group: details, assignments and policies (4 Graph calls)
+ */
+async function fetchManagedGroupData(client: Client, groupId: string): Promise<PimGroupData | null> {
+    const group = await fetchGroupDetails(client, groupId);
+    if (!group) return null;
+
+    const [eligibilityInstances, assignmentInstances, policyRead] = await Promise.all([
+        fetchEligibilityInstancesForGroup(client, groupId),
+        fetchAssignmentInstancesForGroup(client, groupId),
+        fetchGroupPolicies(client, groupId)
+    ]);
+
+    const assignments = buildGroupAssignments(eligibilityInstances, assignmentInstances);
+    return {
+        group,
+        assignments,
+        linkedWorkloads: [],
+        isManaged: true,
+        stats: computeGroupStats(assignments),
+        ...groupPolicyFields(policyRead)
+    };
+}
+
+/**
+ * The policy part of a group's data: the policies and settings as read, or the marker when Graph answered 403. A marked
+ * group carries no policies and no settings, so no reader can take a missing policy for "not set" (FIX-11).
+ */
+export function groupPolicyFields(read: GroupPolicyRead, previous?: PimGroupData["policies"]): Pick<PimGroupData, "policies" | "settings" | "policiesForbidden"> {
+    if (read.forbidden) return { policies: undefined, settings: undefined, policiesForbidden: true };
+    return { policies: toGroupPolicies(read.policies, previous), settings: read.settings, policiesForbidden: undefined };
+}
+
+/** The Member and Owner policy of a group by type; undefined when Graph returned none. */
+export function toGroupPolicies(list: GroupPimPolicy[], previous?: PimGroupData["policies"]): PimGroupData["policies"] | undefined {
+    if (list.length === 0) return undefined;
+    const policies: NonNullable<PimGroupData["policies"]> = {};
+    for (const policy of list) {
+        const type = policy.policyType === "member" ? "member" : "owner";
+        const before = previous?.[type];
+        // Same approvers as the policy read before: keep the names, so a refresh does not look them up again
+        const keep = before && canKeepApprovers({ rules: before.rules, approvers: before.approvers }, policy.rules);
+        policies[type] = keep ? { ...policy, approvers: before.approvers } : policy;
+    }
+    return policies;
+}
+
+/**
+ * Role-assignable group that is not onboarded to PIM: details only, no PIM data
+ */
+function toUnmanagedGroupData(group: PimGroup): PimGroupData {
+    return {
+        group,
+        assignments: [],
+        linkedWorkloads: [],
+        isManaged: false,
+        stats: computeGroupStats([])
+    };
+}
+
+interface ReliablePoolOptions<T> {
+    ids: string[];
+    workerCount: number;
+    delayMs: number;
+    cost: number | ((id: string) => number);
+    signal?: AbortSignal;
+    processor: (id: string) => Promise<T | null>;
+    onProgress?: (current: number, total: number) => void;
+    /** What the ids are, for the error sentence */
+    noun: string;
+}
+
+/**
+ * Runs the per-group reads and never hands back a silently incomplete set: what failed after every retry gets a second,
+ * slower pass after a pause, and what still fails makes the whole load fail with a sentence that says how many and why.
+ * An answer of "not found" (null) is an answer, only a thrown error is a failure.
+ */
+export async function runReliablePool<T>({ ids, workerCount, delayMs, cost, signal, processor, onProgress, noun }: ReliablePoolOptions<T>): Promise<Map<string, T>> {
+    const results = new Map<string, T>();
+    let failed: { id: string; message: string }[] = [];
+
+    const pass = async (items: string[], workers: number, pause: number, report?: (current: number, total: number) => void) => {
+        failed = [];
+        const { results: got } = await runWorkerPool<string, T>({
+            items,
+            workerCount: workers,
+            delayMs: pause,
+            signal,
+            rateLimiter: graphRateLimiter,
+            costPerItem: cost,
+            processor,
+            onItemError: (id, message) => failed.push({ id, message }),
+            onProgress: report,
+        });
+        for (const [id, value] of got) results.set(id, value);
+    };
+
+    await pass(ids, workerCount, delayMs, onProgress);
+
+    if (failed.length > 0 && !signal?.aborted) {
+        const retryIds = failed.map((f) => f.id);
+        Logger.warn("pimGroup", `${retryIds.length} of ${ids.length} ${noun} failed, trying them again at a slower pace`);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (!signal?.aborted) await pass(retryIds, 3, 500);
+    }
+
+    if (signal?.aborted) throw new Error("Aborted");
+    if (failed.length > 0) {
+        Logger.error("pimGroup", `${failed.length} ${noun} failed twice, first reason: ${failed[0].message}`);
+        // Short on purpose: `describeLoadFailure` shows messages of up to 140 characters as they are
+        throw new Error(`${failed.length} of ${ids.length} ${noun} could not be loaded after retrying.`);
+    }
+    return results;
+}
+
+/**
+ * Direct member count of one group: GET /beta/groups/{id}/members/$count with `ConsistencyLevel: eventual`
+ * (required for $count). Beta because v1.0 does not list service principals as members (documented known
+ * issue). Group.Read.All covers it. Undefined when the call fails.
+ */
+async function fetchGroupMemberCount(client: Client, groupId: string): Promise<number | undefined> {
+    try {
+        const response = await withRetry(
+            () => client.api(`/groups/${groupId}/members/$count`).version("beta").header("ConsistencyLevel", "eventual").get(),
+            3, 1000, "fetchGroupMemberCount"
+        );
+        const count = Number(response);
+        return Number.isFinite(count) ? count : undefined;
+    } catch (error) {
+        Logger.warn("pimGroup", `Could not read the member count of group ${groupId}:`, error);
+        return undefined;
+    }
+}
+
+/**
+ * Adds `memberCount` to the unmanaged groups: 6 workers, 500 ms delay. Measured 2026-10-16 (dev tenant, 60 groups): each
+ * call costs 1 resource unit (`x-ms-resource-unit`), so 6 workers use about 3% of the 3,500 RU per 10 s a small tenant has.
+ * Non-fatal: a group whose count cannot be read keeps `memberCount` undefined.
+ */
+async function addMemberCounts(
+    client: Client,
+    unmanaged: PimGroupData[],
+    signal?: AbortSignal
+): Promise<PimGroupData[]> {
+    if (unmanaged.length === 0) return unmanaged;
+
+    const counts = new Map<string, number>();
+    await runWorkerPool<PimGroupData, number>({
+        items: unmanaged,
+        workerCount: 6,
+        delayMs: 500,
+        signal,
+        rateLimiter: graphRateLimiter,
+        costPerItem: COST_GROUP_MEMBER_COUNT,
+        processor: async (data) => {
+            const count = await fetchGroupMemberCount(client, data.group.id);
+            if (count !== undefined) counts.set(data.group.id, count);
+            return count ?? null;
+        }
+    });
+
+    if (signal?.aborted) throw new Error("Aborted");
+
+    return unmanaged.map(data => (counts.has(data.group.id) ? { ...data, memberCount: counts.get(data.group.id) } : data));
+}
+
+/**
+ * `principalUserType` (Member or Guest) on the user principals of the group assignments (Report spec 5.3b), from the same
+ * chunked `id in (...)` lookup the roles use. Ids already read on an earlier load (`previous`) are not asked again. A failed
+ * lookup is logged and leaves the type unknown: guests are then not counted, nothing else changes.
+ */
+export async function addGroupUserTypes(
+    client: Client,
+    groups: PimGroupData[],
+    previous: PimGroupData[] = [],
+    signal?: AbortSignal
+): Promise<PimGroupData[]> {
+    const known = new Map<string, string>();
+    for (const data of previous) {
+        for (const a of data.assignments) if (a.principalUserType) known.set(a.principalId, a.principalUserType);
+    }
+    const candidates = collectUserCandidateIds(groups.map((g) => g.assignments));
+    const unknownIds = candidates.filter((id) => !known.has(id));
+    let fetched = new Map<string, string>();
+    try {
+        fetched = await fetchUserTypes(client, unknownIds, signal);
+    } catch (error: unknown) {
+        if (signal?.aborted) throw error;
+        Logger.warn("pimGroup", "Reading user types of group members failed, guests stay unknown:", error);
+    }
+    const userTypes = new Map<string, string>(candidates.filter((id) => known.has(id)).map((id) => [id, known.get(id) as string]));
+    fetched.forEach((type, id) => userTypes.set(id, type));
+    if (userTypes.size === 0) return groups;
+    return groups.map((g) => (g.assignments.length === 0 ? g : { ...g, assignments: applyUserTypes(g.assignments, userTypes) }));
+}
+
+/**
+ * Inventory: PIM-onboarded group ids plus the role-assignable groups that are not onboarded (unmanaged)
+ */
+async function fetchGroupInventory(client: Client): Promise<{ onboardedIds: string[]; unmanagedIds: string[] }> {
+    const [pimResources, allRoleAssignable] = await Promise.all([
+        fetchPimOnboardedResources(client),
+        fetchRoleAssignableGroupsFallback(client)
+    ]);
+
+    const onboarded = new Set(pimResources.map(r => r.id));
+    const unmanagedIds = allRoleAssignable.map(g => g.id).filter(id => !onboarded.has(id));
+
+    Logger.debug("PimGroupDataService", `Inventory: ${allRoleAssignable.length} total role-assignable, ${onboarded.size} managed, ${unmanagedIds.length} UNMANAGED.`);
+
+    return { onboardedIds: Array.from(onboarded), unmanagedIds };
+}
 
 /**
  * Main function: Fetch all PIM for Groups data
@@ -280,101 +568,23 @@ export async function fetchAllPimGroupData(
         // Phase 1: Fetch BOTH PIM-onboarded groups AND all Role-Assignable groups
         onProgress?.(0, 100, "Scanning group inventory...");
 
-        const [pimResources, allRoleAssignable] = await Promise.all([
-            fetchPimOnboardedResources(client),
-            fetchRoleAssignableGroupsFallback(client) // Ideally rename this function later
-        ]);
+        const { onboardedIds, unmanagedIds } = await fetchGroupInventory(client);
 
         if (signal?.aborted) throw new Error("Aborted");
-
-        const onboardedIds = new Set(pimResources.map(r => r.id));
-        const onboardedGroups = pimResources; // These are the ones we will fetch PIM data for
-
-        // Identify Unmanaged Groups: Role-Assignable BUT NOT in PIM Resources
-        const unmanagedGroups = allRoleAssignable.filter(g => !onboardedIds.has(g.id));
-
-        Logger.debug("PimGroupDataService", `Inventory: ${allRoleAssignable.length} total role-assignable, ${onboardedGroups.length} managed, ${unmanagedGroups.length} UNMANAGED.`);
-
-        const totalToProcess = onboardedGroups.length;
 
         // Phase 2: Process Managed Groups (parallel fetch of assignments/policies)
         // If no managed groups, we still might have unmanaged ones to return
         let managedResults: PimGroupData[] = [];
 
-        if (totalToProcess > 0) {
-            const { results } = await runWorkerPool<string, PimGroupData>({
-                items: onboardedGroups.map(g => g.id),
+        if (onboardedIds.length > 0) {
+            const results = await runReliablePool<PimGroupData>({
+                ids: onboardedIds,
                 workerCount: 3,
                 delayMs: 500,
+                cost: COST_FULL_GROUP,
                 signal,
-                processor: async (groupId, workerId) => {
-                    // Fetch group details
-                    const group = await fetchGroupDetails(client, groupId);
-                    if (!group) return null;
-
-                    // Initialize group data
-                    const groupData: PimGroupData = {
-                        group,
-                        assignments: [],
-                        linkedWorkloads: [],
-                        isManaged: true // Explicitly true
-                    };
-
-                    // Fetch eligibility, assignment instances, and policies
-                    const [eligibilityInstances, assignmentInstances, policyResult] = await Promise.all([
-                        fetchEligibilityInstancesForGroup(client, groupId),
-                        fetchAssignmentInstancesForGroup(client, groupId),
-                        fetchGroupPolicies(client, groupId)
-                    ]);
-
-                    // Process eligibility
-                    for (const instance of eligibilityInstances) {
-                        groupData.assignments.push({
-                            id: instance.id,
-                            groupId: instance.groupId,
-                            principalId: instance.principalId,
-                            principal: (instance as any).principal,
-                            accessType: instance.accessId,
-                            assignmentType: "eligible",
-                            memberType: instance.memberType,
-                            status: instance.status,
-                            startDateTime: instance.startDateTime,
-                            endDateTime: instance.endDateTime,
-                            scheduleInfo: instance.scheduleInfo
-                        });
-                    }
-
-                    // Process assignments
-                    for (const instance of assignmentInstances) {
-                        const isPermanent = !instance.endDateTime && instance.assignmentType === "Activated";
-                        groupData.assignments.push({
-                            id: instance.id,
-                            groupId: instance.groupId,
-                            principalId: instance.principalId,
-                            principal: (instance as any).principal,
-                            accessType: instance.accessId,
-                            assignmentType: isPermanent ? "permanent" : "active",
-                            memberType: instance.memberType,
-                            status: instance.status,
-                            startDateTime: instance.startDateTime,
-                            endDateTime: instance.endDateTime
-                        });
-                    }
-
-                    // Compute stats
-                    groupData.stats = computeGroupStats(groupData.assignments);
-                    groupData.settings = policyResult.settings;
-
-                    if (policyResult.policies.length > 0) {
-                        groupData.policies = {};
-                        for (const policy of policyResult.policies) {
-                            if (policy.policyType === "member") groupData.policies.member = policy;
-                            else groupData.policies.owner = policy;
-                        }
-                    }
-
-                    return groupData;
-                },
+                noun: "PIM groups",
+                processor: (groupId) => fetchManagedGroupData(client, groupId),
                 onProgress: (current, totalItems) => {
                     const progressPercent = Math.round((current / totalItems) * 80); // 80% for managed
                     onProgress?.(progressPercent, 100, `Processing managed groups (${current}/${totalItems})...`);
@@ -386,46 +596,31 @@ export async function fetchAllPimGroupData(
         if (signal?.aborted) throw new Error("Aborted");
 
         // Phase 3: Process Unmanaged Groups (Lightweight)
-        // We already have ID and DisplayName. We need minimal details (description, type) but NO PIM data.
-        // We can fetch details in bulk or parallel if needed, or just use what we have + type detection.
-        // For accurate "Group Type" classification, we ideally need to fetch details.
+        // One details call per group for Type/Mail info, no PIM data.
+        onProgress?.(85, 100, `Processing ${unmanagedIds.length} unmanaged groups...`);
 
-        onProgress?.(85, 100, `Processing ${unmanagedGroups.length} unmanaged groups...`);
-
-        // We'll use a simplified fetch for these to get Type/Mail info
-        const unmanagedResults: PimGroupData[] = [];
-        const { results: unmanagedDetails } = await runWorkerPool<string, PimGroupData>({
-            items: unmanagedGroups.map(g => g.id),
+        const unmanagedDetails = await runReliablePool<PimGroupData>({
+            ids: unmanagedIds,
             workerCount: 5, // Higher concurrency as it's just one lightweight call per group
             delayMs: 200,
+            cost: 1,
             signal,
+            noun: "unmanaged groups",
             processor: async (groupId) => {
                 const group = await fetchGroupDetails(client, groupId);
-                if (!group) return null;
-
-                return {
-                    group,
-                    assignments: [], // No PIM assignments
-                    linkedWorkloads: [],
-                    isManaged: false, // FLAGGED AS UNMANAGED
-                    stats: { // Zero stats
-                        totalAssignments: 0,
-                        activeMembers: 0,
-                        eligibleMembers: 0,
-                        permanentMembers: 0,
-                        activeOwners: 0,
-                        eligibleOwners: 0,
-                        permanentOwners: 0
-                    }
-                };
+                return group ? toUnmanagedGroupData(group) : null;
             }
         });
-        unmanagedResults.push(...Array.from(unmanagedDetails.values()));
+        onProgress?.(92, 100, `Counting members of ${unmanagedDetails.size} unmanaged groups...`);
+        const unmanagedResults = await addMemberCounts(client, Array.from(unmanagedDetails.values()), signal);
 
         Logger.debug("PimGroupDataService", `Complete. Managed: ${managedResults.length}, Unmanaged: ${unmanagedResults.length}`);
 
+        onProgress?.(95, 100, "Reading user types...");
+        const typedManaged = await addGroupUserTypes(client, managedResults, [], signal);
+
         onProgress?.(100, 100, "Complete");
-        return [...managedResults, ...unmanagedResults];
+        return [...typedManaged, ...unmanagedResults];
 
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -438,21 +633,131 @@ export async function fetchAllPimGroupData(
     }
 }
 
+/**
+ * Smart refresh: re-read the PIM inventory and every onboarded group's eligibility
+ * and assignment schedule instances and its policies, keeping the group details that
+ * are already loaded (and the approver names of a policy whose approvers did not change).
+ * Groups that are new to PIM take the complete per-group fetch, groups that left PIM keep
+ * their details as unmanaged, groups that are gone are dropped. Graph has no delta for PIM
+ * eligibility or policies, so this is the cheapest correct refresh: one inventory read plus
+ * three calls per onboarded group.
+ */
+export async function refreshPimGroupAssignments(
+    client: Client,
+    currentData: PimGroupData[],
+    onProgress?: PimGroupProgressCallback,
+    signal?: AbortSignal
+): Promise<PimGroupData[]> {
+    try {
+        if (signal?.aborted) throw new Error("Aborted");
+
+        onProgress?.(0, 100, "Scanning group inventory...");
+
+        const { onboardedIds, unmanagedIds } = await fetchGroupInventory(client);
+
+        if (signal?.aborted) throw new Error("Aborted");
+
+        const cached = new Map(currentData.map(g => [g.group.id, g]));
+
+        let managedResults: PimGroupData[] = [];
+
+        if (onboardedIds.length > 0) {
+            const results = await runReliablePool<PimGroupData>({
+                ids: onboardedIds,
+                workerCount: 3,
+                delayMs: 500,
+                signal,
+                noun: "PIM groups",
+                cost: (groupId) => (cached.get(groupId)?.isManaged ? COST_GROUP_REFRESH : COST_FULL_GROUP),
+                processor: async (groupId) => {
+                    const existing = cached.get(groupId);
+                    if (!existing?.isManaged) {
+                        return fetchManagedGroupData(client, groupId);
+                    }
+
+                    // Graph has no delta for policies either: a setting changed in Entra only shows when it is read again
+                    const [eligibilityInstances, assignmentInstances, policyRead] = await Promise.all([
+                        fetchEligibilityInstancesForGroup(client, groupId),
+                        fetchAssignmentInstancesForGroup(client, groupId),
+                        fetchGroupPolicies(client, groupId)
+                    ]);
+                    const assignments = buildGroupAssignments(eligibilityInstances, assignmentInstances);
+
+                    return {
+                        ...existing,
+                        assignments,
+                        stats: computeGroupStats(assignments),
+                        ...groupPolicyFields(policyRead, existing.policies),
+                    };
+                },
+                onProgress: (current, totalItems) => {
+                    const progressPercent = Math.round((current / totalItems) * 80);
+                    onProgress?.(progressPercent, 100, `Refreshing managed groups (${current}/${totalItems})...`);
+                }
+            });
+            managedResults = Array.from(results.values());
+        }
+
+        if (signal?.aborted) throw new Error("Aborted");
+
+        const unmanagedResults: PimGroupData[] = [];
+        const unmanagedToFetch: string[] = [];
+        for (const groupId of unmanagedIds) {
+            const existing = cached.get(groupId);
+            if (existing) {
+                // Keep the previous count as a fallback in case reading it again fails
+                unmanagedResults.push({ ...toUnmanagedGroupData(existing.group), memberCount: existing.memberCount });
+            } else {
+                unmanagedToFetch.push(groupId);
+            }
+        }
+
+        if (unmanagedToFetch.length > 0) {
+            onProgress?.(85, 100, `Processing ${unmanagedToFetch.length} new unmanaged groups...`);
+
+            const unmanagedDetails = await runReliablePool<PimGroupData>({
+                ids: unmanagedToFetch,
+                workerCount: 5,
+                delayMs: 200,
+                cost: 1,
+                signal,
+                noun: "unmanaged groups",
+                processor: async (groupId) => {
+                    const group = await fetchGroupDetails(client, groupId);
+                    return group ? toUnmanagedGroupData(group) : null;
+                }
+            });
+            unmanagedResults.push(...Array.from(unmanagedDetails.values()));
+        }
+
+        // Member counts change without any signal, so every unmanaged group is counted again on a refresh
+        onProgress?.(92, 100, `Counting members of ${unmanagedResults.length} unmanaged groups...`);
+        const countedUnmanaged = await addMemberCounts(client, unmanagedResults, signal);
+
+        Logger.debug("PimGroupDataService", `Refresh complete. Managed: ${managedResults.length}, Unmanaged: ${countedUnmanaged.length}`);
+
+        onProgress?.(95, 100, "Reading user types...");
+        const typedManaged = await addGroupUserTypes(client, managedResults, currentData, signal);
+
+        onProgress?.(100, 100, "Complete");
+        return [...typedManaged, ...countedUnmanaged];
+
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (signal?.aborted || errorMessage === "Aborted") {
+            Logger.info("pimGroup", "Refresh aborted");
+            throw error;
+        }
+        Logger.error("pimGroup", "Failed to refresh PIM group data:", error);
+        throw error;
+    }
+}
+
 export { getAggregatedGroupStats } from "@/utils/groupStatsUtils";
 
 // ============================================================================
 // POLICY FETCHING (Progressive Loading - like Directory Roles)
 // ============================================================================
-
-/**
- * Callback type for when a group's policies are loaded
- */
-export type GroupPolicyLoadedCallback = (
-    groupId: string,
-    policies: GroupPimPolicy[],
-    settings: GroupPimSettings,
-    error?: string
-) => void;
 
 // Track which group policies have been fetched (for deduplication)
 const fetchedGroupPolicies = new Set<string>();
@@ -465,6 +770,14 @@ export function clearGroupPolicyCache(): void {
     Logger.debug("PimGroupPolicies", "Cache cleared");
 }
 
+/** What the policy read of one group answered: its policies, or the 403 of a user who may not read them */
+export interface GroupPolicyRead {
+    policies: GroupPimPolicy[];
+    settings: GroupPimSettings;
+    /** Graph answered 403: not readable with the current access (not a failure, not "no policy") */
+    forbidden: boolean;
+}
+
 /**
  * Fetch PIM policies for a single group
  * Returns Member and Owner policies with all rules
@@ -473,18 +786,21 @@ export function clearGroupPolicyCache(): void {
  * GET /policies/unifiedRoleManagementPolicyAssignments
  *     ?$filter=scopeId eq '{groupId}' and scopeType eq 'Group'
  *     &$expand=policy($expand=rules)
+ *
+ * A 403 is an answer about the signed-in user (a user without a role that may read PIM settings, or without the owner
+ * right on this group): it is not retried and it does not fail the load; the group is marked `forbidden` (FIX-11).
  */
-async function fetchGroupPolicies(
+export async function fetchGroupPolicies(
     client: Client,
     groupId: string
-): Promise<{ policies: GroupPimPolicy[]; settings: GroupPimSettings }> {
+): Promise<GroupPolicyRead> {
     try {
         // Use same endpoint structure as Directory Roles (pimApi.ts)
-        // Note: Using beta version for Groups (v1.0 not supported for scopeType='Group')
+        // v1.0 answers the query for scopeType 'Group' too (Learn, list roleManagementPolicyAssignments; tenant test T6 and 2026-10-16: same assignments and rules as beta)
         const response = await withRetry(
             () => client
                 .api("/policies/roleManagementPolicyAssignments")
-                .version("beta")
+                .version("v1.0")
                 .header("Accept-Language", GRAPH_LOCALE)
                 .filter(`scopeId eq '${groupId}' and scopeType eq 'Group'`)
                 .expand("policy($expand=rules)")
@@ -531,12 +847,17 @@ async function fetchGroupPolicies(
             combinedSettings = { ...combinedSettings, ...policySettings };
         }
 
-        return { policies, settings: combinedSettings };
+        return { policies, settings: combinedSettings, forbidden: false };
 
     } catch (error: unknown) {
+        if (getErrorStatusCode(error) === 404) return { policies: [], settings: {}, forbidden: false };
+        if (isForbiddenRead(error)) {
+            Logger.info('PimGroupPolicies', `Policies of group ${groupId} are not readable with the current access`);
+            return { policies: [], settings: {}, forbidden: true };
+        }
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         Logger.warn('PimGroupPolicies', `Failed to fetch policies for group ${groupId}:`, errorMessage);
-        return { policies: [], settings: {} };
+        throw error;
     }
 }
 
@@ -547,7 +868,7 @@ async function fetchGroupPolicies(
 export async function fetchSingleGroupPolicy(
     client: Client,
     groupId: string
-): Promise<{ policies: GroupPimPolicy[]; settings: GroupPimSettings } | "CACHED"> {
+): Promise<GroupPolicyRead | "CACHED"> {
     // Check if already fetched
     if (fetchedGroupPolicies.has(groupId)) {
         Logger.debug("PimGroupPolicies", `Policy for ${groupId} already fetched, skipping`);
@@ -555,227 +876,7 @@ export async function fetchSingleGroupPolicy(
     }
 
     const result = await fetchGroupPolicies(client, groupId);
-    fetchedGroupPolicies.add(groupId);
+    // A 403 is not an answer that was read: the next call asks again
+    if (!result.forbidden) fetchedGroupPolicies.add(groupId);
     return result;
-}
-
-/**
- * CONCURRENT fetch PIM policies for multiple groups using worker pool
- * Uses same pattern as Directory Roles for progressive loading
- *
- * Expected speedup: ~3x faster than sequential (3 workers)
- */
-export async function concurrentFetchGroupPolicies(
-    client: Client,
-    groupIds: string[],
-    concurrency: number = 8,
-    delayMs: number = 300,
-    onProgress?: (current: number, total: number) => void,
-    onPolicyLoaded?: GroupPolicyLoadedCallback,
-    signal?: AbortSignal
-): Promise<Map<string, { policies: GroupPimPolicy[]; settings: GroupPimSettings }>> {
-    const policyMap = new Map<string, { policies: GroupPimPolicy[]; settings: GroupPimSettings }>();
-
-    // Filter out already-fetched groupIds
-    const unfetchedGroupIds = groupIds.filter(id => !fetchedGroupPolicies.has(id));
-    const skippedCount = groupIds.length - unfetchedGroupIds.length;
-
-    if (skippedCount > 0) {
-        Logger.debug("PimGroupPolicies", `Skipping ${skippedCount} already-fetched policies`);
-    }
-
-    if (unfetchedGroupIds.length === 0) {
-        onProgress?.(groupIds.length, groupIds.length);
-        return policyMap;
-    }
-
-    // Use universal worker pool
-    const { results, succeeded, failed } = await runWorkerPool<string, { policies: GroupPimPolicy[]; settings: GroupPimSettings }>({
-        items: unfetchedGroupIds,
-        workerCount: concurrency,
-        delayMs: delayMs,
-        signal,
-        processor: async (groupId, workerId) => {
-            try {
-                const result = await fetchGroupPolicies(client, groupId);
-
-                fetchedGroupPolicies.add(groupId);
-                policyMap.set(groupId, result);
-
-                // Notify caller that policy is loaded (for progressive UI updates)
-                onPolicyLoaded?.(groupId, result.policies, result.settings);
-                return result;
-
-            } catch (error: unknown) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                fetchedGroupPolicies.add(groupId); // Mark as fetched even on error
-                onPolicyLoaded?.(groupId, [], {}, errorMsg);
-                throw error;
-            }
-        },
-        onProgress: (current, total) => {
-            // Adjust progress to include skipped items
-            onProgress?.(skippedCount + current, groupIds.length);
-        }
-    });
-
-    Logger.debug("PimGroupPolicies", `Completed: ${succeeded}/${groupIds.length} policies (${failed} failed)`);
-    return policyMap;
-}
-
-/**
- * Fetch and compare group policies to detect changes.
- *
- * Similar to fetchAndComparePolicies() for Directory Roles, but for PIM Groups.
- * Fetches fresh policies for all groups and compares with existing policies
- * to detect which groups had policy changes.
- *
- * @param client - Microsoft Graph client
- * @param existingGroups - Current group data with policies
- * @param onProgress - Optional progress callback
- * @param signal - Optional abort signal
- * @returns Object with changedGroupIds array and updatedGroups array
- */
-
-/**
- * Smart Sync: Sync groups using Delta changes
- * Merges changes into existing data to avoid full re-fetch
- */
-export async function syncGroupsWithDelta(
-    client: Client,
-    currentData: PimGroupData[],
-    changes: import("@/services/deltaService").GroupDeltaChange[],
-    onProgress?: PimGroupProgressCallback
-): Promise<PimGroupData[]> {
-    Logger.debug("SmartSync", `Syncing ${changes.length} group changes into ${currentData.length} existing groups`);
-
-    // 1. Identify IDs
-    const changedIds = new Set<string>();
-    const deletedIds = new Set<string>();
-
-    for (const change of changes) {
-        if (change.isDeleted) {
-            deletedIds.add(change.id);
-        } else {
-            changedIds.add(change.id);
-        }
-    }
-
-    // 2. Remove deleted groups
-    const remainingData = currentData.filter(g => !deletedIds.has(g.group.id));
-
-    // 3. Process Additions/Updates
-    if (changedIds.size === 0) {
-        return remainingData;
-    }
-
-    onProgress?.(0, changedIds.size, `Refreshing ${changedIds.size} changed groups...`);
-
-    // Re-implementing the worker pool fetch for specific IDs:
-    const groupsToFetch = Array.from(changedIds);
-
-    // Note: We don't pass signal here yet but for consistency we should traverse this path too if needed later.
-    const { results } = await runWorkerPool<string, PimGroupData>({
-        items: groupsToFetch,
-        workerCount: 8,
-        delayMs: 300,
-        processor: async (groupId, workerId) => {
-            // Fetch group details
-            const group = await fetchGroupDetails(client, groupId);
-            if (!group) return null;
-
-            // Initialize group data
-            const groupData: PimGroupData = {
-                group,
-                assignments: [],
-                linkedWorkloads: [],
-                isManaged: true // Assume managed if coming from PIM delta? Actually delta is from /groups/delta so it includes ALL groups
-            };
-
-            // Let's fetch everything.
-            const [eligibilityInstances, assignmentInstances, policyResult] = await Promise.all([
-                fetchEligibilityInstancesForGroup(client, groupId),
-                fetchAssignmentInstancesForGroup(client, groupId),
-                fetchGroupPolicies(client, groupId)
-            ]);
-
-            // If no PIM data found, mark as unmanaged/ignore
-            const hasPimData = eligibilityInstances.length > 0 ||
-                assignmentInstances.length > 0 ||
-                !!policyResult.settings.memberMaxDuration ||
-                !!policyResult.settings.ownerMaxDuration;
-
-            // Process eligibility
-            for (const instance of eligibilityInstances) {
-                groupData.assignments.push({
-                    id: instance.id,
-                    groupId: instance.groupId,
-                    principalId: instance.principalId,
-                    principal: (instance as any).principal,
-                    accessType: instance.accessId,
-                    assignmentType: "eligible",
-                    memberType: instance.memberType,
-                    status: instance.status,
-                    startDateTime: instance.startDateTime,
-                    endDateTime: instance.endDateTime,
-                    scheduleInfo: instance.scheduleInfo
-                });
-            }
-            // Process assignments
-            for (const instance of assignmentInstances) {
-                const isPermanent = !instance.endDateTime && instance.assignmentType === "Activated";
-                groupData.assignments.push({
-                    id: instance.id,
-                    groupId: instance.groupId,
-                    principalId: instance.principalId,
-                    principal: (instance as any).principal,
-                    accessType: instance.accessId,
-                    assignmentType: isPermanent ? "permanent" : "active",
-                    memberType: instance.memberType,
-                    status: instance.status,
-                    startDateTime: instance.startDateTime,
-                    endDateTime: instance.endDateTime
-                });
-            }
-            // Policies
-            groupData.settings = policyResult.settings;
-            if (policyResult.policies.length > 0) {
-                groupData.policies = {};
-                for (const policy of policyResult.policies) {
-                    if (policy.policyType === "member") groupData.policies.member = policy;
-                    else groupData.policies.owner = policy;
-                }
-            }
-            groupData.stats = computeGroupStats(groupData.assignments);
-
-            // Decision: Is this a "Managed PIM Group" or "Unmanaged"?
-            if (hasPimData) {
-                groupData.isManaged = true;
-                return groupData;
-            } else if (group.isAssignableToRole) {
-                groupData.isManaged = false;
-                return groupData;
-            }
-            return null; // Not PIM and not role-assignable (shouldn't happen if filter was correct, but safe)
-        },
-        onProgress: (current, totalItems) => {
-            // onProgress?.(current, totalItems, ...);
-        }
-    });
-
-    const newOrUpdatedGroups = Array.from(results.values());
-
-    // Merge logic
-    // We have `remainingData` (old groups minus deleted)
-    // We have `newOrUpdatedGroups` (freshly fetched)
-
-    // Create a map of remaining data for easy update
-    const dataMap = new Map(remainingData.map(g => [g.group.id, g]));
-
-    // Update/Add new groups
-    for (const group of newOrUpdatedGroups) {
-        dataMap.set(group.group.id, group);
-    }
-
-    return Array.from(dataMap.values());
 }

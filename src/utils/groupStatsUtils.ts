@@ -1,8 +1,8 @@
 import { PimGroupData } from "@/types/pimGroup.types";
 
 /**
- * Get aggregated stats across all PIM groups.
- * Pure utility function — no Graph API calls.
+ * Get aggregated stats across all PIM for Groups.
+ * Pure utility function, no Graph API calls.
  */
 export function getAggregatedGroupStats(groupData: PimGroupData[]): {
     totalGroups: number;
@@ -44,4 +44,26 @@ export function getAggregatedGroupStats(groupData: PimGroupData[]): {
         totalPermanentOwners,
         totalAssignments
     };
+}
+
+/**
+ * Role-assignable groups in the tenant and how many of them are onboarded to PIM
+ * (the intersection). Card "Groups under PIM" divides the second by the first.
+ * Every group in the data carries `isAssignableToRole` from the group details; unmanaged
+ * groups come from the role-assignable inventory.
+ */
+export function getRoleAssignableCounts(groupData: PimGroupData[]): {
+    roleAssignableCount: number;
+    onboardedRoleAssignableCount: number;
+} {
+    let roleAssignableCount = 0;
+    let onboardedRoleAssignableCount = 0;
+
+    for (const data of groupData) {
+        if (data.group.isAssignableToRole !== true) continue;
+        roleAssignableCount++;
+        if (data.isManaged !== false) onboardedRoleAssignableCount++;
+    }
+
+    return { roleAssignableCount, onboardedRoleAssignableCount };
 }

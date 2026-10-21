@@ -1,393 +1,43 @@
 # Configure Page
 
-This document explains the features and functionality of the Configure page, where you can configure PIM settings for roles and groups.
+This document explains the Configure page, where you change PIM settings and assignments for roles and groups. Every change goes through one basket, one review and one apply.
 
 ---
 
 ## Overview
 
-The Configure page provides three modes for managing PIM configurations:
+The start page shows your **write access** (what you may change, per area), the **entry cards**, the **access model** panel and **Last applies**. Four modes sit in the mode bar, kept in the URL (`mode=edit|guided|import|model`):
 
-1. **Wizard Mode** — Step-by-step guided configuration with validation and preview at each stage
-2. **Manual Mode** — Full control over individual role and group settings with auto-load of current configuration
-3. **Bulk Mode** — CSV-based batch configuration for rapid policy and assignment changes across all four CSV types (Role Policies, Group Policies, Role Assignments, Group Assignments)
+1. **Edit**: a master-detail list of roles and groups. Pick a target, change settings on the Activation, Assignment and Notification tabs, see and change who has access (Who has it, Add people). *Select several* changes one value on many targets at once; *Copy settings to* copies a target's settings.
+2. **Guided**: a route in steps (Start, Targets, Settings, People) for a change on many targets, optionally from the PIM Monitor access model.
+3. **Import**: drop a CSV or JSON file (assignments, role or group settings, an access model file, or a file of the access model choices saved from the Access model page; a backup is recognised but cannot be imported yet). PIM Manager recognises the file, shows a reference of the columns and a template, and compares every row with the tenant.
+4. **Access model**: the board of the Enterprise Access Model (planes and levels), the catalog of roles with their expected settings, and the placement of your groups. Export saves the recommended role settings as a CSV you can edit and import again, and your label choices and group placements as JSON. Nothing here writes to the tenant.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Configure PIM                               │
-│   Manage PIM roles and groups efficiently.                       │
-├─────────────────────────────────────────────────────────────────┤
-│ ▌ [🪄] Wizard         Step-by-step guided configuration   [→]   │
-│   Recommended when: New to PIM or bulk changes                   │
-├─────────────────────────────────────────────────────────────────┤
-│   [⚙] Manual         Full control over individual settings [→]  │
-│   Recommended when: Direct access without a guided flow          │
-├─────────────────────────────────────────────────────────────────┤
-│   [📊] Bulk          Upload CSV to configure at scale      [→]  │
-│   Recommended when: You have an existing export to apply         │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-> [!NOTE]
-> Each mode is displayed as a horizontal row with a gradient icon. The selected row shows a colored left stripe. Click a row to select it, then click **Continue** to proceed.
+Keep is the default everywhere: a value you do not touch, and an empty cell in a file, changes nothing.
 
 ---
 
-## Wizard Mode
+## The basket
 
-The wizard guides you through PIM configuration in a series of steps. The exact number of steps depends on your workload and configuration type selections (minimum 8, up to 10 for dual-workload flows).
+Every mode adds changes to the **basket** (bar at the bottom). The basket is kept per tenant in the tab, so a reload or consent popup keeps it. Changes are compared by meaning with what the tenant has now. Leave out removes one change, Discard empties the basket.
 
-### Step 1: Safety Check (Backup)
+## Review
 
-Ensures your data is current before making changes.
+*Review* reads the tenant again, sends new assignments once as a validation-only dry run (nothing is written), and shows a verdict, what needs attention and every check with its outcome. A blocking check keeps Apply disabled. Removals are confirmed in the review.
 
-| Check | Description |
-|-------|-------------|
-| **Last Synced** | Shows when data was last refreshed |
-| **Refresh Button** | Fetches latest data from Graph API |
+## Apply, result and Undo
 
-> [!TIP]
-> Always refresh data before configuring to ensure you're working with the latest settings.
+Apply saves a **snapshot** of the touched targets first (their policy rules and assignments) (a failure writes nothing), then writes in order with throttling, retries 429 and 5xx, and never repeats a write that may have succeeded without checking. The result lists every change (Done, Failed, Not written), reads the tenant again and shows values that differ from your intent. *Try the failed ones again* returns to the review; the result can be downloaded as CSV. The last ten applies are kept in **Last applies** with their snapshot, in this browser until you sign out; *Undo this apply* builds a basket from the snapshot, with warnings when someone else changed the target since, or the apply is younger than five minutes.
 
 ---
 
-### Step 2: Workload Selection
+## Custom Extensions (Preview)
 
-Select which PIM workloads you want to configure.
+PIM custom extensions let an activation call an external REST API that approves, auto-approves or denies the request. PIM Manager links an existing extension to a policy; building the endpoint happens in the Microsoft Entra admin center.
 
-| Workload | Description |
-|----------|-------------|
-| **Directory Roles** | Entra ID administrative roles |
-| **PIM for Groups** | Groups managed by PIM |
-
-You can select one or both workloads. The wizard will show relevant options based on your selection.
-
-> [!NOTE]
-> You must have consented to the required permissions for each workload. If not consented, the workload will be unavailable.
-
----
-
-### Step 3: Configuration Type
-
-Choose what type of configuration you want to perform.
-
-| Type | Description |
-|------|-------------|
-| **Policies Only** | Configure activation rules, expiration, approval requirements, and notification settings |
-| **Assignments Only** | Manage eligible and active member assignments for roles or groups |
-| **Both** | Configure policy settings and member assignments in one flow |
-
----
-
-### Step 4: Scope Selection
-
-Select the specific roles and/or groups you want to configure.
-
-**Configuration Modes:**
-
-| Mode | Description |
-|------|-------------|
-| **Start Fresh** | Begin with Microsoft default settings |
-| **Load Current** | Load settings from the selected role/group (single selection only) |
-| **Clone From** | Copy settings from another role/group |
-
-**For Directory Roles:**
-- Search and filter available roles
-- Select multiple roles at once
-- See current assignment counts
-- Clone settings from any existing role
-
-**Role filter pills:**
-
-| Filter | Options |
-|--------|---------|
-| **Type** | All · Built-in · Custom |
-| **Privilege** | All · Privileged |
-| **Assignments** | All · With · Without |
-
-**For PIM Groups:**
-- View PIM-managed groups
-- Toggle to show unmanaged (role-assignable) groups
-- Select multiple groups
-
-**Group type filter pill:** All · Security · M365 · Mail-enabled
-
-> [!TIP]
-> Use "Clone From" to copy a well-configured role's settings to other roles.
-
-> [!NOTE]
-> **Load Current** works for both Directory Roles and PIM Groups. Select exactly one item to enable it.
-
----
-
-### Step 5: Policies *(if Policies or Both selected)*
-
-Define the policy settings to apply.
-
-**Activation Settings:**
-- Maximum activation duration (30 minutes to 24 hours)
-- Authentication requirement (None, MFA, or Conditional Access)
-- Require justification on activation
-- Require ticket information
-- Require approval (with approver selection)
-
-**Assignment Expiration:**
-- Allow permanent eligible assignments
-- Maximum eligible assignment duration
-- Allow permanent active assignments
-- Maximum active assignment duration
-- Require MFA on active assignment
-- Require justification on active assignment
-
-**Notification Settings:**
-Configure email notifications for three event types:
-- **Eligible Assignment**: When members are assigned as eligible
-- **Active Assignment**: When members are assigned as active
-- **Activation**: When eligible members activate the role
-
-For each event, configure notifications to:
-- Role administrators
-- Assignees/Requestors
-- Approvers
-
-> [!NOTE]
-> For PIM Groups, you can toggle between **Member** and **Owner** policies.
-
----
-
-### Step 6: Assignments *(if Assignments or Both selected)*
-
-Manage role/group assignments for users or groups.
-
-**Create New Assignments:**
-
-| Setting | Description |
-|---------|-------------|
-| **Assignment Type** | Eligible (recommended) or Active |
-| **Members** | Search and select users or groups |
-| **Duration** | Permanent or time-bound (with start/end dates) |
-| **Scope** | Directory-wide (`/`) or specific Administrative Unit |
-| **Justification** | Reason for the assignment |
-
-**Permanent Assignment Policy Check:**
-
-When creating assignments, the **Permanent** toggle automatically checks the actual PIM policy for each selected role or group:
-- **Checking policy...** — shown briefly while the policy is being loaded
-- **Blocked by Policy** — shown when the role/group policy does not allow permanent assignments
-
-If multiple roles/groups are selected, permanent is only allowed if **all** selected items allow it.
-
-**Manage Existing Assignments:**
-- View all current assignments for selected roles
-- Filter by Eligible, Active, or Expired
-- Mark assignments for removal
-- Preview affected users before applying
-
-> [!TIP]
-> Use eligible assignments for most scenarios. Active assignments should only be used when immediate access is required without activation.
-
----
-
-### Step 7: Review
-
-Review all changes before applying.
-
-The review step shows:
-- Summary of selected items
-- Policy settings to be applied
-- Assignments to be created
-- Assignments to be removed
-- High-risk role warnings
-- **Policy conflict warnings** — existing assignments that would violate the new policy settings (for example, active assignments that exceed a new maximum eligible duration)
-- **Preflight warnings** — incoherent settings detected before applying (for example, approval required with no approvers configured, or activation duration exceeding the maximum assignment duration)
-
-> [!IMPORTANT]
-> Review carefully — changes will be applied to all selected roles/groups.
-
----
-
-### Step 8: Apply
-
-Execute the configuration changes.
-
-**Process Phases:**
-1. **Policies** — Updates PIM settings for each selected role/group
-2. **Assignments** — Creates new role/group assignments
-3. **Removals** — Removes marked assignments
-
-**Features:**
-- Real-time progress indicator
-- Policy conflict and preflight warnings surfaced before execution begins
-- Success/failure status per operation
-- User-friendly error messages (Graph API errors translated to readable descriptions)
-- Retry failed operations button
-- Expandable operation details
-
-> [!NOTE]
-> You can see detailed logs in the browser console for debugging purposes.
-
----
-
-### Step 9: Checkpoint *(dual-workload flows only)*
-
-When configuring both Directory Roles and PIM Groups, a checkpoint step shows the results of the first workload and lets you continue to the second workload or exit early.
-
----
-
-### Step 10: Final
-
-Completion summary with navigation links to the Report page and Dashboard.
-
----
-
-## Manual Mode
-
-For users who prefer direct access to configuration tools with a staged-changes workflow.
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  [Directory Roles]  [PIM Groups]                                  │
-├───────────────────────┬──────────────────────────────────────────┤
-│    Role Selection     │    Settings Form                         │
-├───────────────────────┼──────────────────────────────────────────┤
-│ ☐ Global Admin        │  Activation Settings                     │
-│ ☑ User Admin          │  ─────────────────────────────────────   │
-│ ☑ Groups Admin        │  Max Duration: [4 hours]                 │
-│ ☐ Exchange Admin      │  ☑ Require MFA                           │
-│ ☑ SharePoint Admin    │  ☑ Require Justification                 │
-│ ...                   │  ☐ Require Approval                      │
-│                       │                                          │
-│ 3 roles selected      │  [Stage Changes]                         │
-└───────────────────────┴──────────────────────────────────────────┘
-│  Staged Changes (2)   [Apply All]  [Clear All]                    │
-│  ✓ User Admin — Policy settings staged                            │
-│  ✓ Groups Admin — Policy settings staged                          │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Workload Tabs
-
-Switch between **Directory Roles** and **PIM Groups** using the tabs at the top of the page.
-
-### Role / Group Selector
-
-The left panel shows all available items for the selected workload.
-
-**Features:**
-- Search to filter roles/groups by name
-- Quick-filter pills to narrow the list without typing
-- Click to select/deselect
-- Shows assignment counts
-- Tags indicate role type
-
-**Role filter pills:**
-
-| Filter | Options |
-|--------|---------|
-| **Type** | All · Built-in · Custom |
-| **Privilege** | All · Privileged |
-| **Assignments** | All · With · Without |
-
-**Group filter pill:** All · Security · M365 · Mail-enabled
-
-### Settings Form
-
-The right panel shows configuration options when roles or groups are selected.
-
-**Load From Selected Role/Group:**
-If exactly one item is selected, you can load that item's current settings as a template.
-
-### Staged Changes
-
-Changes are staged locally before being sent to the API. Review all queued changes in the panel at the bottom of the page.
-
-- Click **Stage Changes** to queue a change for the selected roles/groups
-- Click **Apply All** to submit all staged changes to the Graph API via a progress modal
-- Click **Clear All** to discard all staged changes without applying
-
----
-
-## Bulk Mode
-
-For CSV-based batch configuration. Best suited when you have exported settings from the Report page and want to apply changes across many roles or groups at once.
-
-```
-Upload → Compare → Apply → Results
-```
-
-### Step 1: Upload
-
-Upload a CSV file exported from the **Report page** or downloaded as a template. Four CSV types are supported:
-
-| CSV Type | Auto-detected from headers | Use case |
-|----------|---------------------------|----------|
-| **Role Policies** | Headers include `Role ID`, `Max Activation Duration`, etc. | Apply policy settings to Directory Roles |
-| **Group Policies** | Headers include `Group ID`, `Member Max Duration`, etc. | Apply policy settings to PIM Groups |
-| **Role Assignments** | Headers include `Role ID`, `Principal ID`, `Assignment Type`, `Action` | Add and/or remove eligible/active assignments for Directory Roles |
-| **Group Assignments** | Headers include `Group ID`, `Principal ID`, `Access Type`, `Action` | Add and/or remove eligible/active assignments for PIM Groups |
-
-> [!TIP]
-> Use **Download Template** buttons to get the correct column headers for each type. The Report page **Access Rights** export generates bulk-compatible assignment CSVs with Role ID / Group ID and Principal ID pre-filled — ready to edit and re-import.
-
-> [!NOTE]
-> Approver changes (adding/removing approvers) are not supported in Bulk mode because they require user ID lookup. Use **Wizard mode** for approver configuration.
-
-### Action column — add and remove in one CSV
-
-Assignment CSVs include an **Action** column that controls what happens to each row:
-
-| Action value | Behavior |
-|-------------|----------|
-| `add` (default) | Creates the assignment; skips rows that already exist |
-| `remove` | Removes the assignment; skips rows that are already gone |
-
-A single CSV can contain both `add` and `remove` rows. The preview step shows each row's status: **New**, **Already exists**, **Will remove**, **Already removed**, or **Permanent not allowed**.
-
-**Export → Edit → Import roundtrip:**
-1. Go to **Report** → export **Access Rights**
-2. Two CSV files are generated: one for role assignments, one for group assignments — both include Role/Group ID, Principal ID, and `Action = add`
-3. Change `Action` to `remove` for any rows you want to delete
-4. Upload to Bulk mode and apply
-
-### Step 2: Compare / Preview
-
-**For policy CSVs:** Review the diff between your CSV and the current live settings:
-- All changes are pre-selected by default
-- Deselect individual fields you want to skip
-- Use **Select All / Deselect All** to batch-select
-
-**For assignment CSVs:** A row-by-row preview validates each assignment before apply:
-- Errors (missing required fields) are shown per row
-- Select/deselect individual rows before applying
-- Rows with status **Already exists** or **Already removed** are automatically skipped
-
-### Step 3: Apply
-
-Click **Apply N Changes** (policies) or the apply button (assignments) to execute. A progress bar tracks each update in real time.
-
-### Step 4: Results
-
-A per-row results table shows success or failure for each operation with detailed error messages. Click **Retry Failed** to re-queue only the failed rows, or **Start Over** to upload a new CSV.
-
-**What can be changed via Bulk mode:**
-
-| Field | Role Policies | Group Policies |
-|-------|:-------------:|:--------------:|
-| Max activation duration | ✅ | ✅ |
-| MFA required | ✅ | ✅ |
-| Justification required | ✅ | ❌ |
-| Approval required | ✅ | ✅ |
-| Approvers | ❌ (use Wizard) | ❌ (use Wizard) |
-| Authentication Context | ❌ (use Wizard) | ❌ |
-
-| Field | Role Assignments | Group Assignments |
-|-------|:---------------:|:-----------------:|
-| Add eligible assignment | ✅ | ✅ |
-| Add active assignment | ✅ | ✅ |
-| Remove assignment | ✅ | ✅ |
-| Time-bound duration | ✅ | ✅ |
-| Permanent assignment | ✅ (if policy allows) | ✅ (if policy allows) |
-| Administrative Unit scope | ✅ | ❌ |
+- **Edit and Guided**: the Activation tab ends with a *Custom extension* section. Pick an extension for the pre-approval or post-approval slot. A slot switched on without a pick is never written.
+- **Picker access**: the list needs `PrivilegedAccess-CustomExt.Read.All` (incremental consent) and a Microsoft Entra ID Governance or Entra Suite licence. A policy that already links an extension shows its name without that scope.
+- **Import**: the settings files carry the extension id and Enabled columns. An empty cell keeps the link; a file cannot unlink.
 
 ---
 
@@ -398,8 +48,8 @@ Settings that apply when users **activate** their eligible role.
 | Setting | Description | Recommended |
 |---------|-------------|-------------|
 | **Max Duration** | Maximum activation time | 4-8 hours for most roles |
-| **Require MFA** | Users must complete MFA | ✅ Always enable |
-| **Require Justification** | Users must explain why | ✅ Enable for audit |
+| **Require MFA** | Users must complete MFA | Always enable |
+| **Require Justification** | Users must explain why | Enable for audit |
 | **Require Ticket Info** | Link to ticket system | Optional |
 | **Require Approval** | Must be approved first | For sensitive roles |
 | **Approvers** | Who can approve | Security team or managers |
@@ -436,136 +86,18 @@ Settings that apply to eligible/active **assignments**.
 
 ## Permissions Required
 
-> [!IMPORTANT]
-> Configuration operations require the `RoleManagementPolicy.ReadWrite.Directory` permission.
-
-Without this permission:
-- A warning banner will be displayed
-- Settings form will work but apply will fail
-- You will be prompted to grant permissions in Settings
-
-To grant permissions:
-1. Click the warning banner or go to **Settings**
-2. Click **Grant Write Permissions**
-3. Complete the consent flow
-4. Refresh the page
-
----
-
-## Best Practices
-
-### Choose the Right Mode
-
-| Scenario | Recommended Mode |
-|----------|-----------------|
-| Configure multiple roles/groups with full control | **Wizard** |
-| Quick one-off policy change | **Manual** |
-| Apply exported CSV settings at scale | **Bulk** |
-
-### Use the Wizard for Bulk Changes
-
-The wizard ensures you:
-1. Have fresh data before configuring
-2. Select the right workloads
-3. Review scope before applying
-
-### Standardize Settings
-
-1. Define organization-wide standards
-2. Select all similar roles
-3. Apply consistent settings
-
-Example standards:
-- All privileged roles: 4h max, MFA required, approval required
-- All standard roles: 8h max, MFA required
-
-### Test First
-
-1. Select one non-critical role
-2. Apply settings
-3. Verify in Azure Portal
-4. Then apply to other roles
-
-### Document Changes
-
-1. Export current settings (Report page)
-2. Make changes
-3. Export new settings
-4. Compare for audit trail
+Writes need the write scopes of the workload, requested when you press Grant permission on the start page or in Settings (Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`; PIM for Groups: the three `.AzureADGroup` equivalents). The **access row** on the start page shows per area whether you can write now (open), must activate a role first, have no role that allows it, are missing consent, or whether a group is locked (dynamic or synced). The optional Conditional Access check asks for `Policy.Read.All` on demand.
 
 ---
 
 ## Troubleshooting
 
-### Write Permissions Required
-
-**Symptom**: Warning banner "Write permissions required"
-
-**Solution**:
-1. Click **Open Settings** on the banner
-2. Grant write permissions
-3. Refresh and try again
-
-### "Failed to apply settings"
-
-**Cause**: Permission issues or API errors
-
-**Solution**:
-1. Verify you have `RoleManagementPolicy.ReadWrite.Directory`
-2. Check if role is protected (e.g., Global Admin requires Global Admin)
-3. Check browser console for detailed error
-
-### Wizard State Lost
-
-**Cause**: Session cleared or browser closed
-
-**Solution**:
-- Wizard state is stored in memory only (no persistence)
-- Refreshing the page clears state (by design)
-- Closing the browser clears state
-- Use Manual mode for quick one-off changes
-
-### Assignment Creation Fails
-
-**Symptom**: "Invalid role assignment request" error
-
-**Common causes**:
-- **Permissions**: Ensure you have `RoleManagementPolicy.ReadWrite.Directory`
-- **Conflicting assignment**: User may already have an active assignment
-- **Policy restrictions**: The role's policy may block certain assignment types
-
-**Solution**:
-1. Check the browser console for detailed error messages
-2. Verify the user doesn't already have an assignment for this role
-3. If creating an active assignment, ensure the role allows permanent active assignments (if permanent is selected)
-4. Try with a different role to isolate the issue
-
-### Bulk Mode: Approver Changes Not Applied
-
-**Cause**: Bulk mode only supports activation settings (duration, MFA, justification, approval toggle). Adding or removing approvers requires user ID lookup and is not supported via CSV.
-
-**Solution**: Use **Wizard mode** to configure approvers.
-
-### Bulk Mode: Assignment Removal Has No Effect
-
-**Cause**: The row's status was **Already removed** — the assignment no longer exists.
-
-**Solution**: Check the preview step before applying. Rows with status **Already removed** are automatically skipped. If you expected the assignment to exist, verify in the Report page.
-
-### "Permanent" Toggle Shows "Blocked by Policy"
-
-**Cause**: The selected role or group has a PIM policy that forbids permanent assignments.
-
-**Solution**: Use a time-bound assignment instead, or update the role policy first (via the Wizard Policies step) to allow permanent assignments before creating the assignment.
-
----
+- **Apply is disabled**: open the review; a blocking check names the cause (a missing role, a policy not read, a refused dry run).
+- **A group cannot be changed**: dynamic and synced groups are locked; a group not under PIM comes under PIM when you apply a change.
+- **Import says "Need a fix"**: the row has a cell the file reader refused; the row says which cell and why. Nothing of that row is added.
+- **The basket and Last applies are empty after sign-out**: both are cleared on sign-out by design, so no names or snapshots stay on the device. Undo an apply before you sign out.
 
 ## Next Steps
 
-- [Report Page](./08-report-page.md) - View your configurations
-- [Key Concepts](./06-key-concepts.md) - Understand terminology
-- [Architecture](./00-architecture.md) - Technical details of the wizard
-
----
-
-*Last updated: July 27, 2026*
+- [Report Page](./08-report-page.md): where a role or group has a "Change in Configure" button
+- [Settings](./11-settings.md): permissions and emergency access accounts

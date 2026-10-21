@@ -38,7 +38,7 @@ class LoggerService {
                     case 'ERROR': return LogLevel.ERROR;
                 }
             }
-        } catch (e) {
+        } catch {
             // Ignore localStorage errors
         }
 
@@ -58,25 +58,25 @@ class LoggerService {
         return `[${time}] [${context}] ${message}`;
     }
 
-    debug(context: string, message: string, ...args: any[]) {
+    debug(context: string, message: string, ...args: unknown[]) {
         if (this.shouldLog(LogLevel.DEBUG)) {
             console.debug(this.formatMessage(context, message), ...args);
         }
     }
 
-    info(context: string, message: string, ...args: any[]) {
+    info(context: string, message: string, ...args: unknown[]) {
         if (this.shouldLog(LogLevel.INFO)) {
             console.info(this.formatMessage(context, message), ...args);
         }
     }
 
-    warn(context: string, message: string, ...args: any[]) {
+    warn(context: string, message: string, ...args: unknown[]) {
         if (this.shouldLog(LogLevel.WARN)) {
             console.warn(this.formatMessage(context, message), ...args);
         }
     }
 
-    error(context: string, message: string, ...args: any[]) {
+    error(context: string, message: string, ...args: unknown[]) {
         if (this.shouldLog(LogLevel.ERROR)) {
             console.error(this.formatMessage(context, message), ...args);
         }

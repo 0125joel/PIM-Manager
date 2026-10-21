@@ -18,7 +18,7 @@ export type GraphErrorClassification =
     | "policy-rejected"    // payload conflicts with Microsoft policy enforcement
     | "duration-limit"     // duration exceeds the policy maximum
     | "stale-state"        // referenced object is gone or pending
-    | "transient"          // throttling or 5xx — Graph will likely succeed on retry
+    | "transient"          // throttling or 5xx, Graph will likely succeed on retry
     | "not-found"          // object doesn't exist
     | "unknown";
 
@@ -31,27 +31,45 @@ export interface MappedGraphError {
 }
 
 interface GraphLikeError {
-    body?: {
-        error?: {
-            code?: string;
-            message?: string;
-        };
-    };
+    /** The Graph SDK's `GraphError` carries the code here */
+    code?: unknown;
+    /** The SDK sets `body` to a JSON string of the error; other callers pass an object */
+    body?: unknown;
     statusCode?: number;
     message?: string;
 }
 
+/** `{ code, message }` from a body that is a JSON string (`GraphError`) or an object, wrapped in `error` or not */
+function bodyError(body: unknown): { code?: string; message?: string } {
+    let value: unknown = body;
+    if (typeof value === "string") {
+        try {
+            value = JSON.parse(value);
+        } catch {
+            return {};
+        }
+    }
+    if (!value || typeof value !== "object") return {};
+    const inner = (value as { error?: unknown }).error;
+    const source = (inner && typeof inner === "object" ? inner : value) as { code?: unknown; message?: unknown };
+    return {
+        code: typeof source.code === "string" ? source.code : undefined,
+        message: typeof source.message === "string" ? source.message : undefined,
+    };
+}
+
 /**
- * Try to dig the actual Graph error code + message out of an unknown thrown value.
- * The Graph JS SDK rethrows errors with `body`, `statusCode`, `message`, but
- * the shape isn't strictly typed.
+ * Try to dig the actual Graph error code + message out of an unknown thrown value. The Graph JS SDK throws a
+ * `GraphError` with `code`, `statusCode`, `message` and `body` as a JSON string; reading only `body.error.code` missed
+ * every code of a real Graph answer (found in NG-57).
  */
 function extract(rawError: unknown): { code?: string; message: string; statusCode?: number } {
     if (rawError && typeof rawError === "object") {
         const e = rawError as GraphLikeError;
-        const code = e.body?.error?.code;
-        const message = e.body?.error?.message || e.message || String(rawError);
-        return { code, message, statusCode: e.statusCode };
+        const fromBody = bodyError(e.body);
+        const code = (typeof e.code === "string" && e.code) || fromBody.code;
+        const message = fromBody.message || e.message || String(rawError);
+        return { code: code || undefined, message, statusCode: e.statusCode };
     }
     return { message: String(rawError) };
 }
@@ -119,6 +137,55 @@ export function mapGraphError(rawError: unknown, context?: "policy" | "assignmen
                 ? "PIM policy updates require RoleManagementPolicy.ReadWrite.Directory. Open Settings → Permissions and re-grant write consent."
                 : "Open Settings → Permissions and re-grant write consent for this workload.",
             classification: "permission",
+            rawCode: code,
+            rawMessage: message,
+        };
+    }
+
+    // ---- Known PIM answers of the Configure apply (spec 13.3) ----
+    if (code === "PendingRoleAssignmentRequest" || lower.includes("pending role assignment request")) {
+        return {
+            friendlyMessage: "A scheduled or pending request on this assignment must finish first.",
+            remediation: "Wait until the scheduled start or the pending request is done, then try again.",
+            // A refusal, not a schedule that clears by itself: the old create paths must report it as failed
+            classification: "policy-rejected",
+            rawCode: code,
+            rawMessage: message,
+        };
+    }
+    if (code === "CannotDeleteLastAdminAssignment") {
+        return {
+            friendlyMessage: "Microsoft does not remove the last administrator of a role or the last owner of a group.",
+            remediation: "Add another one first (for a group: another owner, eligible owners count), then remove this one.",
+            classification: "policy-rejected",
+            rawCode: code,
+            rawMessage: message,
+        };
+    }
+    if (code === "ActiveDurationTooShort") {
+        return {
+            friendlyMessage: "Microsoft removes or changes an assignment only after it has been active for five minutes.",
+            remediation: "Try again in a few minutes.",
+            classification: "stale-state",
+            rawCode: code,
+            rawMessage: message,
+        };
+    }
+    if (code === "MissingProvider") {
+        return {
+            friendlyMessage: "Microsoft did not accept the rule as PIM Manager sent it.",
+            remediation: "This is a fault in PIM Manager, not in your settings. Nothing of this rule was written; report it with the rule name.",
+            classification: "policy-rejected",
+            rawCode: code,
+            rawMessage: message,
+        };
+    }
+    if (code === "RoleAssignmentRequestPolicyValidationFailed" && !/duration|expiration/.test(lower)) {
+        return {
+            // Microsoft's message names the rule that failed; keep it
+            friendlyMessage: `The request breaks a rule of the PIM settings of this role or group: ${message}`,
+            remediation: "Often a justification that is required, an end that is required, or permanent that is not allowed.",
+            classification: "policy-rejected",
             rawCode: code,
             rawMessage: message,
         };
@@ -251,6 +318,8 @@ export function describePolicyRuleId(ruleId: string): string {
         "Enablement_Admin_Assignment": "Active-assignment requirements (MFA, justification)",
         "AuthenticationContext_EndUser_Assignment": "Conditional Access authentication context",
         "Approval_EndUser_Assignment": "Approval workflow & approvers",
+        "CustomExtension_PreApproval_EndUser_Assignment": "Custom extension (pre-approval)",
+        "CustomExtension_PostApproval_EndUser_Assignment": "Custom extension (post-approval)",
         "Notification_Admin_Admin_Eligibility": "Eligible-assignment notification to admins",
         "Notification_Requestor_Admin_Eligibility": "Eligible-assignment notification to assignee",
         "Notification_Approver_Admin_Eligibility": "Eligible-assignment notification to approvers",

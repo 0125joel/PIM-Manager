@@ -1,23 +1,13 @@
 import { useMsal } from "@azure/msal-react";
 import { WorkloadType } from '@/types/workload.types';
 import { useCallback } from "react";
+import { WORKLOAD_SCOPES } from "@/hooks/useIncrementalConsent";
 
-const WORKLOAD_SCOPES: Record<WorkloadType, string[]> = {
-    directoryRoles: [
-        "RoleManagement.Read.Directory",
-        "RoleAssignmentSchedule.Read.Directory",
-        "RoleEligibilitySchedule.Read.Directory",
-        "RoleManagementPolicy.Read.Directory"
-    ],
-    pimGroups: [
-        "PrivilegedAccess.Read.AzureADGroup",
-        "RoleManagementPolicy.Read.AzureADGroup"
-    ],
-    intune: ["DeviceManagementRBAC.Read.All"],
-    exchange: ["RoleManagement.Read.Exchange"],
-    sharepoint: ["Sites.Read.All"],
-    defender: [] // Externe setup, niet via Graph
-};
+/**
+ * Workloads the app can load today. Intune, Exchange and SharePoint have scopes defined but no adapter or UI yet:
+ * probing them sent a token request that Entra answered with 400 on every page load.
+ */
+const PROBED_WORKLOADS: WorkloadType[] = ["pimGroups"];
 
 export function useConsentedWorkloads() {
     const { instance, accounts } = useMsal();
@@ -28,8 +18,9 @@ export function useConsentedWorkloads() {
         const consented: WorkloadType[] = ["directoryRoles"]; // directoryRoles is core
 
         for (const [workload, scopes] of Object.entries(WORKLOAD_SCOPES)) {
-            // Sla directoryRoles over (al toegevoegd) en workloads zonder scopes (zoals defender)
+            // directoryRoles is already added; workloads without scopes (defender) or without an adapter are not probed
             if (workload === "directoryRoles" || scopes.length === 0) continue;
+            if (!PROBED_WORKLOADS.includes(workload as WorkloadType)) continue;
 
             try {
                 // Silent token request - fails if not consented
@@ -38,7 +29,7 @@ export function useConsentedWorkloads() {
                     account: accounts[0]
                 });
                 consented.push(workload as WorkloadType);
-            } catch (error) {
+            } catch {
                 // Not consented or token expired/invalid - treat as not enabled
             }
         }

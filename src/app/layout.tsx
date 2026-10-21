@@ -1,30 +1,28 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/components/AuthProvider";
-import { ConditionalSidebar } from "@/components/ConditionalSidebar";
-import { ConditionalLayout } from "@/components/ConditionalLayout";
-import { ConditionalHeader } from "@/components/ConditionalHeader";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { PimDataProvider } from "@/contexts/DirectoryRoleContext";
-import { UnifiedPimProvider } from "@/contexts/UnifiedPimContext";
-import { MobileMenuProvider } from "@/contexts/MobileMenuContext";
-import { ToastProvider } from "@/contexts/ToastContext";
-import { GlobalProgressBar } from "@/components/GlobalProgressBar";
-import { OnboardingWrapper } from "@/components/OnboardingWrapper";
+import { AppProviders } from "@/components/AppProviders";
 import Script from "next/script";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+// IBM Plex replaced Geist (Configure design round 9, 2026-10-03): it reads more easily in dense tables
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500"],
 });
+
+// viewport-fit=cover makes env(safe-area-inset-bottom) available for the bottom navigation
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "PIM Manager",
@@ -40,36 +38,14 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-50 dark:bg-black`}
+        className={`${plexSans.variable} ${plexMono.variable} antialiased bg-page text-ink`}
       >
-        {/* beforeInteractive runs before hydration — sets runtime config and theme before React loads */}
+        {/* beforeInteractive runs before hydration, sets runtime config and theme before React loads */}
         <Script src="/env-config.js" strategy="beforeInteractive" />
         <Script src="/theme-init.js" strategy="beforeInteractive" />
-        <ThemeProvider>
-          <AuthProvider>
-            <ProtectedRoute>
-              <MobileMenuProvider>
-                <UnifiedPimProvider>
-                  <PimDataProvider>
-                    <ErrorBoundary>
-                      <ToastProvider>
-                        <GlobalProgressBar />
-                        <div className="min-h-screen">
-                          <ConditionalHeader />
-                          <ConditionalSidebar />
-                          <ConditionalLayout>
-                            {children}
-                          </ConditionalLayout>
-                        </div>
-                        <OnboardingWrapper />
-                      </ToastProvider>
-                    </ErrorBoundary>
-                  </PimDataProvider>
-                </UnifiedPimProvider>
-              </MobileMenuProvider>
-            </ProtectedRoute>
-          </AuthProvider>
-        </ThemeProvider>
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );

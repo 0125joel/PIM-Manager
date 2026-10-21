@@ -1,7 +1,7 @@
-import { colors, spacing } from '../theme.mjs';
-import { Slide, Label, Heading, Body, Row, Stack, Card, Space, Handle, el } from '../components.mjs';
+import { colors } from '../theme.mjs';
+import { Slide, Label, Row, Card, Space, Handle, el } from '../components.mjs';
 
-export const meta = { title: 'Throttle Benut — per tenant size' };
+export const meta = { title: 'Throttle Benut: per tenant size' };
 
 function InsightCard(number, text) {
     return el('div', {

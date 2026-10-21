@@ -52,12 +52,14 @@ const loginRequest = {
 - `PrivilegedAccess.Read.AzureADGroup` - PIM for Groups
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
+- `PrivilegedAccess-CustomExt.Read.All` - List of PIM custom extensions (Preview); reading which extension a policy links needs no extra scope
+- `Policy.Read.All` - Configure's optional Conditional Access check, asked on demand (also needs a role that may read Conditional Access)
 
-**Write Scopes** (Incremental Consent — only when entering Configure mode):
+**Write Scopes** (Incremental Consent, asked when you choose Grant permission in Configure):
 - Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
-- PIM Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
+- PIM for Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
 
-**Read-Only by Default:** No write scopes in the core login request. Reporting features use read-only permissions. Write permissions are only requested when the user explicitly enters the Configure feature, using incremental consent.
+**Read-Only by Default:** No write scopes in the core login request. Reporting features use read-only permissions. Write permissions are only requested when the user chooses Grant permission in Configure, per workload, using incremental consent.
 
 ---
 
@@ -73,18 +75,17 @@ export const msalConfig: Configuration = {
   auth: {
     clientId: getClientId(),  // Runtime config (self-hosted) or NEXT_PUBLIC_CLIENT_ID (SaaS)
     authority: "https://login.microsoftonline.com/organizations",
-    redirectUri: window.location.origin  // Auto-detected, works on any hosting domain
+    redirectUri: `${window.location.origin}/redirect`  // Auto-detected origin plus the MSAL redirect bridge page
   },
   cache: {
-    cacheLocation: "sessionStorage",  // Critical: NOT localStorage
-    storeAuthStateInCookie: false
+    cacheLocation: "sessionStorage"  // Critical: NOT localStorage
   }
 };
 ```
 
 **Key Security Features:**
 - Multi-tenant support (`/organizations` endpoint)
-- Client ID resolved at runtime — supports both SaaS and self-hosted deployments without secrets
+- Client ID resolved at runtime, supports both SaaS and self-hosted deployments without secrets
 - Token storage in sessionStorage (cleared on browser close)
 
 ### Token Storage
@@ -98,14 +99,15 @@ cache: {
 ```
 
 **Why SessionStorage?**
-- ✅ Tokens automatically cleared when browser/tab closes
-- ✅ Not accessible across browser tabs
-- ✅ Not persisted to disk
-- ❌ LocalStorage persists indefinitely (security risk)
+- Tokens automatically cleared when browser/tab closes
+- Not accessible across browser tabs
+- Not persisted to disk
+- LocalStorage persists indefinitely (security risk)
 
 **What's Stored:**
-- **sessionStorage**: Access tokens, refresh tokens, ID tokens, delta sync links
+- **sessionStorage**: Access tokens, refresh tokens, ID tokens, the loaded Graph data (60 minute cache)
 - **localStorage**: UI preferences only (theme, log level, workload visibility)
+- **The one exception, bounded by the session**: Configure's Last applies (the last ten applies with their snapshot, which hold display names) live in localStorage so Undo survives a reload, and sign-out clears them together with the basket and the undo state (decision of 2026-10-08)
 
 ### Token Lifecycle
 
@@ -158,7 +160,7 @@ const nextConfig: NextConfig = {
 1. User authenticates → Token stored in sessionStorage
 2. Graph API call → Direct from browser to graph.microsoft.com
 3. Response processed → In-memory only (no persistence)
-4. Delta links cached → sessionStorage (for efficiency)
+4. Loaded data cached → sessionStorage (60 minutes, for efficiency)
 5. Browser close → All tokens and data cleared
 
 **No Data Transmission:** Zero data sent to PIM Manager infrastructure or third parties.
@@ -167,11 +169,9 @@ const nextConfig: NextConfig = {
 
 **SessionStorage Usage:**
 ```typescript
-// src/services/deltaService.ts
-const STORAGE_DELTA_LINK_KEY = "pim_directory_roles_delta_link";
-const STORAGE_GROUP_DELTA_LINK_KEY = "pim_groups_delta_link";
-
-sessionStorage.setItem(STORAGE_DELTA_LINK_KEY, deltaLink);
+// src/workloads/cache.ts (createSessionCache): the loaded workload data, 60 minute TTL
+sessionStorage.setItem("pim_data_cache_v4", JSON.stringify(content.data));
+sessionStorage.setItem("pim_data_timestamp", lastFetched);
 ```
 
 **LocalStorage Usage (Non-Sensitive Only):**
@@ -182,12 +182,12 @@ localStorage.setItem("LOG_LEVEL", "DEBUG");
 // src/hooks/useIncrementalConsent.ts
 localStorage.setItem("pim_workload_enabled_directoryRoles", "true");
 
-// src/components/SettingsModal.tsx
+// src/hooks/useWorkloadPermissions.ts
 localStorage.setItem("pim_visibility_directoryRoles", "true");
 ```
 
 **Separation of Concerns:**
-- sessionStorage: Tokens, API responses, delta links (sensitive)
+- sessionStorage: Tokens, API responses (sensitive)
 - localStorage: UI preferences, feature flags (non-sensitive)
 
 ---
@@ -264,13 +264,10 @@ const filter = `startswith(displayName,'${escapeODataString(debouncedQuery)}')`;
 
 **Error Handling:**
 ```typescript
-// src/services/deltaService.ts
+// src/utils/errorUtils.ts
 catch (error: unknown) {
-  if (error instanceof Error && error.message.includes("410")) {
-    // Delta token expired, fallback to full sync
-    return null;
-  }
-  throw error;
+  if (isAbortError(error)) return; // a replaced or cancelled run, not a failure
+  Logger.error("PimData", getErrorMessage(error));
 }
 ```
 
@@ -329,11 +326,11 @@ if (!isAuthenticated) {
 ### No Telemetry or Tracking
 
 **Zero External Services:**
-- ❌ No Google Analytics
-- ❌ No Mixpanel, Segment, Amplitude
-- ❌ No error tracking (Sentry, Rollbar)
-- ❌ No telemetry beacons
-- ✅ Only Microsoft Graph API calls
+- No Google Analytics
+- No Mixpanel, Segment, Amplitude
+- No error tracking (Sentry, Rollbar)
+- No telemetry beacons
+- Only Microsoft Graph API calls
 
 **Visitor Counter:** External badge in README (non-functional, cosmetic only)
 
@@ -369,7 +366,7 @@ if (!isAuthenticated) {
 
 **Workload Isolation:**
 - Core: Directory Roles (always enabled)
-- Optional: PIM Groups, Security Alerts (explicit consent required)
+- Optional: PIM for Groups, Security Alerts, Custom Extensions list, Conditional Access check (explicit consent required)
 - Planned: Intune, Exchange, SharePoint (not implemented)
 
 ---
@@ -378,14 +375,14 @@ if (!isAuthenticated) {
 
 ### For End Users
 
-**✅ Do:**
+**Do:**
 - Review requested permissions before consenting
 - Use modern browsers (Chrome, Edge, Firefox, Safari)
 - Log out when finished (clears all tokens)
 - Enable MFA on your Microsoft account
 - Keep your browser up to date
 
-**❌ Don't:**
+**Don't:**
 - Share your session with others
 - Use PIM Manager on public computers without logging out
 - Install untrusted browser extensions
@@ -393,14 +390,14 @@ if (!isAuthenticated) {
 
 ### For Administrators
 
-**✅ Do:**
+**Do:**
 - Review app registration permissions in Entra ID
 - Monitor consent grants in audit logs
 - Use Conditional Access policies for PIM Manager access
 - Regularly audit PIM configuration changes
 - Enable sign-in risk policies
 
-**❌ Don't:**
+**Don't:**
 - Grant admin consent for unnecessary scopes
 - Allow PIM Manager in unmanaged devices (without Conditional Access)
 - Skip security reviews of open-source dependencies
@@ -415,10 +412,10 @@ if (!isAuthenticated) {
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
-  style-src 'self' 'unsafe-inline';
+  script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
+  style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -426,7 +423,9 @@ Content-Security-Policy:
 ```
 
 > [!NOTE]
-> `'unsafe-eval'` is **not** needed and is intentionally omitted. `'wasm-unsafe-eval'` in `script-src` is required by `@react-pdf/renderer` to instantiate its WebAssembly module (needed for PDF export). `'unsafe-inline'` in `script-src` is required because Next.js static export injects inline RSC hydration scripts (`self.__next_f.push`) that cannot be avoided. The inline theme script is served from `/theme-init.js` (loaded via `next/script`), but the Next.js runtime hydration still requires `'unsafe-inline'`.
+> `'unsafe-eval'` is **not** needed and is intentionally omitted. `'wasm-unsafe-eval'` in `script-src` is required by `@react-pdf/renderer` to instantiate its WebAssembly module (needed for PDF export). `'unsafe-inline'` is **not** in `script-src`: the Next.js static export injects a small, fixed set of inline hydration scripts (`self.__next_f.push`, `self.__next_s.push`), and because the HTML is generated at build time their content is known. `npm run build` runs `scripts/generate-csp-hashes.mjs` after `next build`; it hashes every inline `<script>` in `out/**/*.html` (SHA-256) and replaces the placeholder `__CSP_SCRIPT_HASHES__` in `out/_headers` and `out/staticwebapp.config.json` with the `'sha256-...'` list. The source files in `public/` keep the placeholder, so only the exported copies carry hashes and the deployment must always use the files from `out/` (the Azure test workflow reads `config_file_location: "out"`). The theme and runtime-config scripts are external files (`/theme-init.js`, `/env-config.js`) and are covered by `'self'`. `style-src` is `'self'` only as well: Tailwind ships as a stylesheet, the exported HTML has no inline `<style>` element or `style` attribute (the post-build script fails the build if one appears), and React sets the `style` prop through the CSSOM, which CSP does not block. `https://static.cloudflareinsights.com` (`script-src`) and `https://cloudflareinsights.com` (`connect-src`) allow the Cloudflare Web Analytics beacon: with automatic injection it reports to the site's own `/cdn-cgi/rum` (`'self'`), with the manual or Pages snippet to `cloudflareinsights.com`. The host has no path so that both `beacon.min.js` and the versioned `beacon.min.js/v...` URL match. On Cloudflare Pages the build command must be `npm run build`: with `next build` alone the placeholder goes live and every inline script is blocked (blank page, React error #412).
+
+> `https://pimmonitor.com` in `connect-src` lets Configure read the public PIM Monitor access model catalog (`/catalog/v1/eam-catalog.json`). The request is a plain GET without credentials and carries no tenant data; when the host is blocked, the app uses the copy that ships with it.
 
 **Additional Headers:**
 ```
@@ -448,46 +447,46 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
 ### What PIM Manager Protects Against
 
-✅ **Unauthorized Access**
+**Unauthorized Access**
 - MSAL enforces authentication before any API calls
 - Multi-factor authentication (MFA) supported
 - Conditional Access policies respected
 
-✅ **Data Exfiltration**
+**Data Exfiltration**
 - Client-only architecture prevents server-side data theft
 - No data persistence beyond browser session
 - Direct Graph API calls (no intermediate proxies)
 
-✅ **Token Theft**
+**Token Theft**
 - SessionStorage cleared on browser close
 - Tokens not accessible across tabs
 - MSAL handles secure token storage
 
-✅ **API Abuse**
+**API Abuse**
 - Rate limiting via worker pool
 - Throttling protection with delays
 - Request validation before API calls
 
-✅ **XSS Attacks**
+**XSS Attacks**
 - React automatic escaping
 - Input sanitization (OData escaping)
 - No dynamic code execution
 
 ### What PIM Manager Does NOT Protect Against
 
-❌ **Compromised User Account**
+**Compromised User Account**
 - If user's Microsoft account is compromised, attacker inherits PIM Manager access
 - **Mitigation**: Enable MFA, monitor sign-in logs
 
-❌ **Malicious Browser Extensions**
+**Malicious Browser Extensions**
 - Extensions can read sessionStorage and intercept API calls
 - **Mitigation**: Only install trusted extensions, review permissions
 
-❌ **Physical Access to Unlocked Device**
+**Physical Access to Unlocked Device**
 - Active session can be hijacked if device is unlocked
 - **Mitigation**: Lock screen when away, log out after use
 
-❌ **Man-in-the-Middle (MITM)**
+**Man-in-the-Middle (MITM)**
 - If HTTPS is compromised (e.g., rogue CA), tokens can be intercepted
 - **Mitigation**: Use trusted networks, verify SSL certificates
 

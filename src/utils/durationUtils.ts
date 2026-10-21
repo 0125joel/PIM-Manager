@@ -87,6 +87,10 @@ export function toIsoDuration(humanReadable: string | undefined): string {
 export function formatDuration(iso: string | undefined): string {
     if (!iso) return 'Unknown';
 
+    // P365D special case (Graph days form of one year): display as 1 Year.
+    // Must run before the generic day pattern, which would otherwise match first.
+    if (iso === 'P365D') return '1 Year';
+
     // Handle common patterns
     const yearMatch = iso.match(/^P(\d+)Y$/);
     if (yearMatch) {
@@ -118,9 +122,6 @@ export function formatDuration(iso: string | undefined): string {
         return minutes === 1 ? '1 Minute' : `${minutes} Minutes`;
     }
 
-    // P365D special case - display as 1 Year
-    if (iso === 'P365D') return '1 Year';
-
     return iso; // Return as-is if no pattern matches
 }
 
@@ -149,6 +150,51 @@ export function parseHours(iso: string | undefined): number {
 }
 
 /**
+ * Strict ISO 8601 duration check (PnYnMnWnDTnHnMnS, every component optional).
+ * Accepts `P1Y`, `P6M`, `P15D`, `PT8H`, `PT4H30M`, `P1DT12H` and `PT0S`.
+ * Rejects `P` (no components), `PT` and anything with a non-numeric component.
+ *
+ * @example isIsoDuration("P1Y") => true
+ * @example isIsoDuration("8 hours") => false
+ */
+export function isIsoDuration(value: string | undefined): boolean {
+    if (!value) return false;
+    const v = value.trim().toUpperCase();
+    if (v === "P" || v === "PT" || v.endsWith("T")) return false;
+    return /^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$/.test(v);
+}
+
+/**
+ * Total hours represented by an ISO 8601 duration, for bucketing max activation
+ * durations. Days count as 24 hours, weeks as 7 days, months as 30 days and years
+ * as 365 days. Returns `null` for `PT0S` (Graph uses it for "no limit"), for an
+ * empty value and for anything that is not an ISO duration, so callers can
+ * decide how to treat "unknown" without confusing it with "0 hours".
+ *
+ * @example parseTotalHours("PT8H") => 8
+ * @example parseTotalHours("P1D") => 24
+ * @example parseTotalHours("P1DT12H") => 36
+ * @example parseTotalHours("PT30M") => 0.5
+ * @example parseTotalHours("PT0S") => null
+ */
+export function parseTotalHours(iso: string | undefined): number | null {
+    if (!iso || !isIsoDuration(iso)) return null;
+    const m = iso.trim().toUpperCase().match(/^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+    if (!m) return null;
+    const [, y, mo, w, d, h, mi, sec] = m;
+    const hours =
+        (parseInt(y || "0") * 365 * 24) +
+        (parseInt(mo || "0") * 30 * 24) +
+        (parseInt(w || "0") * 7 * 24) +
+        (parseInt(d || "0") * 24) +
+        parseInt(h || "0") +
+        (parseInt(mi || "0") / 60) +
+        (parseInt(sec || "0") / 3600);
+    if (hours === 0) return null;
+    return hours;
+}
+
+/**
  * Convert hours to ISO 8601 duration string.
  * Handles fractional hours by converting to combined format (PT1H30M).
  *
@@ -170,7 +216,7 @@ export function hoursToIso(hours: number): string {
 }
 
 /**
- * Activation duration options — matches the DurationSlider range (30min–24h).
+ * Activation duration options, matches the DurationSlider range (30min–24h).
  * Single source of truth for CSV templates, dropdowns, and validation.
  */
 export const ACTIVATION_DURATION_OPTIONS = [
@@ -211,11 +257,18 @@ export const DEFAULT_DURATIONS = {
     activeExpiration: 'P6M',
     /** Default activation duration when user activates (PT8H = 8 Hours) */
     activationDuration: 'PT8H',
-    /** Default duration for new eligible assignments (P180D = 180 days — matches Microsoft's P6M default) */
+    /** Default duration for new eligible assignments (P180D = 180 days, matches Microsoft's P6M default) */
     newAssignmentEligible: 'P180D',
     /** Default duration for new active assignments (P15D = 15 Days) */
     newAssignmentActive: 'P15D',
 } as const;
+
+/**
+ * True for the zero duration in either form Graph keeps (`PT0S`, `P0D`): "no maximum" while permanent is allowed.
+ */
+export function isZeroDuration(value: unknown): boolean {
+    return value === 'PT0S' || value === 'P0D';
+}
 
 /**
  * Validate and normalize an expiration value against known options.

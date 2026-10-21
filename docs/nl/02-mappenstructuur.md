@@ -46,7 +46,7 @@ Elke submap vertegenwoordigt een pagina in de applicatie.
 | `app/page.tsx` | Landingspagina (login) |
 | `app/dashboard/` | Dashboard overzicht |
 | `app/report/` | Hoofdrapportpagina met alle roldata |
-| `app/configure/` | PIM configuratiepagina (Wizard, Handmatig, Bulk modi) |
+| `app/configure/` | PIM configuratiepagina (Edit, Guided, Import, Access model) |
 | `app/layout.tsx` | Gedeelde layout (navigatie, providers) |
 | `app/globals.css` | Globale stijlen |
 
@@ -62,15 +62,10 @@ Herbruikbare bouwstenen die op meerdere pagina's worden gebruikt.
 
 | Component | Doel |
 |-----------|------|
-| `configure/` | Configure functie (Wizard, Handmatig, Bulk modi) |
+| `configure/` | Configure functie (Edit, Guided, Import, Access model) |
 | `configure/shared/PrincipalSelector.tsx` | Gebruiker/groep zoeken via Graph API (gedeeld over modi) |
 | `ui/` | Primitieve UI-componenten: Toggle, Skeleton, Toast, DurationSlider |
-| `Sidebar.tsx` | Zijnavigatiebalk |
-| `HelpModal.tsx` | Help documentatie overlay |
 | `LoadingStatus.tsx` | Inline laadindicator voor achtergrond policy-ophalen |
-| `ScopeBadge.tsx` | Badge die toewijzingsscope toont (Tenant-breed, App, RMAU) |
-| `RoleSettingsForm.tsx` | Formulier voor PIM-instellingen |
-| `ProgressModal.tsx` | Voortgangsindicator voor bulk-operaties |
 
 ---
 
@@ -80,17 +75,15 @@ Globale state management met React Context API.
 
 | Bestand | Doel |
 |---------|------|
-| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM Groups, etc.) met unified refresh logica |
-| `DirectoryRoleContext.tsx` | **Directory Roles State**: Beheert rol data, policies, toewijzingen met delta sync. Exporteert `PimDataProvider` voor achterwaartse compatibiliteit. |
+| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM for Groups, etc.) met unified refresh logica |
+| `DirectoryRoleContext.tsx` | **Directory Roles State**: Beheert rol data, policies en toewijzingen. Exporteert `PimDataProvider` voor achterwaartse compatibiliteit. |
 | `ViewModeContext.tsx` | **UI Voorkeuren**: Beheert Basic/Advanced view mode toggle met localStorage persistentie |
-| `MobileMenuContext.tsx` | **Mobile UI State**: Controleert mobile menu open/close state |
 | `ToastContext.tsx` | **Notificaties**: Toast notificatiesysteem (succes/fout/info, automatisch sluiten na 3s) |
 
 **Belangrijke Context Relaties:**
 - `UnifiedPimContext` orkestreert meerdere workloads
 - `DirectoryRoleContext` levert directory rol-specifieke data
 - Dashboard en Report pagina's consumeren beide contexts
-- Delta sync gebeurt transparant door contexts
 
 ---
 
@@ -101,13 +94,8 @@ Kernlogica voor interactie met Microsoft Graph API.
 | Bestand | Doel |
 |---------|------|
 | `directoryRoleService.ts` | **Directory Roles**: Ophalen van roldefinities, toewijzingen, policies |
-| `pimGroupService.ts` | **PIM Groups**: Ophalen van PIM-onboarded groepen en policies |
+| `pimGroupService.ts` | **PIM for Groups**: Ophalen van PIM-onboarded groepen en policies |
 | `pimConfigurationService.ts` | **Policy Lezen/Schrijven**: Verwerk regels, update PIM policies en toewijzingen |
-| `wizardApplyService.ts` | **Wizard Toepassen**: Voer bulk policy/toewijzing schrijven uit via Graph API |
-| `deltaService.ts` | **Slimme Verversing**: Delta queries voor incrementele updates |
-| `CsvParserService.ts` | **Bulk Modus**: Parsen en valideren van CSV-bestanden voor batchconfiguratie |
-| `WizardValidationService.ts` | **Wizard Validatie**: Cross-stap bedrijfsregel validatie |
-| `policyParserService.ts` | **Policy Parsing**: Parse Graph API policy regelstructuren naar getypede instellingen |
 
 **directoryRoleService.ts** bevat:
 - `getRoleDefinitions()` - Ophalen van roldefinities
@@ -116,15 +104,10 @@ Kernlogica voor interactie met Microsoft Graph API.
 - `getAllRolesOptimizedWithDeferredPolicies()` - Hoofdfunctie voor data-laden
 
 **pimGroupService.ts** bevat:
-- `fetchAllPimGroupData()` - Ophalen van alle PIM Groups data
+- `fetchAllPimGroupData()` - Volledig laden: inventaris, details, toewijzingen en policies per groep
+- `refreshPimGroupAssignments()` - Slim verversen: inventaris plus eligibility- en assignment-instances en policies per onboarded groep, groepsdetails blijven behouden
 - `fetchSingleGroupPolicy()` - Ophalen van beleid voor één groep
-- `concurrentFetchGroupPolicies()` - Parallelle groepsbeleid ophalen
-- `syncGroupsWithDelta()` - Delta sync voor groepen
 
-**deltaService.ts** bevat:
-- `fetchDirectoryRoleDeltas()` - Incrementele updates voor rollen
-- `fetchGroupDeltas()` - Incrementele updates voor groepen
-- `getStoredDeltaLink()` / `clearDeltaLink()` - Delta token beheer
 
 > [!WARNING]
 > **Throttling Bescherming**: Services gebruiken worker pools en vertragingen om Graph API throttling (429 fouten) te voorkomen. Verwijder deze beveiligingen niet.
@@ -138,8 +121,7 @@ TypeScript interfaces die datastructuren beschrijven.
 | Bestand | Doel |
 |---------|------|
 | `directoryRole.types.ts` | Directory Roles types (RoleDefinition, PimPolicy, etc.) |
-| `pimGroup.types.ts` | PIM Groups types (PimGroup, GroupPolicy, etc.) |
-| `wizard.types.ts` | Wizard data types (WizardData, WorkloadConfig, etc.) |
+| `pimGroup.types.ts` | PIM for Groups types (PimGroup, GroupPolicy, etc.) |
 | `workload.ts` | Workload systeem types (WorkloadType, WorkloadData) |
 | `roleFilters.ts` | Filter types voor rol/groep filteren |
 | `securityAlerts.ts` | Security alert types |
@@ -160,6 +142,7 @@ Utility functies en API helpers.
 
 | Bestand | Doel |
 |---------|------|
+| `policyParser.ts` | **Policy Parsing**: `parseGraphPolicy`, Graph API policy regels naar getypede instellingen (puur, verplaatst uit `services/`) |
 | `workerPool.ts` | **Worker Pool**: Parallelle API-calls met gelijktijdigheidscontrole en throttling bescherming (standaard: 8 workers, 300ms) |
 | `retryUtils.ts` | **Retry Logica**: `withRetry()` met exponentiële backoff voor 429/5xx fouten |
 | `durationUtils.ts` | **Duration Helpers**: ISO 8601 parsing, formattering en Graph API duration conversies |
@@ -168,7 +151,7 @@ Utility functies en API helpers.
 | `logger.ts` | **Gecentraliseerde Logging**: Gestructureerde logging met dynamisch niveau via localStorage |
 | `authContextApi.ts` | **Authenticatie Contexten**: Haal Conditional Access authenticatie contexten op |
 | `alertFormatting.ts` | **Alert Formattering**: Formatteer en sorteer security alerts op ernst |
-| `chartCapture.ts` | **PDF Generatie**: Capture chart elementen als afbeeldingen voor PDF export |
+| `exportReport.ts` | **Export**: de inhoud van de PDF en CSV export als gewone data (getest); `ReportDocument.tsx` tekent hem |
 
 ---
 
@@ -180,11 +163,10 @@ Applicatie configuratie constanten.
 |---------|------|
 | `authConfig.ts` | Microsoft Entra ID authenticatie configuratie |
 | `constants.ts` | Applicatie-brede constanten |
-| `pdfExportConfig.ts` | **PDF Export configuratie** - single source of truth voor export secties en statistieken |
-| `locales/en.ts` | **Externe Tekst** - Gecentraliseerde UI-strings (Help, Instellingen, etc.) |
+| `exportReport.ts` (`EXPORT_BLOCKS`) | **Export blokken** - single source of truth voor de inhoudsblokken van de export |
 
 > [!TIP]
-> Om een nieuwe statistiek toe te voegen aan de PDF export, voeg simpelweg een entry toe aan de `OVERVIEW_STATS` array in `pdfExportConfig.ts`. Het verschijnt automatisch in de export modal en PDF.
+> Een blok toevoegen aan de export: voeg het toe aan `EXPORT_BLOCKS` en `buildExportReport` in `utils/exportReport.ts`. Het verschijnt in het exportmenu en de PDF.
 
 > [!CAUTION]
 > Het `authConfig.ts` bestand bevat je **Microsoft Entra ID client ID**. Zorg ervoor dat dit overeenkomt met je app-registratie.
@@ -197,10 +179,9 @@ Herbruikbare React hooks.
 
 | Bestand | Doel |
 |---------|------|
-| `useWizardState.tsx` | **Wizard State**: Volledige wizard context + selector hooks (useWizardData, useWizardActions, etc.) |
 | `usePimData.ts` | **Directory Roles Data**: Toegang tot roldata, policies, ververs-functies |
 | `usePimSelectors.ts` | **Gememoïseerde Selectors**: Geoptimaliseerde selectors om onnodige re-renders te voorkomen |
-| `useAggregatedData.ts` | **Data Aggregatie**: Combineert data over meerdere workloads (Directory Roles, PIM Groups) |
+| `useAggregatedData.ts` | **Data Aggregatie**: Combineert data over meerdere workloads (Directory Roles, PIM for Groups) |
 | `useRoleFilters.ts` | **Filter Beheer**: Rol/groep filter logica voor Report en Dashboard pagina's |
 | `useConsentedWorkloads.ts` | **Workload Machtigingen**: Beheert welke workloads gebruikersconsent hebben |
 | `useIncrementalConsent.ts` | **Consent Flow**: Verwerkt incrementele toestemmingsverzoeken |
@@ -227,8 +208,6 @@ flowchart TD
     subgraph "Services"
         G[directoryRoleService]
         H[pimGroupService]
-        I[deltaService]
-        J[wizardApplyService]
     end
 
     subgraph "Utils"
@@ -246,7 +225,6 @@ flowchart TD
     B --> D
     B --> E
     C --> D
-    C --> J
     D --> E
     D --> H
     E --> G
@@ -256,8 +234,6 @@ flowchart TD
     H --> K
     H --> M
     I --> M
-    J --> K
-    J --> M
     K --> L
 ```
 

@@ -4,6 +4,7 @@ import { GRAPH_LOCALE } from "@/config/constants";
 import { Logger } from "@/utils/logger";
 import { withRetry } from "@/utils/retryUtils";
 
+// Beta: roleManagementAlerts has no v1.0 equivalent; Microsoft Learn documents the resource in beta only (checked 2026-10-15)
 const ALERTS_ENDPOINT = "https://graph.microsoft.com/beta/identityGovernance/roleManagementAlerts/alerts";
 const ALERTS_FILTER = "scopeId eq '/' and scopeType eq 'DirectoryRole'";
 

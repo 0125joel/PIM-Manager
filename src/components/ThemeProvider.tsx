@@ -11,29 +11,41 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// Module-level so effects and handlers share one stable implementation
+// (mirrors public/theme-init.js, which runs before hydration)
+function applyTheme(newTheme: Theme) {
+    const root = document.documentElement;
+    root.classList.remove("light", "dark");
+
+    if (newTheme === "system") {
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
+        root.classList.add(systemTheme);
+    } else {
+        root.classList.add(newTheme);
+    }
+}
+
+function readSavedTheme(): Theme {
+    try {
+        const saved = localStorage.getItem("theme");
+        return saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+    } catch {
+        return "system";
+    }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>("system");
 
     useEffect(() => {
-        // Load theme from localStorage
-        const savedTheme = (localStorage.getItem("theme") as Theme) || "system";
+        // Load theme from localStorage (theme-init.js already applied the class before hydration)
+        const savedTheme = readSavedTheme();
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of a browser-only preference
         setThemeState(savedTheme);
         applyTheme(savedTheme);
     }, []);
-
-    const applyTheme = (newTheme: Theme) => {
-        const root = document.documentElement;
-        root.classList.remove("light", "dark");
-
-        if (newTheme === "system") {
-            const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light";
-            root.classList.add(systemTheme);
-        } else {
-            root.classList.add(newTheme);
-        }
-    };
 
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);

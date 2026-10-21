@@ -1,41 +1,40 @@
 {
   "name": "pim-manager",
-  "version": "2.1.0",
-  "releaseDate": "2026-05-28",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/generate-csp-hashes.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.include=src/utils --coverage.include=src/services",
+    "visual": "node scripts/visual-check.mjs"
   },
   "dependencies": {
-    "@azure/msal-browser": "^4.26.2",
-    "@azure/msal-react": "^3.0.22",
+    "@azure/msal-browser": "^5.23.0",
+    "@azure/msal-react": "^5.7.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "@react-pdf/renderer": "^4.3.1",
-    "@types/react-window": "^1.8.8",
-    "date-fns": "^4.1.0",
-    "html2canvas": "^1.4.1",
-    "lucide-react": "^0.555.0",
-    "next": "^16.1.6",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-window": "^2.2.3",
-    "recharts": "^3.5.1"
+    "@react-pdf/renderer": "^4.9.0",
+    "date-fns": "^4.4.0",
+    "next": "^16.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@fontsource/inter": "^5.2.8",
+    "@fontsource/inter": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.2",
     "baseline-browser-mapping": "^2.10.0",
     "eslint": "^9",
-    "eslint-config-next": "16.0.6",
+    "eslint-config-next": "^16.3.6",
     "satori": "^0.26.0",
-    "tailwindcss": "^4",
-    "typescript": "5.9.3"
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.2"
   }
 }

@@ -1,0 +1,4 @@
+Group Name,Principal UPN,Access Type,Assignment Type,Action,End Date,Justification
+Helpdesk Operators,MeganB@contoso.com,member,eligible,add,2027-04-01T00:00:00Z,
+Exchange Admins,AdeleV@contoso.com,member,eligible,add,2027-02-01T00:00:00Z,
+Finance Approvers,PradeepG@contoso.com,owner,eligible,add,2027-06-30T00:00:00Z,

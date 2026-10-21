@@ -1,52 +1,34 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import type { CSSProperties } from "react";
+import { Icon } from "@/components/icons/Icon";
 
 interface DataWarningBannerProps {
     failedCount: number;
     totalCount: number;
     onRefresh?: () => void;
+    /** Spacing around the banner; the report page keeps its bottom margin, the dashboard lays it out with a gap */
+    className?: string;
 }
 
-export function DataWarningBanner({ failedCount, totalCount, onRefresh }: DataWarningBannerProps) {
+/** Policies of some roles could not be read: a warning with the count and a retry, in the warning tokens (spec 1.1). */
+export function DataWarningBanner({ failedCount, totalCount, onRefresh, className = "mb-4" }: DataWarningBannerProps) {
     if (failedCount === 0) return null;
 
     return (
-        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-            <div className="flex-1">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+        <div className={`flex items-start gap-3 rounded bg-warn-tint p-3 ${className}`} style={{ "--pim-icon-accent": "var(--warn-fill)" } as CSSProperties}>
+            <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-ink" />
+            <div className="min-w-0 flex-1">
+                <p className="text-sm leading-5 font-medium text-ink">
                     Incomplete data: {failedCount} of {totalCount} roles could not be loaded
                 </p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-[13px] leading-[18px] text-body">
                     Some configuration data may be missing.{" "}
                     {onRefresh && (
-                        <button
-                            onClick={onRefresh}
-                            className="underline hover:no-underline"
-                        >
+                        <button type="button" onClick={onRefresh} className="inline-flex min-h-6 items-center text-accent underline underline-offset-2 max-sm:min-h-11">
                             Refresh to retry
                         </button>
                     )}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-/**
- * Inline warning for individual role configuration failures
- */
-export function RoleConfigWarning({ error }: { error: string }) {
-    return (
-        <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <div>
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    Could not load configuration
-                </p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {error}. Refresh data to retry.
                 </p>
             </div>
         </div>

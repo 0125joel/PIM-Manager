@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Icon, type IconName } from "@/components/icons/Icon";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -14,65 +14,51 @@ export interface ToastProps {
     onClose: (id: string) => void;
 }
 
-const toastStyles: Record<ToastType, { bg: string; icon: React.ElementType; iconColor: string }> = {
-    success: {
-        bg: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
-        icon: CheckCircle2,
-        iconColor: "text-green-600 dark:text-green-400"
-    },
-    error: {
-        bg: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
-        icon: XCircle,
-        iconColor: "text-red-600 dark:text-red-400"
-    },
-    warning: {
-        bg: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800",
-        icon: AlertTriangle,
-        iconColor: "text-amber-600 dark:text-amber-400"
-    },
-    info: {
-        bg: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-        icon: Info,
-        iconColor: "text-blue-600 dark:text-blue-400"
-    }
+// Tokens only (spec 1.1): the icon carries the status colour through its accent element, the box is tinted for problems
+const toastStyles: Record<ToastType, { box: string; icon: IconName; accent: string }> = {
+    success: { box: "bg-surface border-line", icon: "success", accent: "var(--success-text)" },
+    error: { box: "bg-danger-tint border-transparent", icon: "error", accent: "var(--danger-text)" },
+    warning: { box: "bg-warn-tint border-transparent", icon: "alert", accent: "var(--warn-fill)" },
+    info: { box: "bg-surface border-line", icon: "info", accent: "var(--accent)" },
 };
+
+/** Errors stay until dismissed; the others close after `duration` and wait while the pointer or focus is on them. */
+export function toastAutoCloses(type: ToastType, duration: number): boolean {
+    return type !== "error" && duration > 0;
+}
 
 export function Toast({ id, type, title, message, duration = 5000, onClose }: ToastProps) {
     const style = toastStyles[type];
-    const Icon = style.icon;
+    const [isPaused, setIsPaused] = useState(false);
 
     useEffect(() => {
-        if (duration > 0) {
-            const timer = setTimeout(() => onClose(id), duration);
-            return () => clearTimeout(timer);
-        }
-    }, [id, duration, onClose]);
+        if (!toastAutoCloses(type, duration) || isPaused) return;
+        const timer = setTimeout(() => onClose(id), duration);
+        return () => clearTimeout(timer);
+    }, [id, type, duration, isPaused, onClose]);
 
     return (
         <div
-            className={`
-                flex items-start gap-3 p-4 rounded-lg border shadow-lg
-                animate-in slide-in-from-right-full duration-300
-                ${style.bg}
-            `}
-            role="alert"
+            className={`flex items-start gap-3 rounded border p-4 shadow-menu ${style.box}`}
+            style={{ "--pim-icon-accent": style.accent } as CSSProperties}
+            role={type === "error" ? "alert" : "status"}
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onFocus={() => setIsPaused(true)}
+            onBlur={() => setIsPaused(false)}
         >
-            <Icon className={`h-5 w-5 flex-shrink-0 mt-0.5 ${style.iconColor}`} />
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {title}
-                </p>
-                {message && (
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-                        {message}
-                    </p>
-                )}
+            <Icon name={style.icon} size={20} className="mt-0.5 shrink-0 text-ink" />
+            <div className="min-w-0 flex-1">
+                <p className={`text-sm leading-5 font-medium ${type === "error" ? "text-danger-text" : "text-ink"}`}>{title}</p>
+                {message && <p className="mt-1 text-[13px] leading-[18px] text-body">{message}</p>}
             </div>
             <button
+                type="button"
+                aria-label="Dismiss notification"
                 onClick={() => onClose(id)}
-                className="flex-shrink-0 p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-body transition-colors duration-150 hover:text-ink max-sm:h-11 max-sm:w-11"
             >
-                <X className="h-4 w-4 text-zinc-400" />
+                <Icon name="close" size={16} />
             </button>
         </div>
     );
@@ -87,7 +73,7 @@ export function ToastContainer({ toasts, onClose }: ToastContainerProps) {
     if (toasts.length === 0) return null;
 
     return (
-        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full max-sm:left-4 max-sm:max-w-none max-sm:w-auto max-sm:bottom-[calc(72px+1rem+env(safe-area-inset-bottom))]">
             {toasts.map((toast) => (
                 <Toast key={toast.id} {...toast} onClose={onClose} />
             ))}

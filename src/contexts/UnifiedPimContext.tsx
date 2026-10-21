@@ -1,25 +1,23 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect, useRef } from "react";
 import { useMsal } from "@azure/msal-react";
+import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { Client } from "@microsoft/microsoft-graph-client";
+import { loginRequest } from "@/config/authConfig";
 import { RoleDetailData } from "@/types/directoryRole.types";
-import {
-    WorkloadType,
-    WorkloadLoadingState,
-    WorkloadState,
-    WorkloadConsentState
-} from '@/types/workload.types';
+import { WorkloadType, WorkloadState, WorkloadLoadingState, WorkloadConsentState } from '@/types/workload.types';
 import { PimGroupData as PimGroupDataType } from "@/types/pimGroup.types";
-import { fetchAllPimGroupData, fetchPimOnboardedResources, syncGroupsWithDelta } from "@/services/pimGroupService";
-import { getStoredGroupDeltaLink, fetchGroupDeltas, clearGroupDeltaLink } from "@/services/deltaService";
 import { useConsentedWorkloads } from "@/hooks/useConsentedWorkloads";
 import { setWorkloadEnabled } from "@/hooks/useIncrementalConsent";
 import { Logger } from "@/utils/logger";
-
-// SessionStorage keys for PIM Groups data caching
-const PIM_GROUPS_STORAGE_KEY = "pim_groups_data_cache";
-const PIM_GROUPS_TIMESTAMP_KEY = "pim_groups_timestamp";
+import { LiveValue } from "@/utils/liveValue";
+import { createGraphClient } from "@/utils/graphClient";
+import { WORKLOAD_SCOPES } from "@/hooks/useIncrementalConsent";
+import { createWorkloadEngine, isWorkloadFresh } from "@/workloads/engine";
+import { directoryRolesAdapter, INITIAL_ROLES_EXTRAS, type DirectoryRolesExtras } from "@/workloads/directoryRolesAdapter";
+import { pimGroupsAdapter } from "@/workloads/pimGroupsAdapter";
+import type { WorkloadContent, WorkloadEngine, WorkloadEngineDeps } from "@/workloads/types";
 
 // ============================================================================
 // Types
@@ -75,7 +73,7 @@ export interface UnifiedPimState {
     activeWorkloads: WorkloadType[];
     syncHistory: SyncHistoryEntry[];  // Track recent sync changes
     workloads: {
-        directoryRoles: WorkloadState<DirectoryRolesData>;
+        directoryRoles: WorkloadState<DirectoryRolesData, DirectoryRolesExtras>;
         pimGroups: WorkloadState<PimGroupDataType>;
         intune: WorkloadState<IntuneRoleData>;
         exchange: WorkloadState<ExchangeRoleData>;
@@ -98,27 +96,73 @@ export interface UnifiedPimContextValue extends UnifiedPimState {
     disableWorkload: (workload: WorkloadType) => void;
     addSyncHistoryEntry: (entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => void;
 
-    // Registration for modular workload refresh (allows child contexts to register their refresh)
-    registerWorkloadRefresh: (workload: WorkloadType, refreshFn: () => Promise<void>) => void;
-
     // Graph client helper
     getGraphClient: () => Promise<Client>;
+}
 
-    // Internal: update workload state (used by workload-specific services)
-    updateWorkloadState: <T>(
-        workload: WorkloadType,
-        updater: (prev: WorkloadState<T>) => Partial<WorkloadState<T>>
-    ) => void;
+/** Data-only view of a workload: changes only when data, extras, consent, lastFetched or the error change (not on progress ticks) */
+export interface WorkloadDataSlice<T, X = undefined> {
+    data: T[];
+    extras: X;
+    consent: WorkloadConsentState;
+    lastFetched?: string;
+    error?: string;
+}
+
+export interface UnifiedWorkloadDataMap {
+    directoryRoles: WorkloadDataSlice<DirectoryRolesData, DirectoryRolesExtras>;
+    pimGroups: WorkloadDataSlice<PimGroupDataType>;
+    intune: WorkloadDataSlice<IntuneRoleData>;
+    exchange: WorkloadDataSlice<ExchangeRoleData>;
+    sharepoint: WorkloadDataSlice<SharePointData>;
+    defender: WorkloadDataSlice<DefenderRoleData>;
+}
+
+/** Workload data and consent. Does not change on loading progress ticks. */
+export interface UnifiedDataValue {
+    initialized: boolean;
+    activeWorkloads: WorkloadType[];
+    workloads: UnifiedWorkloadDataMap;
+    getWorkloadData: <T>(workload: WorkloadType) => T[];
+    isWorkloadConsented: (workload: WorkloadType) => boolean;
+}
+
+/** Loading phase, progress and sync history. Changes on every progress tick. */
+export interface UnifiedLoadingValue {
+    workloads: Record<WorkloadType, WorkloadLoadingState>;
+    syncHistory: SyncHistoryEntry[];
+    isWorkloadLoading: (workload: WorkloadType) => boolean;
+    getAvailableWorkloads: () => WorkloadType[];
+}
+
+/** Stable action functions. The object identity never changes after mount. */
+export interface UnifiedActionsValue {
+    /** Page mount: loads what is not loaded, honours the 60 minute TTL and never starts a second load */
+    loadWorkload: (workload: WorkloadType) => Promise<void>;
+    /** Refresh button (`force` false, a smart refresh) and after a write (`force` true, everything again) */
+    refreshWorkload: (workload: WorkloadType, force?: boolean) => Promise<void>;
+    refreshAllWorkloads: (force?: boolean) => Promise<void>;
+    enableWorkload: (workload: WorkloadType) => Promise<boolean>;
+    disableWorkload: (workload: WorkloadType) => void;
+    /** Sign out: abort, forget the cache and empty the workload */
+    clearWorkload: (workload: WorkloadType) => void;
+    /** Change what a workload has loaded (a policy that arrived); batched, `immediate` applies at once */
+    patchWorkload: <T, X = undefined>(workload: WorkloadType, updater: (content: WorkloadContent<T, X>) => WorkloadContent<T, X>, immediate?: boolean) => void;
+    /** What a workload has loaded right now, read live */
+    peekWorkload: <T, X = undefined>(workload: WorkloadType) => WorkloadContent<T, X>;
+    addSyncHistoryEntry: (entry: Omit<SyncHistoryEntry, 'id' | 'timestamp'> & { timestamp?: Date }) => void;
+    getGraphClient: (scopes?: string[]) => Promise<Client>;
 }
 
 // ============================================================================
 // Initial State Factory
 // ============================================================================
 
-function createInitialWorkloadState<T>(): WorkloadState<T> {
+function createInitialWorkloadState<T, X = undefined>(extras: X): WorkloadState<T, X> {
     return {
         workload: "directoryRoles", // Will be overridden
         data: [],
+        extras,
         loading: {
             phase: "idle",
             progress: { current: 0, total: 0 },
@@ -137,15 +181,18 @@ function createInitialState(): UnifiedPimState {
         activeWorkloads: [],
         syncHistory: [],
         workloads: {
-            directoryRoles: { ...createInitialWorkloadState<DirectoryRolesData>(), workload: "directoryRoles", consent: { consented: true } },
-            pimGroups: { ...createInitialWorkloadState<PimGroupDataType>(), workload: "pimGroups" },
-            intune: { ...createInitialWorkloadState<IntuneRoleData>(), workload: "intune" },
-            exchange: { ...createInitialWorkloadState<ExchangeRoleData>(), workload: "exchange" },
-            sharepoint: { ...createInitialWorkloadState<SharePointData>(), workload: "sharepoint" },
-            defender: { ...createInitialWorkloadState<DefenderRoleData>(), workload: "defender" }
+            directoryRoles: { ...createInitialWorkloadState<DirectoryRolesData, DirectoryRolesExtras>(INITIAL_ROLES_EXTRAS), workload: "directoryRoles", consent: { consented: true } },
+            pimGroups: { ...createInitialWorkloadState<PimGroupDataType>(undefined), workload: "pimGroups" },
+            intune: { ...createInitialWorkloadState<IntuneRoleData>(undefined), workload: "intune" },
+            exchange: { ...createInitialWorkloadState<ExchangeRoleData>(undefined), workload: "exchange" },
+            sharepoint: { ...createInitialWorkloadState<SharePointData>(undefined), workload: "sharepoint" },
+            defender: { ...createInitialWorkloadState<DefenderRoleData>(undefined), workload: "defender" }
         }
     };
 }
+
+/** The workloads that have an engine; the others are planned (spec: Azure, Intune, Exchange, SharePoint join with an adapter) */
+type EngineKey = "directoryRoles" | "pimGroups";
 
 // ============================================================================
 // Load Priority Order
@@ -164,124 +211,62 @@ const LOAD_PRIORITY: WorkloadType[] = [
 // Context
 // ============================================================================
 
-const UnifiedPimContext = createContext<UnifiedPimContextValue | undefined>(undefined);
+// Three contexts rendered by one provider, so a component that only needs data
+// (or only actions) does not re-render on loading progress ticks and vice versa.
+const UnifiedDataContext = createContext<UnifiedDataValue | undefined>(undefined);
+const UnifiedLoadingContext = createContext<UnifiedLoadingValue | undefined>(undefined);
+const UnifiedActionsContext = createContext<UnifiedActionsValue | undefined>(undefined);
+
+function useWorkloadDataSlice<T, X>(ws: WorkloadState<T, X>): WorkloadDataSlice<T, X> {
+    const error = ws.loading.error;
+    return useMemo(
+        () => ({ data: ws.data, extras: ws.extras, consent: ws.consent, lastFetched: ws.lastFetched, error }),
+        [ws.data, ws.extras, ws.consent, ws.lastFetched, error]
+    );
+}
 
 export function UnifiedPimProvider({ children }: { children: ReactNode }) {
     const { instance, accounts } = useMsal();
-    const { checkConsent, WORKLOAD_SCOPES } = useConsentedWorkloads();
+    const { checkConsent } = useConsentedWorkloads();
     const [state, setState] = useState<UnifiedPimState>(createInitialState);
     const initializingRef = useRef(false);
 
+    // Ref mirror of the latest state so stable callbacks (refreshWorkload) never
+    // operate on a stale snapshot of workload data or lastFetched
+    const stateRef = useRef<UnifiedPimState>(state);
+    const [liveState] = useState(() => new LiveValue<UnifiedPimState>(state));
+    useEffect(() => {
+        stateRef.current = state;
+        liveState.set(state);
+    }, [state, liveState]);
+
     // Sync history using refs to avoid re-render cascades
     const syncHistoryRef = useRef<SyncHistoryEntry[]>([]);
-
-    // Registry for modular workload refresh functions
-    const workloadRefreshRegistry = useRef<Map<WorkloadType, () => Promise<void>>>(new Map());
-
-    // AbortControllers for each workload to support cancellation
-    const workloadAbortControllers = useRef<Map<WorkloadType, AbortController>>(new Map());
-
-    // ========================================================================
-    // PIM Groups SessionStorage Cache (matches DirectoryRoleContext behavior)
-    // ========================================================================
-
-    // Load PIM Groups from sessionStorage on mount
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        try {
-            const cached = sessionStorage.getItem(PIM_GROUPS_STORAGE_KEY);
-            const timestamp = sessionStorage.getItem(PIM_GROUPS_TIMESTAMP_KEY);
-
-            if (cached && timestamp) {
-                const data = JSON.parse(cached) as PimGroupDataType[];
-                const lastFetched = timestamp;
-
-                Logger.debug("UnifiedPim", `Loaded ${data.length} PIM Groups from cache`);
-
-                setState(prev => ({
-                    ...prev,
-                    workloads: {
-                        ...prev.workloads,
-                        pimGroups: {
-                            ...prev.workloads.pimGroups,
-                            data,
-                            lastFetched,
-                            loading: {
-                                phase: "complete",
-                                progress: { current: 100, total: 100 },
-                                message: "Loaded from cache"
-                            }
-                        }
-                    }
-                }));
-            }
-        } catch (e) {
-            Logger.error("UnifiedPim", "Failed to load PIM Groups from cache", e);
-            sessionStorage.removeItem(PIM_GROUPS_STORAGE_KEY);
-            sessionStorage.removeItem(PIM_GROUPS_TIMESTAMP_KEY);
-            // Also clear delta link to force fresh fetch
-            clearGroupDeltaLink();
-        }
-
-        // Safety: if no cached data, clear delta link to ensure fresh fetch
-        const hasCachedData = sessionStorage.getItem(PIM_GROUPS_STORAGE_KEY);
-        if (!hasCachedData) {
-            Logger.debug("UnifiedPim", "No cached PIM Groups data, clearing delta link for fresh fetch");
-            clearGroupDeltaLink();
-        }
-    }, []);
-
-    // Save PIM Groups to sessionStorage when data changes
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-
-        const data = state.workloads.pimGroups.data;
-        if (data && data.length > 0) {
-            try {
-                sessionStorage.setItem(PIM_GROUPS_STORAGE_KEY, JSON.stringify(data));
-                sessionStorage.setItem(PIM_GROUPS_TIMESTAMP_KEY, new Date().toISOString());
-            } catch (e) {
-                if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-                    Logger.warn("UnifiedPim", "SessionStorage quota exceeded for PIM Groups");
-                } else {
-                    Logger.error("UnifiedPim", "Failed to save PIM Groups to cache", e);
-                }
-            }
-        }
-    }, [state.workloads.pimGroups.data]);
-
 
     // ========================================================================
     // Graph Client
     // ========================================================================
 
     const getGraphClient = useCallback(async (scopes?: string[]) => {
-        const defaultScopes = [
-            "User.Read",
-            "RoleManagement.Read.Directory",
-            "RoleAssignmentSchedule.Read.Directory",
-            "RoleEligibilitySchedule.Read.Directory",
-            "RoleManagementPolicy.Read.Directory",
-            "Policy.Read.ConditionalAccess",
-            "User.Read.All",
-            "Group.Read.All",
-            "AdministrativeUnit.Read.All",
-            "Application.Read.All"
-        ];
-
+        // Default to the login scope set (single source of truth in authConfig.ts)
         const request = {
-            scopes: scopes || defaultScopes,
+            scopes: scopes || loginRequest.scopes,
             account: accounts[0],
         };
 
-        const response = await instance.acquireTokenSilent(request);
+        let accessToken: string;
+        try {
+            accessToken = (await instance.acquireTokenSilent(request)).accessToken;
+        } catch (error) {
+            // Refresh token expired or consent changed: prompt instead of surfacing a dead-end error
+            if (error instanceof InteractionRequiredAuthError) {
+                accessToken = (await instance.acquireTokenPopup(request)).accessToken;
+            } else {
+                throw error;
+            }
+        }
 
-        return Client.init({
-            authProvider: (done) => {
-                done(null, response.accessToken);
-            },
-        });
+        return createGraphClient(accessToken);
     }, [instance, accounts]);
 
     // ========================================================================
@@ -315,7 +300,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
 
     const getAvailableWorkloads = useCallback((): WorkloadType[] => {
         return Object.entries(state.workloads)
-            .filter(([_, ws]) => ws.consent.consented && ws.loading.phase === "complete")
+            .filter(([, ws]) => ws.consent.consented && ws.loading.phase === "complete")
             .map(([key]) => key as WorkloadType);
     }, [state.workloads]);
 
@@ -356,308 +341,100 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
     // Actions
     // ========================================================================
 
-    const refreshWorkload = useCallback(async (workload: WorkloadType, force: boolean = false): Promise<void> => {
-        // Check if a workload-specific refresh function is registered (modular pattern)
-        const registeredRefresh = workloadRefreshRegistry.current.get(workload);
-        if (registeredRefresh) {
-            Logger.debug("UnifiedPim", `Delegating refresh to registered handler for: ${workload}`);
-            await registeredRefresh();
+    // ========================================================================
+    // Workload engines: one per loadable workload, all the loading logic lives in src/workloads
+    // ========================================================================
+
+    // The engines are created once and read the latest Graph client through a ref
+    const [liveClient] = useState(() => new LiveValue<(scopes?: string[]) => Promise<Client>>(getGraphClient));
+    useEffect(() => {
+        liveClient.set(getGraphClient);
+    }, [getGraphClient, liveClient]);
+
+    const engines = useMemo(() => {
+        const deps = <T, X>(workload: EngineKey): WorkloadEngineDeps<T, X> => ({
+            store: {
+                get: () => liveState.get().workloads[workload] as unknown as WorkloadState<T, X>,
+                apply: (updater) => setState(prev => ({
+                    ...prev,
+                    workloads: { ...prev.workloads, [workload]: updater(prev.workloads[workload] as unknown as WorkloadState<T, X>) }
+                })),
+            },
+            getClient: (scopes) => liveClient.get()(scopes),
+            onSynced: (timestamp) => addSyncHistoryEntry({ workload, timestamp }),
+        });
+        return {
+            directoryRoles: createWorkloadEngine(directoryRolesAdapter, deps<DirectoryRolesData, DirectoryRolesExtras>("directoryRoles")),
+            pimGroups: createWorkloadEngine(pimGroupsAdapter, deps<PimGroupDataType, undefined>("pimGroups")),
+        };
+    }, [addSyncHistoryEntry, liveState, liveClient]);
+
+    // Show what the session cache holds. Page effects run before this one, which is why the engine's `load` knows
+    // about a cache that is not shown yet. Directory Roles older than the TTL are refreshed here, as before.
+    const hydratedRef = useRef(false);
+    useEffect(() => {
+        if (hydratedRef.current) return;
+        hydratedRef.current = true;
+        const rolesTimestamp = engines.directoryRoles.hydrate();
+        if (rolesTimestamp !== null && !isWorkloadFresh(rolesTimestamp)) {
+            void engines.directoryRoles.refresh(false);
+        }
+        engines.pimGroups.hydrate();
+        return () => {
+            engines.directoryRoles.dispose();
+            engines.pimGroups.dispose();
+        };
+    }, [engines]);
+
+    // Write the caches whenever the data or the loading state changed; the engine skips it while anything loads
+    const rolesState = state.workloads.directoryRoles;
+    const groupsState = state.workloads.pimGroups;
+    useEffect(() => {
+        engines.directoryRoles.persist();
+    }, [engines, rolesState.data, rolesState.extras, rolesState.loading.phase, rolesState.loading.background?.running]);
+    useEffect(() => {
+        engines.pimGroups.persist();
+    }, [engines, groupsState.data, groupsState.loading.phase]);
+
+    const loadWorkload = useCallback(async (workload: WorkloadType): Promise<void> => {
+        const engine = engines[workload as EngineKey];
+        if (!engine) {
+            Logger.debug("UnifiedPim", `Load requested for ${workload} (not implemented)`);
             return;
         }
+        await engine.load();
+    }, [engines]);
 
-        // Cancel previous request for this workload
-        if (workloadAbortControllers.current.has(workload)) {
-            Logger.debug("UnifiedPim", `Cancelling previous refresh for ${workload}`);
-            workloadAbortControllers.current.get(workload)?.abort();
-            workloadAbortControllers.current.delete(workload);
+    const refreshWorkload = useCallback(async (workload: WorkloadType, force: boolean = false): Promise<void> => {
+        const engine = engines[workload as EngineKey];
+        if (!engine) {
+            Logger.debug("UnifiedPim", `Refresh requested for ${workload} (not implemented)`);
+            return;
         }
+        Logger.debug("UnifiedPim", `Refreshing ${workload} (force=${force})`);
+        await engine.refresh(force);
+    }, [engines]);
 
-        // Create new controller
-        const controller = new AbortController();
-        workloadAbortControllers.current.set(workload, controller);
-        const signal = controller.signal;
+    const clearWorkload = useCallback((workload: WorkloadType): void => {
+        engines[workload as EngineKey]?.clear();
+    }, [engines]);
 
-        try {
-            // Freshness check (unless forced)
-            const workloadState = state.workloads[workload];
-            if (!force && workloadState.lastFetched) {
-                const now = new Date();
-                const lastFetchedDate = new Date(workloadState.lastFetched);
-                const diff = now.getTime() - lastFetchedDate.getTime();
-                if (diff < 60 * 60 * 1000) { // 60 minutes cache TTL
-                    Logger.debug("UnifiedPim", `Data for ${workload} is fresh, skipping fetch`);
+    const patchWorkload = useCallback(<T, X = undefined>(
+        workload: WorkloadType,
+        updater: (content: WorkloadContent<T, X>) => WorkloadContent<T, X>,
+        immediate?: boolean
+    ): void => {
+        const engine = engines[workload as EngineKey] as unknown as WorkloadEngine<T, X> | undefined;
+        engine?.patch(updater, immediate);
+    }, [engines]);
 
-                    // Restore SyncStatus indicator with original timestamp
-                    addSyncHistoryEntry({
-                        workload: workload,
-                        timestamp: lastFetchedDate
-                    });
-
-                    return;
-                }
-            }
-
-            switch (workload) {
-                case "pimGroups": {
-                    // Safety: Check sessionStorage cache in case hydration hasn't finished yet (avoids race condition on F5)
-                    if (typeof sessionStorage !== "undefined" && !workloadState.lastFetched) {
-                        const cachedTs = sessionStorage.getItem(PIM_GROUPS_TIMESTAMP_KEY);
-                        if (cachedTs) {
-                            const diff = new Date().getTime() - new Date(cachedTs).getTime();
-                            if (diff < 60 * 60 * 1000) {
-                                Logger.debug("UnifiedPim", "Found fresh PIM Groups data in storage (pre-hydration), skipping fetch");
-                                // Manually hydrate if needed, or just let the useEffect hydration take over
-                                // returning here allows useEffect hydration to eventually populate state without triggering a new fetch
-
-                                // However, we must ensure loading state doesn't get stuck if we return here but hydration failed or hasn't run.
-                                // Since hydration runs on mount, it should coincide.
-                                // We can treat this as "Cache Hit" and let the hydration useEffect handle the state update.
-                                return;
-                            }
-                        }
-                    }
-
-                    // Get current data for Smart Sync check
-                    const currentData = (state.workloads.pimGroups.data || []) as PimGroupDataType[];
-                    const hasExistingData = currentData.length > 0;
-
-                    // Update loading state
-                    updateWorkloadState(workload, () => ({
-                        loading: {
-                            phase: "fetching",
-                            progress: { current: 0, total: 0 },
-                            message: "Loading PIM Groups data..."
-                        }
-                    }));
-
-                    // Get client with PIM Groups scope
-                    const client = await getGraphClient([
-                        ...WORKLOAD_SCOPES.directoryRoles,
-                        ...WORKLOAD_SCOPES.pimGroups
-                    ]);
-
-                    if (signal.aborted) throw new Error("Aborted");
-
-                    // Phase 1: Smart Sync (Delta) - only if we have existing data
-                    const storedDeltaLink = getStoredGroupDeltaLink();
-                    let smartSyncSuccess = false;
-                    let latestSmartSyncData: PimGroupDataType[] | null = null;
-
-                    // Match DirectoryRoles behavior: check hasExistingData BEFORE delta fetch
-                    if (storedDeltaLink && hasExistingData) {
-                        try {
-                            updateWorkloadState(workload, () => ({
-                                loading: {
-                                    phase: "fetching",
-                                    progress: { current: 0, total: 100 },
-                                    message: "Checking for updates..."
-                                }
-                            }));
-
-                            const deltaResult = await fetchGroupDeltas(client, storedDeltaLink);
-
-                            if (signal.aborted) throw new Error("Aborted");
-
-                            if (deltaResult) {
-                                // Smart Sync Possible
-                                const { changes, newDeltaLink } = deltaResult;
-
-                                if (changes.length === 0) {
-                                    Logger.debug("UnifiedPim", "Smart Sync: No changes found.");
-                                    updateWorkloadState(workload, () => ({
-                                        loading: {
-                                            phase: "complete",
-                                            progress: { current: 100, total: 100 },
-                                            message: "Up to date"
-                                        },
-                                        lastFetched: new Date().toISOString()
-                                    }));
-
-                                    // Record sync timestamp
-                                    addSyncHistoryEntry({
-                                        workload: 'pimGroups'
-                                    });
-
-                                    latestSmartSyncData = currentData;
-                                    smartSyncSuccess = true;
-                                } else {
-                                    Logger.debug("UnifiedPim", `Smart Sync: Processing ${changes.length} changes...`);
-
-
-                                    // Get current data to merge into
-                                    const currentData = (state.workloads.pimGroups.data || []) as PimGroupDataType[];
-
-                                    const updatedData = await syncGroupsWithDelta(
-                                        client,
-                                        currentData,
-                                        changes,
-                                        (current, total, status) => {
-                                            if (signal.aborted) return;
-                                            updateWorkloadState(workload, () => ({
-                                                loading: {
-                                                    phase: "fetching",
-                                                    progress: { current, total },
-                                                    message: status
-                                                }
-                                            }));
-                                        }
-                                    );
-
-                                    if (signal.aborted) throw new Error("Aborted");
-
-                                    updateWorkloadState(workload, () => ({
-                                        data: updatedData,
-                                        loading: {
-                                            phase: "complete",
-                                            progress: { current: 100, total: 100 },
-                                            message: `Synced ${changes.length} updates`
-                                        },
-                                        lastFetched: new Date().toISOString()
-                                    }));
-
-                                    // Record sync timestamp
-                                    addSyncHistoryEntry({
-                                        workload: 'pimGroups'
-                                    });
-
-                                    latestSmartSyncData = updatedData;
-                                    smartSyncSuccess = true;
-                                }
-                            }
-                        } catch (err) {
-                            if (err instanceof Error && err.message === "Aborted") throw err;
-                            Logger.warn("UnifiedPim", "Group Smart Sync failed, falling back to full fetch", err);
-                        }
-                    }
-
-                    // Reconcile newly PIM-onboarded groups: /groups/delta does NOT track PIM
-                    // onboarding events (creating an eligible assignment doesn't change group
-                    // properties). Cross-check the resources endpoint to catch any new groups.
-                    if (smartSyncSuccess && latestSmartSyncData !== null && !signal.aborted) {
-                        try {
-                            const resources = await fetchPimOnboardedResources(client);
-                            const managedIds = new Set(
-                                latestSmartSyncData
-                                    .filter(g => g.isManaged)
-                                    .map(g => g.group.id)
-                            );
-                            const newGroupChanges = resources
-                                .filter(r => !managedIds.has(r.id))
-                                .map(r => ({ id: r.id, "@odata.type": "#microsoft.graph.group", isDeleted: false as const }));
-
-                            if (newGroupChanges.length > 0 && !signal.aborted) {
-                                Logger.debug("UnifiedPim", `Smart Sync: Found ${newGroupChanges.length} newly PIM-onboarded group(s), fetching data...`);
-                                updateWorkloadState(workload, () => ({
-                                    loading: {
-                                        phase: "fetching",
-                                        progress: { current: 0, total: newGroupChanges.length },
-                                        message: `Loading ${newGroupChanges.length} newly onboarded group(s)...`
-                                    }
-                                }));
-
-                                const mergedData = await syncGroupsWithDelta(client, latestSmartSyncData, newGroupChanges);
-
-                                if (!signal.aborted) {
-                                    updateWorkloadState(workload, () => ({
-                                        data: mergedData,
-                                        loading: {
-                                            phase: "complete",
-                                            progress: { current: 100, total: 100 },
-                                            message: `Synced ${newGroupChanges.length} new group(s)`
-                                        },
-                                        lastFetched: new Date().toISOString()
-                                    }));
-                                }
-                            }
-                        } catch (err) {
-                            if (err instanceof Error && err.message === "Aborted") throw err;
-                            Logger.warn("UnifiedPim", "Smart Sync reconciliation check failed (non-fatal)", err);
-                        }
-                    }
-
-                    if (smartSyncSuccess) {
-                        return; // Done!
-                    }
-
-                    // Phase 2: Full Content Fetch (Assignments + Policies)
-                    // User Requirement: "Reliability First" - always fetch policies too.
-                    updateWorkloadState(workload, () => ({
-                        loading: {
-                            phase: "fetching",
-                            progress: { current: 0, total: 100 },
-                            message: "Refreshing PIM Groups..."
-                        }
-                    }));
-
-                    const groupData = await fetchAllPimGroupData(
-                        client,
-                        (current, total, status) => {
-                            if (signal.aborted) return;
-                            updateWorkloadState(workload, () => ({
-                                loading: {
-                                    phase: "fetching",
-                                    progress: { current, total },
-                                    message: status
-                                }
-                            }));
-                        },
-                        signal
-                    );
-
-                    // Update state with data
-                    updateWorkloadState(workload, () => ({
-                        data: groupData,
-                        loading: {
-                            phase: "complete",
-                            progress: { current: 1, total: 1 },
-                            message: `Loaded ${groupData.length} PIM Groups`
-                        },
-                        lastFetched: new Date().toISOString()
-                    }));
-
-                    // Record sync timestamp
-                    addSyncHistoryEntry({
-                        workload: 'pimGroups'
-                    });
-
-                    // Initialize delta link for future smart refreshes (fire-and-forget)
-                    if (!signal.aborted) {
-                        fetchGroupDeltas(client).then(() => {
-                            Logger.debug("UnifiedPim", "Group Delta link initialized for future smart refreshes");
-                        }).catch((err) => {
-                            Logger.warn("UnifiedPim", "Failed to initialize group delta link:", err);
-                        });
-                    }
-
-                    break;
-                }
-                case "directoryRoles":
-                    // Directory Roles is loaded via PimDataContext (backward compat)
-                    Logger.debug("UnifiedPim", "Directory Roles managed by PimDataContext");
-                    break;
-                default:
-                    Logger.debug("UnifiedPim", `Refresh requested for ${workload} (not implemented)`);
-            }
-        } catch (error: any) {
-            if (error.message === "Aborted" || signal.aborted) {
-                Logger.info("UnifiedPim", `Refresh aborted for ${workload}`);
-                return;
-            }
-
-            Logger.error("UnifiedPim", `Failed to refresh ${workload}:`, error);
-            updateWorkloadState(workload, () => ({
-                loading: {
-                    phase: "error",
-                    progress: { current: 0, total: 0 },
-                    message: "Failed to load data",
-                    error: error instanceof Error ? error.message : "Unknown error"
-                }
-            }));
-        }
-    }, [getGraphClient, updateWorkloadState]);
+    const peekWorkload = useCallback(<T, X = undefined>(workload: WorkloadType): WorkloadContent<T, X> => {
+        const ws = stateRef.current.workloads[workload] as unknown as WorkloadState<T, X>;
+        return { data: ws.data, extras: ws.extras };
+    }, []);
 
     const enableWorkload = useCallback(async (workload: WorkloadType): Promise<boolean> => {
-        // NOTE: Consent popup is already handled by SettingsModal via requestConsent hook
+        // NOTE: The consent popup is already handled by the caller via the requestConsent hook (settings page, wizard)
         // This function just updates state and triggers data refresh
 
         const scopes = WORKLOAD_SCOPES[workload];
@@ -689,15 +466,15 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
             });
 
             // Trigger data load
-            Logger.debug("UnifiedPim", `Triggering data refresh for ${workload}`);
-            await refreshWorkload(workload);
+            Logger.debug("UnifiedPim", `Triggering data load for ${workload}`);
+            await loadWorkload(workload);
 
             return true;
         } catch (error) {
             Logger.error("UnifiedPim", `Failed to enable ${workload}:`, error);
             return false;
         }
-    }, [WORKLOAD_SCOPES, updateWorkloadState, refreshWorkload]);
+    }, [updateWorkloadState, loadWorkload]);
 
     const disableWorkload = useCallback((workload: WorkloadType): void => {
         if (workload === "directoryRoles") {
@@ -705,16 +482,11 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        // Update consent state
+        // Abort a load that is going and forget the data and its cache, then withdraw the consent
+        clearWorkload(workload);
         updateWorkloadState(workload, () => ({
             consent: {
                 consented: false
-            },
-            data: [],
-            loading: {
-                phase: "idle",
-                progress: { current: 0, total: 0 },
-                message: ""
             }
         }));
 
@@ -725,11 +497,12 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         }));
 
         Logger.debug("UnifiedPim", `Disabled workload: ${workload}`);
-    }, [updateWorkloadState]);
+    }, [updateWorkloadState, clearWorkload]);
 
     // refreshAllWorkloads: Refresh all enabled workloads in parallel
+    // Reads consent through the state ref so the callback keeps a stable identity
     const refreshAllWorkloads = useCallback(async (force?: boolean): Promise<void> => {
-        const enabledWorkloads = Object.entries(state.workloads)
+        const enabledWorkloads = Object.entries(stateRef.current.workloads)
             .filter(([, ws]) => ws.consent.consented)
             .map(([w]) => w as WorkloadType);
 
@@ -740,7 +513,7 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         );
 
         Logger.debug("UnifiedPim", "All workloads refreshed");
-    }, [state.workloads, refreshWorkload]);
+    }, [refreshWorkload]);
 
     // ========================================================================
     // Initialization: Check consents and auto-load
@@ -760,18 +533,21 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                 const consented = await checkConsent();
                 Logger.debug("UnifiedPim", "Consented workloads:", consented);
 
+                // Sync to localStorage so UI components (WorkloadChips) are aware. This notifies other components,
+                // so it must not run inside the state updater below (React forbids that during render).
+                for (const workload of consented) {
+                    if (workload !== "directoryRoles") {
+                        setWorkloadEnabled(workload, true);
+                    }
+                }
+
                 // 2. Update consent state for all consented workloads
                 setState(prev => {
                     const newWorkloads = { ...prev.workloads } as UnifiedPimState["workloads"];
 
                     for (const workload of consented) {
-                        // Sync to localStorage to ensure UI components (WorkloadChips) are aware
-                        if (workload !== "directoryRoles") {
-                            setWorkloadEnabled(workload, true);
-                        }
-
                         // Use type assertion to handle dynamic key access
-                        (newWorkloads as Record<WorkloadType, WorkloadState<unknown>>)[workload] = {
+                        (newWorkloads as unknown as Record<WorkloadType, WorkloadState<unknown, unknown>>)[workload] = {
                             ...newWorkloads[workload],
                             consent: {
                                 consented: true,
@@ -788,14 +564,12 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
                     };
                 });
 
-                // 3. Auto-load data for consented workloads in priority order
-                // Note: directoryRoles is handled by PimDataProvider (backward compat)
-                // Other workloads are loaded here
+                // 3. Auto-load data for consented workloads in priority order.
+                // Directory Roles is the core workload: the pages load it when they mount.
                 for (const workload of LOAD_PRIORITY) {
                     if (consented.includes(workload) && workload !== "directoryRoles") {
                         Logger.debug("UnifiedPim", `Auto-loading data for ${workload}`);
-                        // Use standard refresh logic
-                        void refreshWorkload(workload).catch(err =>
+                        void loadWorkload(workload).catch(err =>
                             Logger.error("UnifiedPim", `Auto-load failed for ${workload}:`, err)
                         );
                     }
@@ -807,49 +581,149 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         };
 
         initialize();
-    }, [accounts, checkConsent, state.initialized, refreshWorkload]);
+    }, [accounts, checkConsent, state.initialized, loadWorkload]);
 
     // ========================================================================
     // Context Value
     // ========================================================================
 
-    // Register a workload-specific refresh function (modular pattern)
-    const registerWorkloadRefresh = useCallback((workload: WorkloadType, refreshFn: () => Promise<void>) => {
-        workloadRefreshRegistry.current.set(workload, refreshFn);
-        Logger.debug("UnifiedPim", `Registered refresh handler for: ${workload}`);
-    }, []);
+    // Data slices: each one only changes when that workload's data, consent or lastFetched change
+    const directoryRolesSlice = useWorkloadDataSlice(state.workloads.directoryRoles);
+    const pimGroupsSlice = useWorkloadDataSlice(state.workloads.pimGroups);
+    const intuneSlice = useWorkloadDataSlice(state.workloads.intune);
+    const exchangeSlice = useWorkloadDataSlice(state.workloads.exchange);
+    const sharepointSlice = useWorkloadDataSlice(state.workloads.sharepoint);
+    const defenderSlice = useWorkloadDataSlice(state.workloads.defender);
 
-    const contextValue: UnifiedPimContextValue = {
-        ...state,
-        getAvailableWorkloads,
+    const dataValue = useMemo<UnifiedDataValue>(() => ({
+        initialized: state.initialized,
+        activeWorkloads: state.activeWorkloads,
+        workloads: {
+            directoryRoles: directoryRolesSlice,
+            pimGroups: pimGroupsSlice,
+            intune: intuneSlice,
+            exchange: exchangeSlice,
+            sharepoint: sharepointSlice,
+            defender: defenderSlice
+        },
         getWorkloadData,
+        isWorkloadConsented
+    }), [
+        state.initialized, state.activeWorkloads,
+        directoryRolesSlice, pimGroupsSlice, intuneSlice, exchangeSlice, sharepointSlice, defenderSlice,
+        getWorkloadData, isWorkloadConsented
+    ]);
+
+    const { directoryRoles: drLoading, pimGroups: pgLoading, intune: inLoading, exchange: exLoading, sharepoint: spLoading, defender: dfLoading } = state.workloads;
+    const loadingValue = useMemo<UnifiedLoadingValue>(() => ({
+        workloads: {
+            directoryRoles: drLoading.loading,
+            pimGroups: pgLoading.loading,
+            intune: inLoading.loading,
+            exchange: exLoading.loading,
+            sharepoint: spLoading.loading,
+            defender: dfLoading.loading
+        },
+        syncHistory: state.syncHistory,
         isWorkloadLoading,
-        isWorkloadConsented,
+        getAvailableWorkloads
+    }), [
+        drLoading.loading, pgLoading.loading, inLoading.loading, exLoading.loading, spLoading.loading, dfLoading.loading,
+        state.syncHistory, isWorkloadLoading, getAvailableWorkloads
+    ]);
+
+    // Every member is a stable useCallback, so this object is created once
+    const actionsValue = useMemo<UnifiedActionsValue>(() => ({
+        loadWorkload,
         refreshWorkload,
         refreshAllWorkloads,
         enableWorkload,
         disableWorkload,
+        clearWorkload,
+        patchWorkload,
+        peekWorkload,
         addSyncHistoryEntry,
-        registerWorkloadRefresh,
-        getGraphClient,
-        updateWorkloadState
-    };
+        getGraphClient
+    }), [
+        loadWorkload, refreshWorkload, refreshAllWorkloads, enableWorkload, disableWorkload,
+        clearWorkload, patchWorkload, peekWorkload, addSyncHistoryEntry, getGraphClient
+    ]);
 
     return (
-        <UnifiedPimContext.Provider value={contextValue}>
-            {children}
-        </UnifiedPimContext.Provider>
+        <UnifiedActionsContext.Provider value={actionsValue}>
+            <UnifiedDataContext.Provider value={dataValue}>
+                <UnifiedLoadingContext.Provider value={loadingValue}>
+                    {children}
+                </UnifiedLoadingContext.Provider>
+            </UnifiedDataContext.Provider>
+        </UnifiedActionsContext.Provider>
     );
 }
 
 // ============================================================================
-// Hook
+// Hooks
 // ============================================================================
 
-export function useUnifiedPimData() {
-    const context = useContext(UnifiedPimContext);
+/** Workload data and consent only; does not re-render on loading progress. */
+export function useUnifiedData(): UnifiedDataValue {
+    const context = useContext(UnifiedDataContext);
     if (context === undefined) {
-        throw new Error("useUnifiedPimData must be used within a UnifiedPimProvider");
+        throw new Error("useUnifiedData must be used within a UnifiedPimProvider");
     }
     return context;
+}
+
+/** Loading phases, progress and sync history; re-renders on every progress tick. */
+export function useUnifiedLoading(): UnifiedLoadingValue {
+    const context = useContext(UnifiedLoadingContext);
+    if (context === undefined) {
+        throw new Error("useUnifiedLoading must be used within a UnifiedPimProvider");
+    }
+    return context;
+}
+
+/** Stable actions (refresh, enable, disable, Graph client); never re-renders consumers. */
+export function useUnifiedActions(): UnifiedActionsValue {
+    const context = useContext(UnifiedActionsContext);
+    if (context === undefined) {
+        throw new Error("useUnifiedActions must be used within a UnifiedPimProvider");
+    }
+    return context;
+}
+
+/**
+ * Compatibility hook that merges the three contexts into the previous single
+ * value. It re-renders on any change; prefer useUnifiedData, useUnifiedLoading
+ * or useUnifiedActions in components.
+ */
+export function useUnifiedPimData(): UnifiedPimContextValue {
+    const data = useUnifiedData();
+    const loading = useUnifiedLoading();
+    const actions = useUnifiedActions();
+
+    return useMemo<UnifiedPimContextValue>(() => {
+        const merge = <T, X = undefined>(workload: WorkloadType): WorkloadState<T, X> => ({
+            workload,
+            ...(data.workloads[workload] as unknown as WorkloadDataSlice<T, X>),
+            loading: loading.workloads[workload]
+        });
+        return {
+            initialized: data.initialized,
+            activeWorkloads: data.activeWorkloads,
+            syncHistory: loading.syncHistory,
+            workloads: {
+                directoryRoles: merge<DirectoryRolesData, DirectoryRolesExtras>("directoryRoles"),
+                pimGroups: merge<PimGroupDataType>("pimGroups"),
+                intune: merge<IntuneRoleData>("intune"),
+                exchange: merge<ExchangeRoleData>("exchange"),
+                sharepoint: merge<SharePointData>("sharepoint"),
+                defender: merge<DefenderRoleData>("defender")
+            },
+            getAvailableWorkloads: loading.getAvailableWorkloads,
+            getWorkloadData: data.getWorkloadData,
+            isWorkloadLoading: loading.isWorkloadLoading,
+            isWorkloadConsented: data.isWorkloadConsented,
+            ...actions
+        };
+    }, [data, loading, actions]);
 }

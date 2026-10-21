@@ -8,7 +8,7 @@ PIM Manager is a client-side SPA (Next.js static export) that can be hosted on a
 
 No setup required. Visit [pimmanager.com](https://pimmanager.com) and sign in with your Microsoft Entra ID account.
 
-You will need an App Registration in your tenant — see [App Registration](#app-registration) below.
+You will need an App Registration in your tenant, see [App Registration](#app-registration) below.
 
 ---
 
@@ -34,13 +34,13 @@ The ARM template creates the following resources in your chosen Resource Group:
 | Azure Static Web App (Free tier) | Hosts the application | Free |
 | User-assigned Managed Identity | Required by the deployment script | Free |
 | Storage Account (Standard LRS) | Temporary state for the deployment script | ~€0.01/month |
-| Deployment Script | Downloads the latest release and deploys it — removed after 24h | Free |
+| Deployment Script | Downloads the latest release and deploys it, removed after 24h | Free |
 
-The Managed Identity and Storage Account are infrastructure concerns for the one-time deployment process. They have no relation to how the running application authenticates users — that is handled entirely by your App Registration.
+The Managed Identity and Storage Account are infrastructure concerns for the one-time deployment process. They have no relation to how the running application authenticates users, that is handled entirely by your App Registration.
 
 ### Authentication: why no secrets are needed
 
-PIM Manager uses **Authorization Code Flow with PKCE** — the correct flow for browser-based SPAs. This flow requires only a Client ID, which is intentionally public. There is no client secret, no certificate, and nothing to rotate. Security is enforced by the redirect URI whitelist in your App Registration and by PKCE itself.
+PIM Manager uses **Authorization Code Flow with PKCE**: the correct flow for browser-based SPAs. This flow requires only a Client ID, which is intentionally public. There is no client secret, no certificate, and nothing to rotate. Security is enforced by the redirect URI whitelist in your App Registration and by PKCE itself.
 
 The Managed Identity in the ARM template is a separate concern: it only exists to authenticate the deployment container to Azure during the initial setup. Once the app is running, the Managed Identity is unused.
 
@@ -55,7 +55,7 @@ Before clicking Deploy, you need:
    az provider register --namespace Microsoft.ContainerInstance --wait
    ```
    Registering a provider requires Contributor or Owner on the subscription (Reader cannot register).
-3. An **App Registration** in your Entra ID tenant — see [App Registration](#app-registration) below
+3. An **App Registration** in your Entra ID tenant, see [App Registration](#app-registration) below
 
 > Create the App Registration first, but leave the Redirect URI blank for now. You will add it after deployment once you know your Static Web App URL.
 
@@ -78,7 +78,7 @@ Before clicking Deploy, you need:
 
 ### Deploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F0125joel%2FPIM-manager%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2F0125joel%2FPIM-Manager%2Fmain%2Fazuredeploy.json)
 
 The deployment form asks for:
 
@@ -87,7 +87,7 @@ The deployment form asks for:
 | **Subscription** | Your Azure subscription |
 | **Resource Group** | Select existing or create new |
 | **Static Web App Name** | Resource name in Azure (e.g. `pim-manager`) |
-| **Location** | Azure region — West Europe recommended |
+| **Location** | Azure region, West Europe recommended |
 | **Entra Client ID** | Client ID from your App Registration |
 
 Deployment takes approximately 3–5 minutes. When complete, the output shows your Static Web App URL.
@@ -97,11 +97,11 @@ Deployment takes approximately 3–5 minutes. When complete, the output shows yo
 After deployment, add your Static Web App URL as a Redirect URI in your App Registration:
 
 1. Go to **Entra ID > App registrations > [Your App] > Authentication**
-2. Under **Single-page application**, add your SWA URL (e.g. `https://your-app.azurestaticapps.net`)
+2. Under **Single-page application**, add your SWA URL followed by `/redirect` (e.g. `https://your-app.azurestaticapps.net/redirect`). This is the MSAL redirect bridge page; the path must match exactly
 3. Save
 
 > [!IMPORTANT]
-> The redirect URI must be registered under **Single-page application**, not under "Web". Using the "Web" type will cause MSAL authentication to fail with a CORS-related error.
+> The redirect URI must be registered under **Single-page application**, not under "Web". Using the "Web" type will cause MSAL authentication to fail with a CORS-related error. Registering only the bare origin (without `/redirect`) makes sign-in fail as well: MSAL v5 sends every popup and silent token response to the `/redirect` page.
 
 The app will not function until this step is completed.
 
@@ -116,7 +116,7 @@ All deployment options require an App Registration in your Microsoft Entra ID te
 1. Go to **Entra ID > App registrations > New registration**
 2. Name: anything recognisable (e.g. `PIM Manager`)
 3. Supported account types: **Accounts in this organizational directory only**
-4. Redirect URI: leave blank for now — add after deployment
+4. Redirect URI: leave blank for now, add `<your URL>/redirect` after deployment
 5. Register
 
 ### Required API permissions
@@ -138,4 +138,4 @@ Grant the following **Delegated** permissions (no Application permissions, no se
 
 Grant admin consent for your organisation after adding the permissions.
 
-> Additional permissions for PIM Groups, Security Alerts, and Configure features are requested incrementally via consent popups when the user enables those features. They do not need to be pre-configured here.
+> Additional permissions for PIM for Groups, Security Alerts, and Configure features are requested incrementally via consent popups when the user enables those features. They do not need to be pre-configured here.

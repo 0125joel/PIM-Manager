@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { VIEW_MODE_STORAGE_KEY } from "@/utils/viewModePreference";
 
 export type ViewMode = "basic" | "advanced";
 
@@ -13,7 +14,7 @@ interface ViewModeContextType {
 
 const ViewModeContext = createContext<ViewModeContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'dashboard-view-mode';
+const STORAGE_KEY = VIEW_MODE_STORAGE_KEY;
 
 interface ViewModeProviderProps {
     children: ReactNode;
@@ -24,10 +25,11 @@ export function ViewModeProvider({ children }: ViewModeProviderProps) {
     const [viewMode, setViewModeState] = useState<ViewMode>("basic");
     const [isHydrated, setIsHydrated] = useState(false);
 
-    // Load from localStorage on mount
+    // Load from localStorage on mount (after hydration, so the pre-rendered HTML matches)
     useEffect(() => {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored === "basic" || stored === "advanced") {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-time read of localStorage
             setViewModeState(stored);
         }
         setIsHydrated(true);

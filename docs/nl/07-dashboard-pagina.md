@@ -6,234 +6,49 @@ Het Dashboard is de centrale hub voor het monitoren van je Privileged Identity M
 
 ## Overzicht
 
-**Doel:** Real-time zichtbaarheid in PIM-dekking en toewijzingsdistributie voor Directory Roles en PIM Groups.
+**Doel:** Realtime inzicht in PIM-dekking en de verdeling van toewijzingen over Directory Roles en PIM for Groups.
 
-**Belangrijkste Mogelijkheden:**
-- Beveiligingsanalyse via analytische grafieken
-- Identificatie van configuratieproblemen en verlopende toewijzingen
-- Workload-gebaseerde data filtering
-- Interactieve filtering die doorloopt naar Report pagina
-- PDF export voor compliance rapportage
+**Paginakop:** de titel, een Basic- of Advanced-schakelaar, in Advanced een schakelaar Privileged roles of All roles, "synced N min ago", Refresh (slim verversen) en Export. Eronder de "counting"-chips (Directory roles, PIM for Groups, Unmanaged groups, Security alerts) die bepalen welke workloads op deze pagina meetellen; een workload zonder toestemming toont een gestippelde chip met slot die de toestemming start.
+
+**Filter:** een klik op een kaart, legenda-rij of Easy to miss-rij zet precies een filter, bewaard in de URL als `f` (bijvoorbeeld `/dashboard?f=mfa:neither`). Een balk onder de chips toont het filter als verwijderbare chip, een zin met het aantal en "Open in report with this filter". Escape wist het filter.
 
 ---
 
 ## Weergavemodi
 
-Het Dashboard ondersteunt twee weergavemodi:
+### Basic
 
-### Basismodus
-**Voor:** Snel overzicht en high-level inzichten
+Acht kaarten (4 bij 2), daarna in twee kolommen: **Has access** (donut permanent, eligible, active time-bound) en **On activation** (Entra MFA, auth context, neither, met approval, justification en over 8 h), **Role-assignable groups outside PIM** en **From Microsoft** (de eigen PIM-alerts, rijen klappen inline open), **Easy to miss** (zes rijen in drie categorieen) en een **tipbalk** met tips die uit de tenant worden berekend. Elk getal staat gedefinieerd in `utils/dashboardStats.ts` en is getest met een fixture.
 
-**Toont:**
-- 4 Overzichtskaarten (Totaal Rollen, Actieve Sessies, Permanente Toewijzingen, PIM-dekking)
-- 2 Beveiligingsgrafieken (Toewijzingsdistributie, MFA & CA Handhaving)
-- Security Alerts panel
-- Pro Tips carrousel
-- Roloverzicht (5 rollen)
-- Groepsoverzicht (5 groepen)
+### Advanced
 
-### Geavanceerde Modus
-**Voor:** Diepgaande analyse en gedetailleerde metrics
-
-**Toont:**
-- 7 Overzichtskaarten (voegt toe: Eligible Toewijzingen, Custom Rollen, Goedkeuring Vereist)
-- 7 Beveiligingsgrafieken (alle beschikbare grafieken)
-- Recente Activaties tijdlijn
-- Binnenkort Verlopend alerts
-- Top Gebruikers ranglijst
-- Goedkeurders Overzicht
-- Configuratiefouten widget
-- Rol & Groepen Overzicht
-
-**Toggle:** Klik op "Basis" of "Geavanceerd" knop in header. Modus blijft bewaard in localStorage.
+Dezelfde kop en kaarten, daarna vijf secties over de volle breedte: **Has access, and how**, **On activation** (grafieken voor MFA, approval, justification en maximale duur voor privileged of alle rollen, plus de lijst custom extensions), **PIM for Groups**, **Most privileged, and who approves** (top 6 accounts, approvers, een waarschuwing bij rollen met een approver) en **Right now** (lopende activeringen, eligibility die binnen 7 dagen eindigt). De secties gebruiken de hele tenant en worden gedimd zolang een filter actief is.
 
 ---
 
-## Dashboard Componenten
+## Kaarten
 
-### Overzichtskaarten
+| Kaart | Getal |
+|-------|-------|
+| Roles and groups | Roldefinities plus onboarded groepen die meetellen |
+| Active now | Actieve toewijzingen die door activering zijn ontstaan |
+| Permanent | Actieve toewijzingen zonder einde door een beheerder |
+| Eligible | Eligibility-schema's en -instanties |
+| Privileged roles | Rollen met `isPrivileged` (All roles in Advanced: alle rollen) |
+| Require approval | Privileged rollen waarvan het beleid goedkeuring vereist |
+| Custom roles | Rollen die niet ingebouwd zijn |
+| Groups under PIM | Aandeel onboarded groepen van de role-assignable groepen |
 
-High-level PIM metrics weergegeven als interactieve kaarten.
-
-**Basismodus (4 kaarten):**
-1. **Totaal Rollen** - Alle opgehaalde rollen (of "Totaal Items" als groepen ingeschakeld)
-2. **Actieve Sessies** - Momenteel actieve toewijzingen
-3. **Permanente Toewijzingen** - Always-on toegang
-4. **PIM-dekking** - % van bevoorrechte rollen met policies
-
-**Geavanceerde Modus (3 extra kaarten):**
-5. **Eligible Toewijzingen** - Gebruikers klaar om te activeren
-6. **Custom Rollen** - Aantal niet-ingebouwde rollen
-7. **Goedkeuring Vereist** - Rollen met goedkeuringsworkflows
-
-**Interactie:** Klik op kaart om filter toe te passen op dashboard data.
+Getallen die van beleid afhangen tonen een plaatshouder tot het beleid geladen is; een mislukte lading toont een streepje en de reden.
 
 ---
 
-### Beveiligingsgrafieken
+## Toestanden
 
-Multi-dimensionale analyse van PIM configuratie en toewijzingsdistributie.
-
-| Grafiek | Modus | Doel | Interactief |
-|---------|-------|------|-------------|
-| Toewijzingsdistributie | Beide | Permanent vs Eligible (rollen + groepen) | Ja |
-| MFA & CA Handhaving | Beide | Azure MFA / Conditional Access / Geen | Ja |
-| Toewijzingsmethode | Geavanceerd | Directe gebruiker vs Groepstoewijzingen (alleen rollen) | Ja |
-| Goedkeuringsvereisten | Geavanceerd | Rollen/Groepen die goedkeuring vereisen | Ja |
-| Max Duur Distributie | Geavanceerd | Histogram van activatieduurlimieten | Ja |
-| Authenticatie Contexten | Geavanceerd | CA contexten in gebruik (alleen rollen) | Ja |
-| PIM Groups Dekking | Geavanceerd | Managed vs Unmanaged groepen | Nee |
-
-**Speciale Features:**
-- **"Alleen" vs "Heeft Enige" modus** voor Toewijzingsdistributie en Toewijzingsmethode
-- **"Bevoorrecht" vs "Alle Rollen" toggle** voor MFA grafiek
-- **Kleurgecodeerde duur buckets** (Groen <1u tot Rood >12u)
-- **Respecteert workload toggles** - grafieken passen aan op basis van ingeschakelde workloads
-
-**Interactie:** Klik op grafieksegment om filter toe te passen.
-
----
-
-### Security Alerts
-
-**Bestand:** `SecurityAlerts.tsx`
-**Zichtbaarheid:** Alleen basismodus
-
-Toont Microsoft's ingebouwde PIM beveiligingsaanbevelingen.
-
-**Statussen:**
-- **Toestemming niet verleend:** Slot icoon + "Security Alerts Inschakelen" knop
-- **Laden:** Spinner
-- **Fout:** Alert driehoek + retry knop
-- **Succes:** Uitklapbare alert kaarten
-
-**Features:**
-- **Uitklapbare alerts** - Klik voor volledige beschrijving
-- **Alerts verbergen** - Verberg individuele alerts (session-stored)
-- **Geslaagde checks** - Inklapbare lijst van geslaagde checks
-- **Alles herstellen** - Verborgen lijst wissen
-
-**Toestemming:** Vereist `RoleManagementAlert.Read.Directory` scope
-
----
-
-### Rol & Groepen Overzicht
-
-**Roloverzicht (`DashboardRoleOverview.tsx`):**
-- Zoekvak + filter dropdown
-- 5 meest relevante rollen
-- Elke rolrij linkt naar gedetailleerd rapport
-
-**Groepsoverzicht (`GroupsOverview.tsx`):**
-- Stat kaarten: Eligible/Active members en owners
-- **Unmanaged Groups Alert** - Rode banner als groepen PIM omzeilen
-- 5 meest relevante groepen
-- Groepstype badges (Security, M365, Mail-enabled)
-
-**Zoekfilters:**
-- Alle rollen
-- Alleen bevoorrecht
-- PIM geconfigureerd
-
-**Navigatie:** Klik op rol/groep → navigeert naar `/report?search={naam}`
-
----
-
-### Recente Activaties (Alleen Geavanceerd)
-
-**Bestand:** `RecentActivations.tsx`
-
-Tijdlijnweergave van laatste 10 rolactivaties.
-
-**Features:**
-- Tijdlijnlay-out met stippen en verbindingslijnen
-- Verloop badges (indien tijdgebonden)
-- Principal type indicator (Gebruiker/Groep)
-- Privilege level indicator (amber voor bevoorrechte rollen)
-- "Verlopen" status voor eerdere activaties
-
----
-
-### Binnenkort Verlopend (Alleen Geavanceerd)
-
-**Bestand:** `ExpiringSoon.tsx`
-
-Alert voor toewijzingen die binnen 7 dagen verlopen.
-
-**Features:**
-- Volgende 10 eerst-verlopende toewijzingen
-- Kleurgecodeerde urgentie:
-  - Rood: ≤1 dag
-  - Oranje: ≤3 dagen
-  - Geel: >3 dagen
-- Aftelling weergave: "Vandaag", "Morgen", "Xd"
-
----
-
-### Top Gebruikers (Alleen Geavanceerd)
-
-**Bestand:** `TopUsers.tsx`
-
-Identificeer gebruikers met meeste bevoorrechte toegang.
-
-**Metrics per gebruiker:**
-- Totaal aantal toewijzingen
-- Uitsplitsing: X Permanent, Y Eligible, Z Actief
-- Uniek rollenantal
-- Ranglijst badge (1e goud, 2e zilver, 3e brons)
-
-Toont top 10 gebruikers gesorteerd op totaal aantal toewijzingen.
-
----
-
-### Goedkeurders Overzicht (Alleen Geavanceerd)
-
-**Bestand:** `ApproversOverview.tsx`
-
-Toont wie rolactivaties kan goedkeuren.
-
-**Data per goedkeurder:**
-- Naam en email
-- Aantal rollen dat ze goedkeuren
-- Top 10 goedkeurders (op rollenantal)
-
----
-
-### Configuratiefouten (Alleen Geavanceerd)
-
-**Bestand:** `ConfigurationErrors.tsx`
-
-Benadrukt rollen met fetch/configuratiefouten.
-
-**Fouttypes:**
-- 404: Niet Gevonden
-- 403: Toegang Geweigerd
-- 429: Rate Limited
-- Overige: Generieke fouten
-
-**Features:**
-- Gegroepeerd op fouttype
-- Toont tot 3 rollen per type, "+X meer" indicator
-- Refresh knop om mislukte fetches opnieuw te proberen
-- Succestatus: Groen vinkje
-
----
-
-### Pro Tip (Alleen Basismodus)
-
-**Bestand:** `ProTip.tsx`
-
-Educatieve carrousel met PIM best practices.
-
-**Features:**
-- 10 roterende tips over PIM configuratie
-- Auto-roteert elke 8 seconden
-- Pauzeer/hervat knop
-- Vorige/volgende navigatie
-- Stipindicatoren (klikbaar)
-- "Meer informatie" link naar Microsoft docs
-
-**Tips behandeld:** Eligible toewijzingen, goedkeuringsworkflows, activatieduur, access reviews, MFA handhaving, global admin limieten, security alerts, rechtvaardiging, authenticatie contexten, break-glass accounts
+- **Laden:** skeletons, een voortgangslijn en een statuszin; nooit een 0 voor een onbekende waarde.
+- **Geen toestemming:** een kader met slot en "Grant read access".
+- **Alles in orde:** een succesregel ("No alerts. 7 checks passed.").
+- **Mislukt:** een kader met de oorzaak (statuscode na pogingen), Try again en Dismiss; nooit een toast.
 
 ---
 
@@ -246,8 +61,8 @@ Rij van gekleurde chips die actieve workloads tonen met tandwiel knop om Instell
 **Chips:**
 1. **Directory Roles** (Shield icoon) - Blauw wanneer zichtbaar
 2. **Security Alerts** (Alert icoon) - Toggle onder Directory Roles
-3. **PIM Groups** (Users icoon) - Blauw wanneer zichtbaar
-4. **Unmanaged Groups** (ShieldOff icoon) - Toggle onder PIM Groups
+3. **PIM for Groups** (Users icoon) - Blauw wanneer zichtbaar
+4. **Unmanaged Groups** (ShieldOff icoon) - Toggle onder PIM for Groups
 
 **Gedrag:**
 - Verborgen chips tonen met doorstreepte tekst + EyeOff icoon
@@ -279,49 +94,16 @@ Rij van gekleurde chips die actieve workloads tonen met tandwiel knop om Instell
 
 ## Filtersysteem
 
-### Hoe Filtering Werkt
-
-1. **URL Parameters** - Gelezen via `useSearchParams()`
-   - Voorbeeld: `/dashboard?assignmentType=permanent&memberType=direct`
-
-2. **Universele Filter Hook** - `useRoleFilters()`
-   - Leest URL → parseert parameters
-   - Filtert data in real-time
-   - Biedt: `filteredRoles`, `hasActiveFilters`, `resetFilters()`
-
-3. **Interactieve Triggers:**
-   - Klik op taartdiagramsegment
-   - Klik op overzichtskaart
-   - Gebruik actieve filters banner knoppen
-
-4. **Ondersteunde Filters:**
-   - `assignmentType`: permanent, eligible, active
-   - `memberType`: direct, group
-   - `mfaType`: azure-mfa, ca-any, none
-   - `approval`: yes, no
-   - `maxDuration`: <1h, 2-4h, 5-8h, 9-12h, >12h
-   - `privileged`: true, false
-   - `pimConfigured`: configured
-   - `roleType`: custom
-
-5. **Actieve Filters Banner:**
-   - Toont filteraantal
-   - "Rapport Bekijken" knop linkt naar rapport met zelfde filters behouden
-   - "Alle filters wissen" knop reset
+Een filtermodel voor dashboard en rapport (`utils/dashboardFilter.ts`): `assignment`, `privileged`, `approval`, `mfa`, `justification`, `maxDuration`, `principalType`, `noEndDate`, `activationNotification`, `hasEligible`, `roleTemplateId`, `customRole`, `excludeEmergency`. Een klik zet precies een filter, meerdere sleutels worden `f=sleutel:waarde,sleutel:waarde`. Een filter op een activatieterm zonder `privileged` wordt als privileged rollen toegepast. "Open in report with this filter" neemt het filter mee naar `/report?f=...`, waar het rapport dezelfde functies toepast, zodat beide dezelfde rollen tonen.
 
 ---
 
 ## Navigatie naar Rapport
 
-**Links naar Rapport Pagina:**
-
 | Component | Link | Gedrag |
 |-----------|------|--------|
-| Actieve Filters Banner | "Rapport Bekijken" | `/report?{alle huidige URL params}` |
-| Roloverzicht | Rolrij klik | `/report?search={rol.naam}` |
-| Roloverzicht footer | "Volledig rapport bekijken" | `/report?workload=directoryRoles` |
-| Groepsoverzicht | Groepsrij klik | `/report?search={groep.naam}` |
-| Groepsoverzicht footer | "Volledig rapport bekijken" | `/report?workload=pimGroups` |
+| Filterbalk | "Open in report with this filter" | `/report?f={filter}` |
+| Advanced PIM for Groups | "All in report" | `/report` |
 
 ---
 
@@ -332,10 +114,10 @@ Rij van gekleurde chips die actieve workloads tonen met tandwiel knop om Instell
 | Databron | Doel |
 |----------|------|
 | `usePimData()` | Directory roles + toewijzingen + policies |
-| `useUnifiedPimData()` | PIM Groups + workload management |
-| `useRoleFilters()` | Universeel filtersysteem |
+| `useUnifiedPimData()` | PIM for Groups + workload management |
+| `useDashboardFilter()` | Het filter `f` in de URL |
 | `useSecurityAlerts()` | Microsoft security alerts API |
-| `useAggregatedData()` | Gecombineerde rollen + groepen metrics |
+| `useDashboardScope()` | Privileged of All roles (Advanced) |
 | `useViewMode()` | Basis/Geavanceerd toggle status |
 
 ---
@@ -351,7 +133,7 @@ Rij van gekleurde chips die actieve workloads tonen met tandwiel knop om Instell
 - Security alerts (indien toestemming verleend)
 - Filter samenvatting (indien actief)
 
-**Componenten:** `PdfExportModal` voor aanpassing
+**Componenten:** `ExportDialog` (PDF of CSV; de CSV heeft de kolommen van het Overview-toewijzingenbestand van de Report, `utils/exportSchema.ts`; detail, doelgroep, namen, grafiekstijl, workloads, filter, inhoudsblokken); de inhoud komt uit `utils/exportReport.ts` en `components/pdf/ReportDocument.tsx` tekent hem
 
 ---
 

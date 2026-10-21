@@ -52,10 +52,12 @@ const loginRequest = {
 - `PrivilegedAccess.Read.AzureADGroup` - PIM for Groups
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
+- `PrivilegedAccess-CustomExt.Read.All` - Lijst van PIM custom extensions (Preview); lezen welke extension een beleid koppelt vraagt geen extra scope
+- `Policy.Read.All` - De optionele Conditional Access-check van Configureren, op verzoek gevraagd (vraagt ook een rol die Conditional Access mag lezen)
 
-**Standaard Read-Only:** Geen write scopes in de core inlogaanvraag. Schrijfmachtigingen worden via incremental consent aangevraagd wanneer de gebruiker de Configuratiepagina opent:
+**Standaard Read-Only:** Geen write scopes in de core inlogaanvraag. Schrijfmachtigingen worden via incremental consent aangevraagd wanneer de gebruiker in Configure kiest voor Grant permission, per workload:
 - Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
-- PIM Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
+- PIM for Groups: `RoleManagementPolicy.ReadWrite.AzureADGroup`, `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup`, `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup`
 
 ---
 
@@ -71,11 +73,10 @@ export const msalConfig: Configuration = {
   auth: {
     clientId: getClientId(),  // Runtime config (self-hosted) of NEXT_PUBLIC_CLIENT_ID (SaaS)
     authority: "https://login.microsoftonline.com/organizations",
-    redirectUri: window.location.origin  // Automatisch gedetecteerd, werkt op elk hosting domein
+    redirectUri: `${window.location.origin}/redirect`  // Automatisch gedetecteerde origin plus de MSAL redirect-bridgepagina
   },
   cache: {
-    cacheLocation: "sessionStorage",  // Kritiek: NIET localStorage
-    storeAuthStateInCookie: false
+    cacheLocation: "sessionStorage"  // Kritiek: NIET localStorage
   }
 };
 ```
@@ -96,14 +97,15 @@ cache: {
 ```
 
 **Waarom SessionStorage?**
-- ✅ Tokens automatisch gewist wanneer browser/tab sluit
-- ✅ Niet toegankelijk over browser tabs heen
-- ✅ Niet persistent op disk
-- ❌ LocalStorage blijft onbeperkt bestaan (beveiligingsrisico)
+- Tokens automatisch gewist wanneer browser/tab sluit
+- Niet toegankelijk over browser tabs heen
+- Niet persistent op disk
+- LocalStorage blijft onbeperkt bestaan (beveiligingsrisico)
 
 **Wat wordt Opgeslagen:**
-- **sessionStorage**: Access tokens, refresh tokens, ID tokens, delta sync links
+- **sessionStorage**: Access tokens, refresh tokens, ID tokens, de geladen Graph-data (cache van 60 minuten)
 - **localStorage**: Alleen UI voorkeuren (theme, log level, workload zichtbaarheid)
+- **De ene uitzondering, begrensd door de sessie**: Last applies van Configure (de laatste tien applies met hun snapshot, met weergavenamen) staan in localStorage zodat Undo een herlaad overleeft; uitloggen wist ze samen met het mandje en de undo-status (besluit van 2026-10-08)
 
 ### Token Levenscyclus
 
@@ -156,7 +158,7 @@ const nextConfig: NextConfig = {
 1. Gebruiker authenticeert → Token opgeslagen in sessionStorage
 2. Graph API call → Direct van browser naar graph.microsoft.com
 3. Response verwerkt → Alleen in-memory (geen persistentie)
-4. Delta links gecached → sessionStorage (voor efficiëntie)
+4. Geladen data gecached → sessionStorage (60 minuten, voor efficiëntie)
 5. Browser sluiten → Alle tokens en data gewist
 
 **Geen Data Transmissie:** Zero data verzonden naar PIM Manager infrastructuur of third parties.
@@ -165,11 +167,9 @@ const nextConfig: NextConfig = {
 
 **SessionStorage Gebruik:**
 ```typescript
-// src/services/deltaService.ts
-const STORAGE_DELTA_LINK_KEY = "pim_directory_roles_delta_link";
-const STORAGE_GROUP_DELTA_LINK_KEY = "pim_groups_delta_link";
-
-sessionStorage.setItem(STORAGE_DELTA_LINK_KEY, deltaLink);
+// src/workloads/cache.ts (createSessionCache): the loaded workload data, 60 minute TTL
+sessionStorage.setItem("pim_data_cache_v4", JSON.stringify(content.data));
+sessionStorage.setItem("pim_data_timestamp", lastFetched);
 ```
 
 **LocalStorage Gebruik (Niet-Gevoelig Alleen):**
@@ -180,12 +180,12 @@ localStorage.setItem("LOG_LEVEL", "DEBUG");
 // src/hooks/useIncrementalConsent.ts
 localStorage.setItem("pim_workload_enabled_directoryRoles", "true");
 
-// src/components/SettingsModal.tsx
+// src/hooks/useWorkloadPermissions.ts
 localStorage.setItem("pim_visibility_directoryRoles", "true");
 ```
 
 **Scheiding van Concerns:**
-- sessionStorage: Tokens, API responses, delta links (gevoelig)
+- sessionStorage: Tokens, API responses (gevoelig)
 - localStorage: UI voorkeuren, feature flags (niet-gevoelig)
 
 ---
@@ -262,13 +262,10 @@ const filter = `startswith(displayName,'${escapeODataString(debouncedQuery)}')`;
 
 **Error Handling:**
 ```typescript
-// src/services/deltaService.ts
+// src/utils/errorUtils.ts
 catch (error: unknown) {
-  if (error instanceof Error && error.message.includes("410")) {
-    // Delta token expired, fallback naar full sync
-    return null;
-  }
-  throw error;
+  if (isAbortError(error)) return; // a replaced or cancelled run, not a failure
+  Logger.error("PimData", getErrorMessage(error));
 }
 ```
 
@@ -327,11 +324,11 @@ if (!isAuthenticated) {
 ### Geen Telemetrie of Tracking
 
 **Zero Externe Services:**
-- ❌ Geen Google Analytics
-- ❌ Geen Mixpanel, Segment, Amplitude
-- ❌ Geen error tracking (Sentry, Rollbar)
-- ❌ Geen telemetrie beacons
-- ✅ Alleen Microsoft Graph API calls
+- Geen Google Analytics
+- Geen Mixpanel, Segment, Amplitude
+- Geen error tracking (Sentry, Rollbar)
+- Geen telemetrie beacons
+- Alleen Microsoft Graph API calls
 
 **Bezoekersteller:** Externe badge in README (niet-functioneel, alleen cosmetisch)
 
@@ -367,7 +364,7 @@ if (!isAuthenticated) {
 
 **Workload Isolatie:**
 - Core: Directory Roles (altijd ingeschakeld)
-- Optioneel: PIM Groups, Security Alerts (expliciete consent vereist)
+- Optioneel: PIM for Groups, Security Alerts, lijst van custom extensions, Conditional Access-check (expliciete consent vereist)
 - Gepland: Intune, Exchange, SharePoint (niet geïmplementeerd)
 
 ---
@@ -376,14 +373,14 @@ if (!isAuthenticated) {
 
 ### Voor Eindgebruikers
 
-**✅ Wel:**
+**Wel:**
 - Review gevraagde permissies voor consent
 - Gebruik moderne browsers (Chrome, Edge, Firefox, Safari)
 - Log uit wanneer klaar (wist alle tokens)
 - Schakel MFA in op je Microsoft account
 - Houd je browser up-to-date
 
-**❌ Niet:**
+**Niet:**
 - Deel je sessie met anderen
 - Gebruik PIM Manager op publieke computers zonder uit te loggen
 - Installeer onbetrouwbare browser extensies
@@ -391,14 +388,14 @@ if (!isAuthenticated) {
 
 ### Voor Administrators
 
-**✅ Wel:**
+**Wel:**
 - Review app registratie permissies in Entra ID
 - Monitor consent grants in audit logs
 - Gebruik Conditional Access policies voor PIM Manager toegang
 - Audit PIM configuratie wijzigingen regelmatig
 - Schakel sign-in risk policies in
 
-**❌ Niet:**
+**Niet:**
 - Verleen admin consent voor onnodige scopes
 - Sta PIM Manager toe op unmanaged devices (zonder Conditional Access)
 - Sla security reviews van open-source dependencies over
@@ -413,10 +410,10 @@ if (!isAuthenticated) {
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net;
-  style-src 'self' 'unsafe-inline';
+  script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
+  style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -424,7 +421,9 @@ Content-Security-Policy:
 ```
 
 > [!NOTE]
-> `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'wasm-unsafe-eval'` in `script-src` is vereist door `@react-pdf/renderer` om zijn WebAssembly module te initialiseren (nodig voor PDF export). `'unsafe-inline'` in `script-src` is vereist omdat Next.js static export inline RSC hydration scripts (`self.__next_f.push`) injecteert die niet te vermijden zijn. Het inline theme-script wordt geladen vanuit `/theme-init.js` (via `next/script`), maar de Next.js runtime hydration vereist nog steeds `'unsafe-inline'`.
+> `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'wasm-unsafe-eval'` in `script-src` is vereist door `@react-pdf/renderer` om zijn WebAssembly module te initialiseren (nodig voor PDF export). `'unsafe-inline'` staat **niet** in `script-src`: de Next.js static export injecteert een kleine, vaste set inline hydration-scripts (`self.__next_f.push`, `self.__next_s.push`) en omdat de HTML tijdens de build wordt gegenereerd is hun inhoud bekend. `npm run build` draait na `next build` het script `scripts/generate-csp-hashes.mjs`; dat hasht elk inline `<script>` in `out/**/*.html` (SHA-256) en vervangt de placeholder `__CSP_SCRIPT_HASHES__` in `out/_headers` en `out/staticwebapp.config.json` door de lijst `'sha256-...'`. De bronbestanden in `public/` houden de placeholder, dus alleen de geëxporteerde kopieën bevatten hashes en de deployment moet altijd de bestanden uit `out/` gebruiken (de Azure-testworkflow leest `config_file_location: "out"`). Het theme- en runtime-configscript zijn externe bestanden (`/theme-init.js`, `/env-config.js`) en vallen onder `'self'`. Ook `style-src` is alleen `'self'`: Tailwind komt als stylesheet, de geëxporteerde HTML heeft geen inline `<style>`-element of `style`-attribuut (het post-build script laat de build falen als er een verschijnt), en React zet de `style`-prop via de CSSOM, die CSP niet blokkeert. `https://static.cloudflareinsights.com` (`script-src`) en `https://cloudflareinsights.com` (`connect-src`) laten de beacon van Cloudflare Web Analytics door: bij automatische injectie rapporteert die aan de eigen `/cdn-cgi/rum` (`'self'`), bij het handmatige of Pages-snippet aan `cloudflareinsights.com`. De host staat er zonder pad in, zodat zowel `beacon.min.js` als de geversioneerde URL `beacon.min.js/v...` matcht. Op Cloudflare Pages moet het build command `npm run build` zijn: met alleen `next build` gaat de placeholder live en wordt elk inline script geblokkeerd (lege pagina, React error #412).
+
+> `https://pimmonitor.com` in `connect-src` laat Configure de openbare access model-catalogus van PIM Monitor lezen (`/catalog/v1/eam-catalog.json`). Het verzoek is een gewone GET zonder credentials en bevat geen tenantgegevens; als de host geblokkeerd is, gebruikt de app de kopie die met de app wordt meegeleverd.
 
 **Aanvullende Headers:**
 ```
@@ -446,46 +445,46 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
 ### Wat PIM Manager Beschermt Tegen
 
-✅ **Ongeautoriseerde Toegang**
+**Ongeautoriseerde Toegang**
 - MSAL forceert authenticatie voor alle API calls
 - Multi-factor authenticatie (MFA) ondersteund
 - Conditional Access policies gerespecteerd
 
-✅ **Data Exfiltratie**
+**Data Exfiltratie**
 - Client-only architectuur voorkomt server-side data diefstal
 - Geen data persistentie buiten browser sessie
 - Directe Graph API calls (geen tussenliggende proxies)
 
-✅ **Token Diefstal**
+**Token Diefstal**
 - SessionStorage gewist bij browser sluiten
 - Tokens niet toegankelijk over tabs heen
 - MSAL handelt veilige token opslag af
 
-✅ **API Misbruik**
+**API Misbruik**
 - Rate limiting via worker pool
 - Throttling bescherming met vertragingen
 - Request validatie voor API calls
 
-✅ **XSS Aanvallen**
+**XSS Aanvallen**
 - React automatische escaping
 - Input sanitisatie (OData escaping)
 - Geen dynamische code execution
 
 ### Wat PIM Manager NIET Beschermt Tegen
 
-❌ **Gecompromitteerd Gebruikersaccount**
+**Gecompromitteerd Gebruikersaccount**
 - Als gebruiker's Microsoft account gecompromitteerd is, erft aanvaller PIM Manager toegang
 - **Mitigatie**: Schakel MFA in, monitor sign-in logs
 
-❌ **Kwaadaardige Browser Extensies**
+**Kwaadaardige Browser Extensies**
 - Extensies kunnen sessionStorage lezen en API calls intercepteren
 - **Mitigatie**: Installeer alleen betrouwbare extensies, review permissies
 
-❌ **Fysieke Toegang tot Ontgrendeld Apparaat**
+**Fysieke Toegang tot Ontgrendeld Apparaat**
 - Actieve sessie kan gekaapt worden als apparaat ontgrendeld is
 - **Mitigatie**: Lock screen wanneer weg, log uit na gebruik
 
-❌ **Man-in-the-Middle (MITM)**
+**Man-in-the-Middle (MITM)**
 - Als HTTPS gecompromitteerd is (bijv. rogue CA), kunnen tokens onderschept worden
 - **Mitigatie**: Gebruik betrouwbare netwerken, verifieer SSL certificaten
 

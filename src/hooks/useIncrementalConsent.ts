@@ -42,6 +42,13 @@ export const WORKLOAD_WRITE_SCOPES: Record<WorkloadType, string[]> = {
     defender: []
 };
 
+// Same-tab change notification for workload/feature enablement and visibility.
+// The browser `storage` event only fires in OTHER tabs, so components that read
+// these localStorage flags (WorkloadChips, useWorkloadVisibility) listen to this
+// event instead of polling.
+import { notifyWorkloadStateChange, WORKLOAD_STATE_EVENT } from "@/utils/workloadPreferences";
+export { notifyWorkloadStateChange, WORKLOAD_STATE_EVENT };
+
 // Persistence helpers
 const STORAGE_KEY_PREFIX = "pim_workload_enabled_";
 
@@ -70,6 +77,7 @@ export function setWorkloadEnabled(workload: WorkloadType, enabled: boolean): vo
     } else {
         localStorage.removeItem(`${STORAGE_KEY_PREFIX}${workload}`);
     }
+    notifyWorkloadStateChange();
 }
 
 // Write consent persistence (for Configure features)
@@ -93,6 +101,15 @@ export function setWriteConsentGranted(workloadId: string, granted: boolean): vo
  * Hook for requesting incremental consent for additional workloads.
  * Triggers MSAL popup to acquire permissions, then persists to localStorage.
  */
+/** MSAL errors carry their code in `errorCode` rather than `code` */
+function getMsalErrorCode(error: unknown): string | undefined {
+    if (error && typeof error === "object" && "errorCode" in error) {
+        const code = (error as { errorCode?: unknown }).errorCode;
+        if (typeof code === "string") return code;
+    }
+    return undefined;
+}
+
 export function useIncrementalConsent() {
     const { instance, accounts } = useMsal();
 
@@ -119,8 +136,8 @@ export function useIncrementalConsent() {
             });
             setWorkloadEnabled(workload, true);
             return true;
-        } catch (popupError: any) {
-            if (popupError?.errorCode === "interaction_in_progress") {
+        } catch (popupError: unknown) {
+            if (getMsalErrorCode(popupError) === "interaction_in_progress") {
                 try {
                     await instance.acquireTokenSilent({
                         scopes,
@@ -153,8 +170,8 @@ export function useIncrementalConsent() {
             });
             setWriteConsentGranted(workload, true);
             return true;
-        } catch (popupError: any) {
-            if (popupError?.errorCode === "interaction_in_progress") {
+        } catch (popupError: unknown) {
+            if (getMsalErrorCode(popupError) === "interaction_in_progress") {
                 try {
                     await instance.acquireTokenSilent({
                         scopes,

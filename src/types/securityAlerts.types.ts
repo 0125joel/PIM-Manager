@@ -41,7 +41,7 @@ export interface SecurityAlert {
     // Expanded relationships
     alertDefinition?: SecurityAlertDefinition;
     alertIncidents?: SecurityAlertIncident[];
-    alertConfiguration?: Record<string, any>;
+    alertConfiguration?: Record<string, unknown>;
 }
 
 export interface SecurityAlertsState {
@@ -65,22 +65,6 @@ export function getSeverityColor(severity: AlertSeverity): string {
             return '#6b7280'; // gray-500
         default:
             return '#6b7280'; // gray-500
-    }
-}
-
-// Helper function to get severity icon
-export function getSeverityIcon(severity: AlertSeverity): string {
-    switch (severity) {
-        case 'high':
-            return '🔴';
-        case 'medium':
-            return '🟠';
-        case 'low':
-            return '🔵';
-        case 'informational':
-            return 'ℹ️';
-        default:
-            return '⚪';
     }
 }
 

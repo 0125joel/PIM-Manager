@@ -1,393 +1,43 @@
 # Configuratiepagina
 
-Dit document legt de functies en functionaliteit van de Configuratiepagina uit, waar je PIM-instellingen voor rollen en groepen kunt configureren.
+Dit document beschrijft de Configure-pagina, waar je PIM-instellingen en toewijzingen van rollen en groepen wijzigt. Elke wijziging gaat door één mandje, één review en één apply.
 
 ---
 
 ## Overzicht
 
-De Configuratiepagina biedt drie modi voor het beheren van PIM-configuraties:
+De startpagina toont je **schrijftoegang** (wat je mag wijzigen, per gebied), de **ingangskaarten**, het paneel **access model** en **Last applies**. Vier modi staan in de modusbalk en in de URL (`mode=edit|guided|import|model`):
 
-1. **Wizard Modus** — Stapsgewijze begeleide configuratie met validatie en preview bij elke stap
-2. **Handmatige Modus** — Volledige controle over individuele rol- en groepsinstellingen met automatisch laden van de huidige configuratie
-3. **Bulk Modus** — CSV-gebaseerde batchconfiguratie voor beleid en toewijzingen voor alle vier CSV-types (Rol Policies, Groep Policies, Rol Toewijzingen, Groep Toewijzingen)
+1. **Edit**: een master-detail lijst van rollen en groepen. Kies een doel, wijzig instellingen op de tabs Activation, Assignment en Notification, bekijk en wijzig wie toegang heeft (Who has it, Add people). *Select several* wijzigt één waarde op meerdere doelen; *Copy settings to* kopieert de instellingen van een doel.
+2. **Guided**: een route in stappen (Start, Targets, Settings, People) voor een wijziging op veel doelen, eventueel vanuit het PIM Monitor access model.
+3. **Import**: sleep een CSV- of JSON-bestand (toewijzingen, rol- of groepsinstellingen, een access model-bestand, of een bestand met de keuzes van het access model dat je op de pagina Access model hebt opgeslagen; een back-up wordt herkend maar kan nog niet worden geïmporteerd). PIM Manager herkent het bestand, toont een naslag van de kolommen en een sjabloon, en vergelijkt elke rij met de tenant.
+4. **Access model**: het bord van het Enterprise Access Model (vlakken en niveaus), de catalogus van rollen met verwachte instellingen en de plaatsing van je groepen. Exporteren slaat de aanbevolen rolinstellingen op als CSV die je kunt bewerken en weer importeren, en je keuzes van labels en groepsplaatsingen als JSON. Hier wordt niets naar de tenant geschreven.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Configure PIM                                 │
-│   Beheer PIM rollen en groepen efficiënt.                        │
-├─────────────────────────────────────────────────────────────────┤
-│ ▌ [🪄] Wizard        Begeleide stapsgewijze configuratie   [→]  │
-│   Aanbevolen wanneer: Nieuw met PIM of bulk-wijzigingen          │
-├─────────────────────────────────────────────────────────────────┤
-│   [⚙] Handmatig     Volledige controle over instellingen   [→]  │
-│   Aanbevolen wanneer: Direct toegang zonder begeleide flow       │
-├─────────────────────────────────────────────────────────────────┤
-│   [📊] Bulk         Upload CSV voor configuratie op schaal  [→]  │
-│   Aanbevolen wanneer: Je hebt een bestaande export om toepassen  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-> [!NOTE]
-> Elke modus wordt weergegeven als een horizontale rij met een kleurverloop-icoon. De geselecteerde rij toont een gekleurde linkerstreep. Klik een rij om te selecteren en klik vervolgens op **Doorgaan**.
+Keep is overal de standaard: een waarde die je niet aanraakt en een lege cel in een bestand wijzigen niets.
 
 ---
 
-## Wizard Modus
+## Het mandje
 
-De wizard begeleidt je door PIM-configuratie in een reeks stappen. Het exacte aantal stappen hangt af van de geselecteerde workload en het configuratietype (minimaal 8, maximaal 10 bij dual-workload flows).
+Elke modus voegt wijzigingen toe aan het **mandje** (balk onderaan). Het mandje wordt per tenant in het tabblad bewaard, zodat een herlaad of toestemmingspopup het behoudt. Wijzigingen worden naar betekenis vergeleken met wat de tenant nu heeft. Leave out haalt één wijziging weg, Discard leegt het mandje.
 
-### Stap 1: Veiligheidscontrole (Backup)
+## Review
 
-Zorgt ervoor dat je data actueel is voordat je wijzigingen maakt.
+*Review* leest de tenant opnieuw, stuurt nieuwe toewijzingen één keer als dry run (alleen validatie, er wordt niets geschreven) en toont een oordeel, wat aandacht vraagt en elke controle met uitkomst. Een blokkerende controle houdt Apply uitgeschakeld. Verwijderingen bevestig je in de review.
 
-| Controle | Beschrijving |
-|----------|--------------|
-| **Laatst Gesynchroniseerd** | Toont wanneer data voor het laatst is ververst |
-| **Vernieuw Knop** | Haalt laatste data op van Graph API |
+## Apply, resultaat en Undo
 
-> [!TIP]
-> Vernieuw altijd de data voordat je configureert om te werken met de meest actuele instellingen.
+Apply bewaart eerst een **snapshot** van de geraakte doelen (hun policyregels en toewijzingen) (bij een fout wordt niets geschreven) en schrijft daarna in volgorde met throttling, probeert 429 en 5xx opnieuw en herhaalt nooit een schrijfactie die mogelijk is gelukt zonder te controleren. Het resultaat toont elke wijziging (Done, Failed, Not written), leest de tenant opnieuw en toont waarden die afwijken van je bedoeling. *Try the failed ones again* gaat terug naar de review; het resultaat kan als CSV worden gedownload. De laatste tien applies staan in **Last applies** met hun snapshot, in deze browser tot je uitlogt; *Undo this apply* bouwt een mandje uit de snapshot, met waarschuwingen als iemand anders het doel sindsdien wijzigde of de apply jonger is dan vijf minuten.
 
 ---
 
-### Stap 2: Workload Selectie
+## Custom Extensions (Preview)
 
-Selecteer welke PIM workloads je wilt configureren.
+Met PIM custom extensions roept een activatie een externe REST API aan die het verzoek goedkeurt, automatisch goedkeurt of weigert. PIM Manager koppelt een bestaande extensie aan een policy; het endpoint zelf bouw je in het Microsoft Entra admin center.
 
-| Workload | Beschrijving |
-|----------|--------------|
-| **Directory Rollen** | Entra ID administratieve rollen |
-| **PIM voor Groepen** | Groepen beheerd door PIM |
-
-Je kunt één of beide workloads selecteren. De wizard toont relevante opties op basis van je selectie.
-
-> [!NOTE]
-> Je moet consent hebben gegeven voor de benodigde machtigingen per workload. Zonder consent is de workload niet beschikbaar.
-
----
-
-### Stap 3: Configuratie Type
-
-Kies welk type configuratie je wilt uitvoeren.
-
-| Type | Beschrijving |
-|------|--------------|
-| **Alleen Policies** | Configureer activatieregels, vervaldatum, goedkeuringseisen en notificatie-instellingen |
-| **Alleen Toewijzingen** | Beheer eligible en actieve toewijzingen voor rollen of groepen |
-| **Beide** | Configureer beleidsinstellingen en toewijzingen in één flow |
-
----
-
-### Stap 4: Scope Selectie
-
-Selecteer de specifieke rollen en/of groepen die je wilt configureren.
-
-**Configuratie Modi:**
-
-| Modus | Beschrijving |
-|-------|--------------|
-| **Nieuw Beginnen** | Begin met Microsoft standaardinstellingen |
-| **Huidige Laden** | Laad instellingen van de geselecteerde rol/groep (alleen bij enkele selectie) |
-| **Klonen Van** | Kopieer instellingen van een andere rol/groep |
-
-**Voor Directory Rollen:**
-- Zoeken en filteren van beschikbare rollen
-- Selecteer meerdere rollen tegelijk
-- Zie huidige toewijzingsaantallen
-- Kloon instellingen van bestaande rollen
-
-**Rol filter pills:**
-
-| Filter | Opties |
-|--------|--------|
-| **Type** | All · Built-in · Custom |
-| **Privilege** | All · Privileged |
-| **Toewijzingen** | All · With · Without |
-
-**Voor PIM Groepen:**
-- Bekijk PIM-beheerde groepen
-- Toggle om onbeheerde (rol-toewijsbare) groepen te tonen
-- Selecteer meerdere groepen
-
-**Groep type filter pill:** All · Security · M365 · Mail-enabled
-
-> [!TIP]
-> Gebruik "Klonen Van" om goed geconfigureerde rolinstellingen te kopiëren naar andere rollen.
-
-> [!NOTE]
-> **Huidige Laden** werkt voor zowel Directory Rollen als PIM Groepen. Selecteer exact één item om dit in te schakelen.
-
----
-
-### Stap 5: Policies *(indien Policies of Beide geselecteerd)*
-
-Definieer de beleidsinstellingen om toe te passen.
-
-**Activatie Instellingen:**
-- Maximale activatieduur (30 minuten tot 24 uur)
-- Authenticatie-eis (Geen, MFA, of Conditional Access)
-- Rechtvaardiging vereist bij activatie
-- Ticketinformatie vereist
-- Goedkeuring vereist (met goedkeurdersselectie)
-
-**Toewijzingsvervaldatum:**
-- Permanent eligible toestaan
-- Maximale duur eligible toewijzing
-- Permanent actief toestaan
-- Maximale duur actieve toewijzing
-- MFA vereist bij actieve toewijzing
-- Rechtvaardiging vereist bij actieve toewijzing
-
-**Notificatie-instellingen:**
-Configureer e-mailnotificaties voor drie eventtypen:
-- **Eligible Toewijzing**: Wanneer leden worden toegewezen als eligible
-- **Actieve Toewijzing**: Wanneer leden worden toegewezen als actief
-- **Activatie**: Wanneer eligible leden de rol activeren
-
-Voor elk event, configureer notificaties naar:
-- Rol administratoren
-- Toegewezenen/Aanvragers
-- Goedkeurders
-
-> [!NOTE]
-> Voor PIM Groepen kun je schakelen tussen **Member** en **Owner** policies.
-
----
-
-### Stap 6: Toewijzingen *(indien Toewijzingen of Beide geselecteerd)*
-
-Beheer rol/groep toewijzingen voor gebruikers of groepen.
-
-**Nieuwe Toewijzingen Maken:**
-
-| Instelling | Beschrijving |
-|------------|--------------|
-| **Toewijzingstype** | Eligible (aanbevolen) of Actief |
-| **Leden** | Zoek en selecteer gebruikers of groepen |
-| **Duur** | Permanent of tijdgebonden (met start/einddatum) |
-| **Scope** | Directory-breed (`/`) of specifieke Administratieve Eenheid |
-| **Rechtvaardiging** | Reden voor de toewijzing |
-
-**Beleidscontrole Permanente Toewijzing:**
-
-Bij het aanmaken van toewijzingen controleert de **Permanent** toggle automatisch het werkelijke PIM-beleid voor elke geselecteerde rol of groep:
-- **Beleid controleren...** — kort weergegeven terwijl het beleid wordt geladen
-- **Geblokkeerd door Beleid** — weergegeven wanneer het beleid van de rol/groep geen permanente toewijzingen toestaat
-
-Als meerdere rollen/groepen zijn geselecteerd, is permanent alleen toegestaan als **alle** geselecteerde items dit toestaan.
-
-**Bestaande Toewijzingen Beheren:**
-- Bekijk alle huidige toewijzingen voor geselecteerde rollen
-- Filter op Eligible, Actief, of Verlopen
-- Markeer toewijzingen voor verwijdering
-- Bekijk vooraf welke gebruikers worden beïnvloed
-
-> [!TIP]
-> Gebruik eligible toewijzingen voor de meeste scenario's. Actieve toewijzingen alleen gebruiken wanneer directe toegang vereist is zonder activatie.
-
----
-
-### Stap 7: Review
-
-Bekijk alle wijzigingen voordat je ze toepast.
-
-De review stap toont:
-- Samenvatting van geselecteerde items
-- Beleidsinstellingen die worden toegepast
-- Toewijzingen die worden gemaakt
-- Toewijzingen die worden verwijderd
-- Waarschuwingen voor hoog-risico rollen
-- **Conflictwaarschuwingen voor beleid** — bestaande toewijzingen die de nieuwe beleidsinstellingen zouden overtreden (bijvoorbeeld actieve toewijzingen die een nieuwe maximale eligible duur overschrijden)
-- **Preflight-waarschuwingen** — incoherente instellingen gedetecteerd voor toepassing (bijvoorbeeld goedkeuring vereist zonder geconfigureerde goedkeurders, of activatieduur die de maximale toewijzingsduur overschrijdt)
-
-> [!IMPORTANT]
-> Controleer zorgvuldig — wijzigingen worden toegepast op alle geselecteerde rollen/groepen.
-
----
-
-### Stap 8: Toepassen
-
-Voer de configuratiewijzigingen uit.
-
-**Procesfasen:**
-1. **Policies** — Update PIM-instellingen voor elke geselecteerde rol/groep
-2. **Toewijzingen** — Maakt nieuwe rol/groep toewijzingen
-3. **Verwijderingen** — Verwijdert gemarkeerde toewijzingen
-
-**Functies:**
-- Realtime voortgangsindicator
-- Beleidconflict- en preflight-waarschuwingen getoond voor de uitvoering begint
-- Succes/faal status per operatie
-- Gebruiksvriendelijke foutmeldingen (Graph API-fouten vertaald naar leesbare beschrijvingen)
-- Herprobeer gefaalde operaties knop
-- Uitvouwbare operatiedetails
-
-> [!NOTE]
-> Je kunt gedetailleerde logs zien in de browser console voor debugging.
-
----
-
-### Stap 9: Controlepunt *(alleen bij dual-workload flows)*
-
-Bij het configureren van zowel Directory Rollen als PIM Groepen toont een controlepuntstap de resultaten van de eerste workload en laat je doorgaan naar de tweede workload of vroegtijdig afsluiten.
-
----
-
-### Stap 10: Afsluiting
-
-Voltooiingssamenvatting met navigatielinks naar de Rapportpagina en Dashboard.
-
----
-
-## Handmatige Modus
-
-Voor gebruikers die directe toegang tot configuratietools prefereren, met een workflow voor gestaagde wijzigingen.
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  [Directory Rollen]  [PIM Groepen]                                │
-├───────────────────────┬──────────────────────────────────────────┤
-│    Rol Selectie       │    Instellingen Formulier                │
-├───────────────────────┼──────────────────────────────────────────┤
-│ ☐ Global Admin        │  Activatie Instellingen                  │
-│ ☑ User Admin          │  ─────────────────────────────────────   │
-│ ☑ Groups Admin        │  Max Duur: [4 uur]                       │
-│ ☐ Exchange Admin      │  ☑ MFA Vereist                           │
-│ ☑ SharePoint Admin    │  ☑ Rechtvaardiging Vereist               │
-│ ...                   │  ☐ Goedkeuring Vereist                   │
-│                       │                                          │
-│ 3 rollen geselecteerd │  [Wijzigingen Stagen]                    │
-└───────────────────────┴──────────────────────────────────────────┘
-│  Gestaagde Wijzigingen (2)  [Alles Toepassen]  [Alles Wissen]    │
-│  ✓ User Admin — Beleidsinstellingen gestaged                      │
-│  ✓ Groups Admin — Beleidsinstellingen gestaged                    │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Workload Tabbladen
-
-Schakel tussen **Directory Rollen** en **PIM Groepen** via de tabbladen bovenaan de pagina.
-
-### Rol / Groep Selectie
-
-Het linker paneel toont alle beschikbare items voor de geselecteerde workload.
-
-**Functies:**
-- Zoeken om rollen/groepen te filteren
-- Quick-filter pills om de lijst te verfijnen zonder te typen
-- Klik om te selecteren/deselecteren
-- Toont toewijzingsaantallen
-- Tags geven roltype aan
-
-**Rol filter pills:**
-
-| Filter | Opties |
-|--------|--------|
-| **Type** | All · Built-in · Custom |
-| **Privilege** | All · Privileged |
-| **Toewijzingen** | All · With · Without |
-
-**Groep filter pill:** All · Security · M365 · Mail-enabled
-
-### Instellingenformulier
-
-Het rechter paneel toont configuratie-opties wanneer rollen of groepen zijn geselecteerd.
-
-**Laden Vanaf Geselecteerd Item:**
-Als precies één item is geselecteerd, kun je de huidige instellingen van dat item laden als sjabloon.
-
-### Gestaagde Wijzigingen
-
-Wijzigingen worden lokaal gestaged voordat ze naar de API worden verzonden. Bekijk alle wachtrij-wijzigingen in het paneel onderaan de pagina.
-
-- Klik **Wijzigingen Stagen** om een wijziging in de wachtrij te plaatsen voor de geselecteerde rollen/groepen
-- Klik **Alles Toepassen** om alle gestaagde wijzigingen via een voortgangsmodal naar de Graph API te versturen
-- Klik **Alles Wissen** om alle gestaagde wijzigingen te verwijderen zonder toe te passen
-
----
-
-## Bulk Modus
-
-Voor CSV-gebaseerde batchconfiguratie. Het meest geschikt wanneer je instellingen hebt geëxporteerd van de Rapportpagina en wijzigingen wilt toepassen op veel rollen of groepen tegelijk.
-
-```
-Upload → Vergelijk → Toepassen → Resultaten
-```
-
-### Stap 1: Upload
-
-Upload een CSV-bestand geëxporteerd van de **Rapportpagina** of gedownload als sjabloon. Vier CSV-types worden ondersteund:
-
-| CSV Type | Automatisch gedetecteerd op basis van headers | Gebruik |
-|----------|-----------------------------------------------|---------|
-| **Rol Policies** | Headers bevatten `Role ID`, `Max Activation Duration`, etc. | Beleidsinstellingen toepassen op Directory Rollen |
-| **Groep Policies** | Headers bevatten `Group ID`, `Member Max Duration`, etc. | Beleidsinstellingen toepassen op PIM Groepen |
-| **Rol Toewijzingen** | Headers bevatten `Role ID`, `Principal ID`, `Assignment Type`, `Action` | Eligible/actieve toewijzingen toevoegen én verwijderen bij Directory Rollen |
-| **Groep Toewijzingen** | Headers bevatten `Group ID`, `Principal ID`, `Access Type`, `Action` | Eligible/actieve toewijzingen toevoegen én verwijderen bij PIM Groepen |
-
-> [!TIP]
-> Gebruik de **Download Template** knoppen voor de juiste kolomkoppen. De **Toegangsrechten** export van de Rapportpagina genereert bulk-compatibele CSV-bestanden met Role ID / Group ID en Principal ID alvast ingevuld — klaar om te bewerken en opnieuw te importeren.
-
-> [!NOTE]
-> Goedkeurder-wijzigingen (toevoegen/verwijderen van goedkeurders) worden niet ondersteund in Bulk Modus, omdat deze opzoeken van gebruikers-ID's vereisen. Gebruik **Wizard Modus** voor het configureren van goedkeurders.
-
-### Action-kolom — toevoegen en verwijderen in één CSV
-
-Toewijzings-CSV's bevatten een **Action**-kolom die bepaalt wat er met elke rij gebeurt:
-
-| Waarde | Gedrag |
-|--------|--------|
-| `add` (standaard) | Maakt de toewijzing aan; slaat rijen over die al bestaan |
-| `remove` | Verwijdert de toewijzing; slaat rijen over die al zijn verwijderd |
-
-Een enkele CSV kan zowel `add`- als `remove`-rijen bevatten. De preview-stap toont de status per rij: **New**, **Already exists**, **Will remove**, **Already removed** of **Permanent not allowed**.
-
-**Export → Bewerk → Import roundtrip:**
-1. Ga naar **Rapport** → exporteer **Toegangsrechten**
-2. Er worden twee CSV-bestanden gegenereerd: één voor roltoewijzingen, één voor groeptoewijzingen — beide bevatten Role/Group ID, Principal ID en `Action = add`
-3. Verander `Action` naar `remove` voor rijen die je wilt verwijderen
-4. Upload naar Bulk Modus en pas toe
-
-### Stap 2: Vergelijk / Preview
-
-**Voor policy CSV's:** Bekijk het verschil tussen je CSV en de huidige live-instellingen:
-- Alle wijzigingen zijn standaard vooraf geselecteerd
-- Deselecteer individuele velden die je wilt overslaan
-- Gebruik **Alles Selecteren / Alles Deselecteren** voor bulk-selectie
-
-**Voor toewijzings-CSV's:** Een rij-voor-rij preview valideert elke toewijzing voor toepassing:
-- Fouten (ontbrekende verplichte velden) worden per rij getoond
-- Selecteer/deselecteer individuele rijen voor toepassing
-- Rijen met status **Already exists** of **Already removed** worden automatisch overgeslagen
-
-### Stap 3: Toepassen
-
-Klik **N Wijzigingen Toepassen** (policies) of de toepassen-knop (toewijzingen) om wijzigingen uit te voeren. Een voortgangsbalk volgt elke update in realtime.
-
-### Stap 4: Resultaten
-
-Een tabel per rij toont succes of mislukking voor elke operatie met gedetailleerde foutmeldingen. Klik **Opnieuw Proberen** om alleen de mislukte rijen opnieuw te selecteren, of **Opnieuw Beginnen** om een nieuwe CSV te uploaden.
-
-**Wat kan worden gewijzigd via Bulk Modus:**
-
-| Veld | Rol Policies | Groep Policies |
-|------|:------------:|:--------------:|
-| Maximale activatieduur | ✅ | ✅ |
-| MFA vereist | ✅ | ✅ |
-| Rechtvaardiging vereist | ✅ | ❌ |
-| Goedkeuring vereist | ✅ | ✅ |
-| Goedkeurders | ❌ (gebruik Wizard) | ❌ (gebruik Wizard) |
-| Authentication Context | ❌ (gebruik Wizard) | ❌ |
-
-| Veld | Rol Toewijzingen | Groep Toewijzingen |
-|------|:----------------:|:------------------:|
-| Eligible toewijzing toevoegen | ✅ | ✅ |
-| Actieve toewijzing toevoegen | ✅ | ✅ |
-| Toewijzing verwijderen | ✅ | ✅ |
-| Tijdgebonden duur | ✅ | ✅ |
-| Permanente toewijzing | ✅ (indien beleid het toestaat) | ✅ (indien beleid het toestaat) |
-| Administratieve Eenheid scope | ✅ | ❌ |
+- **Edit en Guided**: het tabblad Activation eindigt met een sectie *Custom extension*. Kies een extensie voor de pre-approval of post-approval slot. Een slot dat aan staat zonder keuze wordt nooit geschreven.
+- **Toegang tot de lijst**: de lijst vraagt `PrivilegedAccess-CustomExt.Read.All` (incrementele toestemming) en een Microsoft Entra ID Governance- of Entra Suite-licentie. Een policy die al een extensie koppelt toont de naam ook zonder die scope.
+- **Import**: de bestanden met instellingen bevatten de kolommen voor extensie-id en Enabled. Een lege cel behoudt de koppeling; een bestand kan niet ontkoppelen.
 
 ---
 
@@ -398,8 +48,8 @@ Instellingen die gelden wanneer gebruikers hun eligible rol **activeren**.
 | Instelling | Beschrijving | Aanbevolen |
 |------------|--------------|------------|
 | **Max Duur** | Maximale activatietijd | 4-8 uur voor meeste rollen |
-| **MFA Vereist** | Gebruikers moeten MFA voltooien | ✅ Altijd inschakelen |
-| **Rechtvaardiging Vereist** | Gebruikers moeten uitleggen waarom | ✅ Inschakelen voor audit |
+| **MFA Vereist** | Gebruikers moeten MFA voltooien | Altijd inschakelen |
+| **Rechtvaardiging Vereist** | Gebruikers moeten uitleggen waarom | Inschakelen voor audit |
 | **Ticketinfo Vereist** | Link naar ticketsysteem | Optioneel |
 | **Goedkeuring Vereist** | Moet eerst worden goedgekeurd | Voor gevoelige rollen |
 | **Goedkeurders** | Wie kan goedkeuren | Security team of managers |
@@ -436,136 +86,18 @@ Instellingen die gelden voor eligible/actieve **toewijzingen**.
 
 ## Vereiste Machtigingen
 
-> [!IMPORTANT]
-> Configuratie-operaties vereisen de `RoleManagementPolicy.ReadWrite.Directory` machtiging.
-
-Zonder deze machtiging:
-- Een waarschuwingsbanner wordt getoond
-- Instellingenformulier werkt maar toepassen zal falen
-- Je wordt gevraagd machtigingen te verlenen in Instellingen
-
-Om machtigingen te verlenen:
-1. Klik op de waarschuwingsbanner of ga naar **Instellingen**
-2. Klik op **Schrijfmachtigingen Verlenen**
-3. Voltooi de consent flow
-4. Ververs de pagina
-
----
-
-## Best Practices
-
-### Kies de Juiste Modus
-
-| Scenario | Aanbevolen Modus |
-|----------|-----------------|
-| Meerdere rollen/groepen configureren met volledige controle | **Wizard** |
-| Snelle eenmalige beleidswijziging | **Handmatig** |
-| Geëxporteerde CSV-instellingen op schaal toepassen | **Bulk** |
-
-### Gebruik de Wizard voor Bulk Wijzigingen
-
-De wizard zorgt ervoor dat je:
-1. Actuele data hebt voor configureren
-2. De juiste workloads selecteert
-3. Scope controleert voor toepassing
-
-### Standaardiseer Instellingen
-
-1. Definieer organisatiebrede standaarden
-2. Selecteer alle vergelijkbare rollen
-3. Pas consistente instellingen toe
-
-Voorbeeld standaarden:
-- Alle geprivilegieerde rollen: 4u max, MFA vereist, goedkeuring vereist
-- Alle standaard rollen: 8u max, MFA vereist
-
-### Test Eerst
-
-1. Selecteer één niet-kritieke rol
-2. Pas instellingen toe
-3. Verifieer in Azure Portal
-4. Pas dan toe op andere rollen
-
-### Documenteer Wijzigingen
-
-1. Exporteer huidige instellingen (Rapportpagina)
-2. Maak wijzigingen
-3. Exporteer nieuwe instellingen
-4. Vergelijk voor audit trail
+Schrijven vraagt de schrijfscopes van de workload, aangevraagd wanneer je op de startpagina of in Settings op Grant permission drukt (Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`; PIM for Groups: de drie `.AzureADGroup`-equivalenten). De **toegangsrij** op de startpagina toont per gebied of je nu mag schrijven (open), eerst een rol moet activeren, geen rol hebt die het toestaat, toestemming mist, of dat een groep vergrendeld is (dynamisch of gesynchroniseerd). De optionele Conditional Access-controle vraagt op verzoek `Policy.Read.All`.
 
 ---
 
 ## Probleemoplossing
 
-### Schrijfmachtigingen Vereist
-
-**Symptoom**: Waarschuwingsbanner "Schrijfmachtigingen vereist"
-
-**Oplossing**:
-1. Klik op **Instellingen Openen** op de banner
-2. Verleen schrijfmachtigingen
-3. Ververs en probeer opnieuw
-
-### "Instellingen toepassen mislukt"
-
-**Oorzaak**: Machtigingsproblemen of API-fouten
-
-**Oplossing**:
-1. Verifieer dat je `RoleManagementPolicy.ReadWrite.Directory` hebt
-2. Controleer of rol beschermd is (bijv. Global Admin vereist Global Admin)
-3. Controleer browserconsole voor gedetailleerde fout
-
-### Wizard Status Verloren
-
-**Oorzaak**: Sessie gewist of browser gesloten
-
-**Oplossing**:
-- Wizard status wordt alleen in geheugen opgeslagen (geen persistentie)
-- Pagina verversen wist de status (by design)
-- Browser sluiten wist de status
-- Gebruik Handmatige modus voor snelle eenmalige wijzigingen
-
-### Toewijzing Maken Mislukt
-
-**Symptoom**: "Invalid role assignment request" fout
-
-**Veelvoorkomende oorzaken**:
-- **Machtigingen**: Controleer of je `RoleManagementPolicy.ReadWrite.Directory` hebt
-- **Conflicterende toewijzing**: Gebruiker heeft mogelijk al een actieve toewijzing
-- **Beleidsrestricties**: Het beleid van de rol blokkeert mogelijk bepaalde toewijzingstypes
-
-**Oplossing**:
-1. Bekijk de browserconsole voor gedetailleerde foutmeldingen
-2. Controleer of de gebruiker niet al een toewijzing heeft voor deze rol
-3. Als je een actieve toewijzing maakt, controleer of de rol permanente actieve toewijzingen toestaat (indien permanent geselecteerd)
-4. Probeer met een andere rol om het probleem te isoleren
-
-### Bulk Modus: Goedkeurder-wijzigingen Niet Toegepast
-
-**Oorzaak**: Bulk modus ondersteunt alleen activatie-instellingen (duur, MFA, rechtvaardiging, goedkeuring toggle). Het toevoegen of verwijderen van goedkeurders vereist opzoeken van gebruikers-ID's en wordt niet ondersteund via CSV.
-
-**Oplossing**: Gebruik **Wizard Modus** om goedkeurders te configureren.
-
-### Bulk Modus: Toewijzingsverwijdering Heeft Geen Effect
-
-**Oorzaak**: De rij had status **Already removed** — de toewijzing bestaat niet meer.
-
-**Oplossing**: Controleer de preview-stap voor het toepassen. Rijen met status **Already removed** worden automatisch overgeslagen. Als je verwachtte dat de toewijzing zou bestaan, controleer dit op de Rapportpagina.
-
-### "Permanent" Toggle Toont "Geblokkeerd door Beleid"
-
-**Oorzaak**: De geselecteerde rol of groep heeft een PIM-beleid dat permanente toewijzingen verbiedt.
-
-**Oplossing**: Gebruik een tijdgebonden toewijzing, of pas het rolbeleid eerst aan (via de Wizard Policies stap) om permanente toewijzingen toe te staan voordat je de toewijzing aanmaakt.
-
----
+- **Apply is uitgeschakeld**: open de review; een blokkerende controle noemt de oorzaak (ontbrekende rol, policy niet gelezen, geweigerde dry run).
+- **Een groep is niet te wijzigen**: dynamische en gesynchroniseerde groepen zijn vergrendeld; een groep buiten PIM komt onder PIM wanneer je een wijziging toepast.
+- **Import meldt "Need a fix"**: de rij heeft een cel die de bestandslezer weigerde; de rij zegt welke cel en waarom. Van die rij wordt niets toegevoegd.
+- **Het mandje en Last applies zijn leeg na uitloggen**: beide worden bij uitloggen bewust gewist, zodat er geen namen of snapshots op het apparaat blijven. Maak een apply ongedaan voordat je uitlogt.
 
 ## Volgende Stappen
 
-- [Rapportpagina](./08-rapport-pagina.md) - Bekijk je configuraties
-- [Belangrijke Concepten](./06-belangrijke-concepten.md) - Begrijp terminologie
-- [Architectuur](./00-architecture.md) - Technische details van de wizard
-
----
-
-*Laatst bijgewerkt: 27 juli 2026*
+- [Rapportpagina](./08-rapport-pagina.md): waar een rol of groep een knop "Change in Configure" heeft
+- [Settings](./11-settings.md): machtigingen en noodtoegangsaccounts

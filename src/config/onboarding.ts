@@ -1,8 +1,8 @@
-import { LucideIcon, Shield, LayoutDashboard, Puzzle, Wrench, FileDown, Filter, Download, Wand2, Settings, FileSpreadsheet, AlertTriangle, Zap } from "lucide-react";
+import type { IconName } from "@/components/icons/Icon";
 
 // Manually bumped when there are noteworthy features to announce.
-// Not every release needs highlights — only bump when there's something worth showing.
-export const FEATURE_HIGHLIGHTS_VERSION = "2.1";
+// Not every release needs highlights, only bump when there's something worth showing.
+export const FEATURE_HIGHLIGHTS_VERSION = "3.0";
 
 export interface TourGuideItem {
     text: string;
@@ -14,13 +14,13 @@ export interface TourStep {
     page: string;
     title: string;
     description: string;
-    icon: LucideIcon;
+    icon: IconName;
     guides: TourGuideItem[];
     tooltipPosition?: "top" | "bottom" | "left" | "right";
 }
 
 // ---------------------------------------------------------------------------
-// First-time onboarding tour — broad overview for brand new users
+// First-time onboarding tour, broad overview for brand new users
 // ---------------------------------------------------------------------------
 export const ONBOARDING_STEPS: TourStep[] = [
     // -- Dashboard --
@@ -30,9 +30,9 @@ export const ONBOARDING_STEPS: TourStep[] = [
         page: "/dashboard",
         title: "Welcome to PIM Manager",
         description: "Let\u2019s take a quick tour of the key areas.",
-        icon: Shield,
+        icon: "shield",
         guides: [
-            { text: "PIM Manager runs entirely in your browser \u2014 no data leaves your session" },
+            { text: "PIM Manager runs entirely in your browser, no data leaves your session" },
             { text: "All data comes from Microsoft Graph API using your credentials" },
             { text: "You can explore read-only before enabling any write features" },
         ],
@@ -44,11 +44,11 @@ export const ONBOARDING_STEPS: TourStep[] = [
         page: "/dashboard",
         title: "Security Dashboard",
         description: "Your starting point for PIM posture insights.",
-        icon: LayoutDashboard,
+        icon: "dashboard",
         guides: [
-            { text: "Toggle between Basic and Advanced view for more or less detail" },
-            { text: "Click any stat card to jump to a filtered report" },
-            { text: "Charts and stats update as you enable more workloads" },
+            { text: "Basic answers the first questions, Advanced adds activation charts, groups, accounts and what is happening now" },
+            { text: "Click a card, a legend row or an Easy to miss row to filter the whole page" },
+            { text: "Numbers that are not known yet show a placeholder, never zero" },
         ],
         tooltipPosition: "bottom",
     },
@@ -58,12 +58,12 @@ export const ONBOARDING_STEPS: TourStep[] = [
         page: "/dashboard",
         title: "Workloads & Consent",
         description: "PIM Manager uses incremental consent to access your data.",
-        icon: Puzzle,
+        icon: "extension",
         guides: [
             { text: "Directory Roles load automatically after sign-in" },
-            { text: "PIM Groups, Security Alerts and other workloads need additional consent" },
-            { text: "Enable or disable workloads anytime via Settings or the workload chips" },
-            { text: "Consent is remembered \u2014 workloads stay enabled across sessions" },
+            { text: "PIM for Groups, Security Alerts and other workloads need additional consent" },
+            { text: "Enable workloads with the workload chips, permissions are listed under Settings" },
+            { text: "Consent is remembered, workloads stay enabled across sessions" },
         ],
         tooltipPosition: "bottom",
     },
@@ -71,13 +71,13 @@ export const ONBOARDING_STEPS: TourStep[] = [
         id: "dashboard-export",
         target: "dashboard-export-pdf",
         page: "/dashboard",
-        title: "Dashboard PDF Export",
+        title: "Export",
         description: "Share your security posture with stakeholders.",
-        icon: FileDown,
+        icon: "export",
         guides: [
-            { text: "Export the full dashboard as a PDF report" },
-            { text: "Choose which sections to include (charts, tables, stats)" },
-            { text: "Includes your current view mode and workload selection" },
+            { text: "One dialog for a PDF report or a CSV of all assignments" },
+            { text: "Choose Summary, Full or Full with appendix, an Admin or Management audience, and bars, donuts or tables" },
+            { text: "Names of people can be replaced, and the current filter can be applied" },
         ],
         tooltipPosition: "bottom",
     },
@@ -88,11 +88,11 @@ export const ONBOARDING_STEPS: TourStep[] = [
         page: "/report",
         title: "Filters & Search",
         description: "Narrow down exactly what you need to see.",
-        icon: Filter,
+        icon: "filter",
         guides: [
-            { text: "Filter by role type, assignment type, MFA, approval, scope, and more" },
-            { text: "Search by role name or assigned user" },
-            { text: "Active filters are shown as count \u2014 click Reset to clear all" },
+            { text: "Three groups of filters per view, for roles and for groups" },
+            { text: "Search a role, a group or a person" },
+            { text: "Active filters show as chips, Clear all removes them" },
         ],
         tooltipPosition: "bottom",
     },
@@ -102,76 +102,89 @@ export const ONBOARDING_STEPS: TourStep[] = [
         page: "/report",
         title: "Report Export",
         description: "Get your data out of PIM Manager.",
-        icon: Download,
+        icon: "export",
         guides: [
-            { text: "Export filtered results as CSV for analysis in Excel" },
-            { text: "Export as JSON for automation or integration" },
-            { text: "Only your currently visible and filtered data is exported" },
+            { text: "Overview as CSV for Excel or an auditor" },
+            { text: "A file that opens in Configure\u2019s Import, with every column and ID" },
+            { text: "A complete JSON backup before you change anything" },
         ],
         tooltipPosition: "bottom",
     },
     // -- Configure --
     {
         id: "configure-modes",
-        target: "configure-modes",
+        target: "nav-configure",
         page: "/configure",
-        title: "Configure at Scale",
-        description: "Three modes for different workflows.",
-        icon: Wrench,
+        title: "Configure with a review",
+        description: "Change settings and assignments in three ways, and see everything before it is written.",
+        icon: "configure",
         guides: [
-            { text: "Wizard \u2014 step-by-step guided flow with validation and preview" },
-            { text: "Manual \u2014 direct access to individual role and group settings" },
-            { text: "Bulk \u2014 upload a CSV to configure many roles at once" },
-            { text: "Write permissions are only requested when you enter configure mode" },
+            { text: "Edit: pick a role or group and change its settings, or the people who have it" },
+            { text: "Guided: the same rules on several roles or groups, step by step" },
+            { text: "Import: a CSV or an access model file, checked against your tenant first" },
+            { text: "Nothing is written until you review and apply; Undo this apply brings it back" },
         ],
         tooltipPosition: "bottom",
     },
 ];
 
 // ---------------------------------------------------------------------------
-// Feature highlights — in-depth spotlight tour for returning users
+// Feature highlights, in-depth spotlight tour for returning users
 // Focused on what's new since the last FEATURE_HIGHLIGHTS_VERSION bump.
 // ---------------------------------------------------------------------------
 export const HIGHLIGHT_STEPS: TourStep[] = [
     {
-        id: "hl-policy-preflight",
-        target: "configure-modes",
+        id: "hl-configure-basket",
+        target: "nav-configure",
         page: "/configure",
-        title: "New: Policy Preflight Validation",
-        description: "PIM Manager now catches incoherent settings before any write is attempted.",
-        icon: AlertTriangle,
+        title: "New: Configure collects changes first",
+        description: "Edit, Guided and Import put their changes in one basket that you review before anything is written.",
+        icon: "configure",
         guides: [
-            { text: "Approval enabled without approvers configured is flagged before you apply" },
-            { text: "Activation duration exceeding the max assignment duration is detected and shown inline" },
-            { text: "Conflicting constraint combinations are surfaced as warnings in the configure flow" },
-            { text: "Preflight runs automatically in Wizard and Manual mode before the apply step" },
-            { text: "Fixing a warning is optional but recommended to avoid Graph API rejections" },
+            { text: "The bar at the bottom counts the changes waiting; Leave out takes one out" },
+            { text: "The basket stays in this tab through a reload or a permission popup" },
+            { text: "Select several and Copy settings to... change many roles or groups at once" },
+            { text: "Who has it adds, ends and removes people, and reads the policy of the tenant for the limits" },
         ],
         tooltipPosition: "bottom",
     },
     {
-        id: "hl-policy-conflict-detection",
-        target: "configure-modes",
+        id: "hl-configure-review",
+        target: "nav-configure",
         page: "/configure",
-        title: "New: Policy Conflict Detection",
-        description: "Existing assignments that would violate a pending policy change are now identified before apply.",
-        icon: Shield,
+        title: "New: Review, checks and Undo",
+        description: "PIM Manager checks the changes before the first write and keeps a snapshot so an apply can be undone.",
+        icon: "shield",
         guides: [
-            { text: "Active assignments exceeding a new max eligible duration are surfaced at Review step" },
-            { text: "Conflicts are shown per-assignment so you can decide whether to proceed" },
-            { text: "Apply step repeats conflict warnings before executing writes" },
-            { text: "Works for both Directory Roles and PIM Groups in Wizard and Manual mode" },
-            { text: "No change is blocked outright: you retain full control over what gets applied" },
+            { text: "Every new assignment is validated by Microsoft first; nothing is written by the check" },
+            { text: "The review says what changes for the people who activate and what you would lose yourself" },
+            { text: "The result shows every change, and the ones that failed can be tried again" },
+            { text: "Undo this apply is on the result and on the start page, for the last ten applies" },
+        ],
+        tooltipPosition: "bottom",
+    },
+    {
+        id: "hl-configure-import",
+        target: "nav-configure",
+        page: "/configure",
+        title: "New: Import and the access model",
+        description: "Import reads the files the Report exports, row by row, and the access model gives you a template to start from.",
+        icon: "export",
+        guides: [
+            { text: "A reference lists every column of every file, with a template to download" },
+            { text: "Each row says New, Already there, Will be removed or what to fix; settings show Now and then the file" },
+            { text: "The access model page sorts all Entra roles into planes and levels with recommended settings" },
+            { text: "Use as a template opens Guided with those values; you still review everything" },
         ],
         tooltipPosition: "bottom",
     },
     {
         id: "hl-throttle-aware-client",
-        target: "configure-modes",
-        page: "/configure",
+        target: "workload-chips",
+        page: "/dashboard",
         title: "Improved: Throttle-Aware Graph Client",
-        description: "A sliding-window rate limiter now wraps all Graph API calls to prevent cascading 429 errors.",
-        icon: Zap,
+        description: "Loading these workloads is now paced by a sliding-window rate limiter that prevents cascading 429 errors.",
+        icon: "active",
         guides: [
             { text: "A 500 RU/10s cap matches the Microsoft Graph tenant-level throttle budget" },
             { text: "Retry-After headers are respected: new requests pause automatically when the budget is exhausted" },
@@ -182,15 +195,15 @@ export const HIGHLIGHT_STEPS: TourStep[] = [
     },
     {
         id: "hl-friendly-graph-errors",
-        target: "configure-modes",
-        page: "/configure",
+        target: "sidebar-help",
+        page: "/dashboard",
         title: "Improved: Friendly Graph API Error Messages",
-        description: "Raw Graph API error codes are now translated to clear, actionable messages in the apply flow.",
-        icon: Wrench,
+        description: "Raw Graph API error codes are now translated to clear, actionable messages in the apply flow. The Help guide explains each one.",
+        icon: "configure",
         guides: [
             { text: "Error codes like RoleAssignmentExists or PolicyViolation show a plain-language explanation" },
             { text: "Actionable guidance is shown alongside each error so you know what to fix" },
-            { text: "Applies to all apply operations in Wizard, Manual, and Bulk modes" },
+            { text: "Applies to every apply in Configure, imports included" },
             { text: "Technical error codes are still logged to the browser console for debugging" },
         ],
         tooltipPosition: "bottom",

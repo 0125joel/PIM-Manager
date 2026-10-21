@@ -32,6 +32,27 @@ This document details all Microsoft Graph API endpoints used by PIM Manager. Und
 |----------|---------|---------------------|
 | roleManagementAlerts/alerts | Get security alerts | RoleManagementAlert.Read.Directory |
 
+### Custom Extensions (Optional, Preview)
+
+| Endpoint | Purpose | Permissions Required |
+|----------|---------|---------------------|
+| privilegedAccess/customExtensions | List the tenant's PIM custom extensions (picker, orphan check, CSV name resolution) | PrivilegedAccess-CustomExt.Read.All |
+| roleManagementPolicyAssignments (rules) | Which extension a policy links; rides the normal policy read | RoleManagementPolicy.Read.Directory / .AzureADGroup |
+
+### Configure (reads)
+
+| Endpoint | Purpose | Permissions Required |
+|----------|---------|---------------------|
+| roleAssignmentScheduleInstances / roleEligibilityScheduleInstances `filterByCurrentUser(on='principal')` | The access check: the signed-in admin's active and eligible roles | RoleAssignmentSchedule.Read.Directory, RoleEligibilitySchedule.Read.Directory |
+| privilegedAccess/group/{assignment,eligibility}ScheduleInstances `filterByCurrentUser(on='principal')` | The access check: the admin's PIM group memberships and ownerships | PrivilegedAccess.Read.AzureADGroup |
+| me/ownedObjects/microsoft.graph.group | The access check: groups the admin owns | User.Read |
+| directory/administrativeUnits/{id}/members/microsoft.graph.group, groups/{id} | The access check: groups in a unit or a role's scope (`membershipRule`, `onPremisesSyncEnabled`) | AdministrativeUnit.Read.All, Group.Read.All |
+| roleEligibilityScheduleRequests / roleAssignmentScheduleRequests (roles and groups) with `isValidationOnly` | The dry run of new assignments in the review; nothing is written | The write scopes of the workload |
+| identity/conditionalAccess/policies | The optional Conditional Access check of the review | Policy.Read.All (on demand) and a role that may read Conditional Access |
+| users, groups (`$search`, `startswith` fallback) | Search for people in Add people and the approver picker | User.Read.All, Group.Read.All |
+| directory/administrativeUnits, applications (`$search`) | The scopes of a new role assignment | AdministrativeUnit.Read.All, Application.Read.All |
+| users, groups, servicePrincipals (`id in (...)`, `userPrincipalName in (...)`) | Import: the people of a file that the loaded assignments do not name | User.Read.All, Group.Read.All, Application.Read.All |
+
 ---
 
 ## Phase 1: Initial Load
@@ -87,8 +108,6 @@ GET /roleManagement/directory/roleAssignments?$expand=principal
 > Permanent assignments bypass PIM entirely. These users don't need to activate their role.
 
 ### 1. Unified PIM Context (`UnifiedPimContext.tsx`)
-- `GET /directoryRoles/delta` (Delta Query for Role Changes)
-- `GET /groups/delta` (Delta Query for Group Metadata)
 - `GET /roleManagement/directory/roleDefinitions` (Fallback Full Sync)
 - `GET /roleManagement/directory/roleAssignmentScheduleInstances`
 - `GET /roleManagement/directory/roleEligibilityScheduleInstances`
@@ -234,12 +253,8 @@ Microsoft Graph enforces rate limits to protect service stability.
 
 ### Smart Refresh Strategy
 To improve performance, the application implements a **Smart Refresh** logic:
-1.  **Directory Roles**: Uses `/directoryRoles/delta` to fetch *only* changed roles (assignments/definitions).
-    *   If a delta token exists, we request changes.
-    *   If token is expired (410), we fall back to a Full Sync.
-2.  **PIM Groups**: Uses a Hybrid approach.
-    *   `/groups/delta`: Checks for group renames/deletions immediately.
-    *   **Full Content Fetch**: Parallel-fetches Assignments and Policies for all groups to ensure absolute data reliability (as Groups Delta for assignments is not fully supported).
+1.  **Directory Roles**: Graph has no delta for PIM assignments or policies (`/directoryRoles/delta` only reports activated role objects), so Refresh re-reads the definitions and assignment schedules without blocking the page and then every policy in the background (one paged call for the tenant). Approver names of policies whose approvers did not change are kept.
+2.  **PIM for Groups**: No delta. Graph's `/groups/delta` only filters on `id` and never reports PIM eligibility or policy changes, so the app reads the PIM inventory (`/identityGovernance/privilegedAccess/group/resources` plus the role-assignable groups) and then, per onboarded group, the eligibility and assignment schedule instances and the policies (3 workers, 500 ms). Group details stay as loaded.
 3.  **Parallel Execution**: Both workloads refresh concurrently for maximum speed.
 
 ### Limits
@@ -429,6 +444,54 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ---
 
+## Custom Extensions API Calls (Preview)
+
+PIM Custom Extensions let a role or group activation call an external REST API (typically a Logic App behind API Management) that answers `Approved`, `AutoApproved` or `Denied`. PIM Manager reads which extension a policy links, links one from Configure and lists the tenant's extensions for the picker. Building the endpoint stays outside the app; `docs/Assets/pim-custom-extension-logic-app-setup.md` covers that side.
+
+### Linked extension on a policy (no extra permission)
+
+Both slots ride the existing policy read (`roleManagementPolicyAssignments?$expand=policy($expand=rules)`, Directory Roles on v1.0, PIM for Groups on beta). They are two rules in the same `rules` array, present on every policy once the preview is rolled out to the tenant:
+
+```json
+{
+  "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+  "id": "CustomExtension_PreApproval_EndUser_Assignment",
+  "isEnabled": true,
+  "customExtensionId": "a05c9349-5950-4884-bab4-7fb6aa3e4ff5",
+  "displayName": "Outside office hours",
+  "customAttributes": ["ticketNumber"],
+  "target": { "caller": "EndUser", "operations": ["All"], "level": "Assignment", "inheritableSettings": [], "enforcedSettings": [] }
+}
+```
+
+`CustomExtension_PostApproval_EndUser_Assignment` has the same shape. `displayName` is denormalized by Graph, so the Report and the Dashboard need no further call. Tenants without the preview have no such rules and every custom extension surface renders nothing.
+
+### List custom extensions
+
+```http
+GET /identityGovernance/privilegedAccess/customExtensions
+```
+
+**API Version**: `beta`
+
+**Permission**: `PrivilegedAccess-CustomExt.Read.All` (delegated, incremental consent; probed silently, the popup only opens when the user asks for the list)
+
+**Purpose**: the picker in Configure, name-to-id resolution for Import files, and orphan detection (a linked `customExtensionId` that no longer exists).
+
+**Graceful Degradation**: a 403 (no consent, or no Microsoft Entra ID Governance / Entra Suite licence) is mapped to `PERMISSION_DENIED`; the list-dependent parts hide and the rest of the app is unchanged.
+
+### Link or unlink an extension
+
+```http
+PATCH /policies/roleManagementPolicies/{policyId}/rules/CustomExtension_PreApproval_EndUser_Assignment
+```
+
+Body: `@odata.type`, `id`, `isEnabled`, `customExtensionId`, `customAttributes` and a `target` that carries its own `"@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget"` with `operations: ["All"]` (the `createRuleTarget()` shape). Never send `displayName`. An unlink sends `customExtensionId: ""` with `isEnabled: false`. Confirmed live on v1.0 and beta for Directory Roles (`docs/Assets/pim-custom-extensions-research.md` §3.3a); PIM for Groups uses the same rule ids. A `target` copied from a GET response (no discriminator, lowercase `all`) fails with `MissingProvider`.
+
+**Permission**: `RoleManagementPolicy.ReadWrite.Directory` or `RoleManagementPolicy.ReadWrite.AzureADGroup`, the existing Configure write scopes; linking needs no custom extension scope.
+
+---
+
 ## Permission Summary
 
 ### Configure Write Permissions
@@ -438,9 +501,9 @@ GET /identityGovernance/roleManagementAlerts/alerts
 | `RoleManagementPolicy.ReadWrite.Directory` | Delegated | Update PIM policy rules for Directory Roles |
 | `RoleEligibilitySchedule.ReadWrite.Directory` | Delegated | Create eligible assignments for Directory Roles |
 | `RoleAssignmentSchedule.ReadWrite.Directory` | Delegated | Create active assignments for Directory Roles |
-| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Delegated | Update PIM policies for PIM Groups |
-| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Delegated | Create eligible assignments for PIM Groups |
-| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Delegated | Create active assignments for PIM Groups |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Delegated | Update PIM policies for PIM for Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Delegated | Create eligible assignments for PIM for Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Delegated | Create active assignments for PIM for Groups |
 
 > [!NOTE]
 > Write permissions are requested via incremental consent only when the user enters Configure mode. They are not included in the initial login request.
@@ -454,6 +517,7 @@ GET /identityGovernance/roleManagementAlerts/alerts
 | Create role active assignment | `/roleManagement/directory/roleAssignmentScheduleRequests` | POST | RoleAssignmentSchedule.ReadWrite.Directory |
 | Create group assignment | `/identityGovernance/privilegedAccess/group/assignmentScheduleRequests` | POST | PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup |
 | Update group policy rule | `/policies/roleManagementPolicies/{policyId}/rules/{ruleId}` | PATCH | RoleManagementPolicy.ReadWrite.AzureADGroup |
+| Link or unlink a custom extension | `/policies/roleManagementPolicies/{policyId}/rules/CustomExtension_{PreApproval,PostApproval}_EndUser_Assignment` | PATCH | RoleManagementPolicy.ReadWrite.Directory or .AzureADGroup |
 
 ---
 
@@ -472,16 +536,18 @@ GET /identityGovernance/roleManagementAlerts/alerts
 | `AdministrativeUnit.Read.All` | Delegated | Read administrative unit names |
 | `Application.Read.All` | Delegated | Read application names |
 
-### Optional Permissions (PIM Groups & Security Alerts)
+### Optional Permissions (PIM for Groups, Security Alerts, Custom Extensions, Conditional Access)
 
 | Permission | Scope | Used For |
 |------------|-------|----------|
-| `PrivilegedAccess.Read.AzureADGroup` | Delegated | Read PIM Groups assignments and resources |
+| `PrivilegedAccess.Read.AzureADGroup` | Delegated | Read PIM for Groups assignments and resources |
 | `RoleManagementPolicy.Read.AzureADGroup` | Delegated | Read PIM policies for groups (Member/Owner) |
 | `RoleManagementAlert.Read.Directory` | Delegated | Read security alerts for roles |
+| `PrivilegedAccess-CustomExt.Read.All` | Delegated | List the tenant's PIM custom extensions (Preview) |
+| `Policy.Read.All` | Delegated | Configure's optional Conditional Access check, requested on demand |
 
 > [!TIP]
-> The application follows the **least privilege principle** by using granular permissions instead of broad permissions like `Directory.Read.All` or `Policy.Read.All`. Admin consent can be granted in the Microsoft Entra Admin Center.
+> The application follows the **least privilege principle** by using granular permissions instead of broad permissions like `Directory.Read.All`. `Policy.Read.All` is only asked for when you start the optional Conditional Access check in Configure. Admin consent can be granted in the Microsoft Entra admin center.
 
 > [!IMPORTANT]
 > All permissions are **delegated**. The app acts on behalf of the signed-in user, using their permissions in Microsoft Entra ID.

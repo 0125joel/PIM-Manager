@@ -60,8 +60,8 @@ De applicatie is opgebouwd uit **losjes gekoppelde modules** die onafhankelijk o
 │       ▼             ▼             ▼             ▼          │
 │                     Component Layer                         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ Overview │  │ Security │  │ Role     │  │ Loading  │    │
-│  │ Cards    │  │ Charts   │  │ Filters  │  │ Status   │    │
+│  │ Stat     │  │ Charts   │  │ Report   │  │ Loading  │    │
+│  │ Cards    │  │          │  │ Filters  │  │ Status   │    │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘    │
 └───────┼─────────────┼─────────────┼─────────────┼──────────┘
         │             │             │             │
@@ -69,8 +69,8 @@ De applicatie is opgebouwd uit **losjes gekoppelde modules** die onafhankelijk o
 │       ▼             ▼             ▼             ▼          │
 │                      Hooks Layer                            │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │useAggregated │  │useRoleFilters│  │useIncremental│      │
-│  │Data          │  │              │  │Consent       │      │
+│  │useAggregated │  │useDashboard  │  │useIncremental│      │
+│  │Data          │  │Filter        │  │Consent       │      │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
 └─────────┼─────────────────┼─────────────────┼──────────────┘
           │                 │                 │
@@ -78,8 +78,8 @@ De applicatie is opgebouwd uit **losjes gekoppelde modules** die onafhankelijk o
 │         ▼                 ▼                 ▼              │
 │                     Context Layer                           │
 │  ┌────────────────┐  ┌────────────────┐                    │
-│  │ UnifiedPim     │  │ DirectoryRole  │                    │
-│  │ Context        │  │ Context        │                    │
+│  │ UnifiedPim     │  │ Configure      │                    │
+│  │ Context        │  │ BasketContext  │                    │
 │  └───────┬────────┘  └───────┬────────┘                    │
 └──────────┼───────────────────┼─────────────────────────────┘
            │                   │
@@ -95,7 +95,7 @@ De applicatie is opgebouwd uit **losjes gekoppelde modules** die onafhankelijk o
 
 **Richtlijnen:**
 - Elke module heeft één verantwoordelijkheid (Single Responsibility)
-- Modules communiceren via props, contexts of hooks - nooit direct
+- Modules communiceren via props, contexts of hooks - nooit direct. Eén uitzondering: `app/configure/**` (de paginacontainer en zijn edit-componenten) mag rechtstreeks uit `services/` importeren (aanroepen gebeuren in event handlers en effects, nooit tijdens render), zie `AGENTS.md` en `docs/architecture/code-map.md`
 - Nieuwe workloads voegen toe zonder bestaande code aan te passen
 
 ### Clean Code
@@ -107,7 +107,7 @@ De codebase volgt strikte clean code principes:
 | **Meaningful Names** | `directoryRoleService.ts` niet `roleData.ts`, `useAggregatedData` niet `useData` |
 | **Small Functions** | Max ~50 regels per functie, helper functies voor complexe logica |
 | **DRY (Don't Repeat)** | `workerPool.ts` utility hergebruikt door alle services |
-| **Consistent Formatting** | Prettier + ESLint configuratie enforced |
+| **Consistent Formatting** | ESLint (`eslint-config-next`) zonder tolerantie: `npm run lint` moet 0 problemen melden |
 | **Type Safety** | Strikte TypeScript types voor alle interfaces |
 | **Error Handling** | Try-catch met duidelijke foutmeldingen, never silent fail |
 
@@ -135,22 +135,21 @@ Componenten en utilities zijn ontworpen voor **maximale herbruikbaarheid**:
 
 | Component/Utility | Hergebruikt in |
 |-------------------|----------------|
-| `InteractiveStatCard` | Dashboard, Report, future pages |
+| `ui/StatCard` | Dashboardkaarten (knop als de kaart een filter zet) |
 | `LoadingStatus` | Dashboard header, Report header |
 | `GlobalProgressBar` | Alle pagina's (via layout) |
 | `workerPool.ts` | directoryRoleService, pimGroupService, future services |
-| `useAggregatedData` | OverviewCards, SecurityCharts, future components |
-| `ScopeBadge` | Role details, Group details, Reports |
+| `useAggregatedData` | Dashboard- en rapportcomponenten |
 
 **Design Pattern: Composition over Inheritance**
 
 ```tsx
-// ❌ Niet: Props drilling
+// Niet: Props drilling
 <Dashboard>
   <Cards rolesData={...} groupsData={...} loading={...} />
 </Dashboard>
 
-// ✅ Wel: Hook-based data access
+// Wel: Hook-based data access
 function OverviewCards() {
   const aggregated = useAggregatedData();  // Haalt zelf data op
   return <Cards value={aggregated.totalItems} />;
@@ -194,7 +193,7 @@ De UI is ontworpen rond **gebruikersgerichte principes**:
 
 #### 5. Consistency
 - Dezelfde interactiepatronen door hele app
-- Consistente iconen (Lucide) en kleuren (Tailwind palette)
+- Consistente iconen (eigen iconenset) en kleuren (Tailwind palette)
 - Uniforme spacing en typography
 
 ### Accessibility
@@ -213,12 +212,12 @@ De app volgt WCAG 2.1 richtlijnen waar mogelijk:
 
 | Component | Technologie | Rationale |
 |-----------|-------------|-----------|
-| Framework | Next.js 16 (App Router) | Static export, React Server Components |
+| Framework | Next.js 16 (App Router) | Static export (`output: "export"`), alleen client components, geen SSR |
 | Styling | Tailwind CSS | Utility-first, dark mode support |
 | Auth | MSAL.js (@azure/msal-react) | Microsoft identity platform |
 | API Client | @microsoft/microsoft-graph-client | Type-safe Graph API calls |
-| Charts | Recharts | React-native, responsive |
-| Icons | Lucide React | Consistent, tree-shakeable |
+| Charts | Eigen SVG-componenten | Geen dependency, getekend uit data |
+| Icons | the own icon set (components/icons) | Consistent, tree-shakeable |
 | PDF Export | @react-pdf/renderer | Client-side PDF generation |
 
 ### Build Configuration
@@ -269,8 +268,8 @@ Microsoft Entra ID PIM beheert privileged access voor verschillende workloads:
 | Workload | Base Endpoint | API Version | Permissions |
 |----------|---------------|-------------|-------------|
 | Directory Roles | `/roleManagement/directory/` | v1.0/beta | RoleManagement.Read.Directory |
-| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | beta | PrivilegedAccess.Read.AzureADGroup |
-| Intune Roles | `/deviceManagement/roleDefinitions` | v1.0 | DeviceManagementRBAC.Read.All |
+| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | beta (policies en hun toewijzingen via v1.0) | PrivilegedAccess.Read.AzureADGroup |
+| Intune Roles (gepland) | `/deviceManagement/roleDefinitions` | v1.0 | DeviceManagementRBAC.Read.All |
 
 ### Authentication & Consent Flow
 
@@ -290,8 +289,8 @@ Microsoft Entra ID PIM beheert privileged access voor verschillende workloads:
 ```
 
 **Incremental Consent Strategie:**
-1. Basis-permissies bij login (User.Read, RoleManagement.Read.Directory)
-2. Extra scopes aanvragen wanneer gebruiker een workload activeert
+1. Tien leesscopes bij login (`loginRequest` in `config/authConfig.ts`): User.Read, RoleManagement.Read.Directory, RoleAssignmentSchedule.Read.Directory, RoleEligibilitySchedule.Read.Directory, RoleManagementPolicy.Read.Directory, Policy.Read.ConditionalAccess, User.Read.All, Group.Read.All, AdministrativeUnit.Read.All, Application.Read.All
+2. Extra scopes aanvragen wanneer de gebruiker een workload activeert (PIM for Groups, Security Alerts) of Configure opent (schrijfscopes: RoleManagementPolicy / RoleEligibilitySchedule / RoleAssignmentSchedule.ReadWrite.Directory en RoleManagementPolicy / PrivilegedEligibilitySchedule / PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup)
 3. Consent state opgeslagen in localStorage voor sessie-persistentie
 
 ---
@@ -313,36 +312,42 @@ De app gebruikt een **Unified Context** pattern om meerdere workloads te beheren
 │  └─────────────────────────────────────────────────────┘    │
 │                                                              │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌────────────┐   │
-│  │ enableWorkload  │  │ refreshWorkload │  │register-   │   │
-│  └─────────────────┘  └─────────────────┘  │Workload-   │   │
-│                                            │Refresh     │   │
+│  │ loadWorkload    │  │ refreshWorkload │  │ patch- /   │   │
+│  └─────────────────┘  └─────────────────┘  │ peek-      │   │
+│                                            │ Workload   │   │
 │  ┌─────────────────────────────────────┐   └────────────┘   │
-│  │ refreshAllWorkloads() - UNIVERSEEL   │                    │
-│  │ (delegeert naar registered handlers) │                    │
+│  │ one WorkloadEngine per workload     │                    │
+│  │ (src/workloads/engine.ts)           │                    │
 │  └─────────────────────────────────────┘                    │
 └─────────────────────────────────────────────────────────────┘
           │                         │
           ▼                         ▼
 ┌──────────────────┐      ┌──────────────────┐
-│ DirectoryRole    │      │ PimGroup         │
-│ Context          │      │ Service          │
-│ (registreert     │      │                  │
-│  refreshData)    │      │                  │
+│ directoryRoles   │      │ pimGroups        │
+│ Adapter          │      │ Adapter          │
+│ → directoryRole  │      │ → pimGroup       │
+│   Service        │      │   Service        │
 └──────────────────┘      └──────────────────┘
 ```
+
+**Drie contexts per provider (render-performance).** `UnifiedPimProvider` rendert drie geneste contexts uit één state-object: een data-context (`useUnifiedData`: per workload `data`, `consent`, `lastFetched`, per workload gememoïseerd zodat hij alleen verandert als die referenties veranderen), een loading-context (`useUnifiedLoading`: per workload laadfase en voortgang plus `syncHistory`) en een actions-context (`useUnifiedActions`: `loadWorkload`, `refreshWorkload`, `refreshAllWorkloads`, `enableWorkload`, `disableWorkload`, `clearWorkload`, `patchWorkload`, `peekWorkload`, `addSyncHistoryEntry`, `getGraphClient`; elk lid is een stabiele callback, dus het object wordt één keer aangemaakt). De Directory Roles-hooks `useRolesData`, `useRolesLoading` en `useRolesActions` (`hooks/usePimData.ts`) zijn selectors over de `directoryRoles`-slices van dezelfde drie contexts. Tijdens het laden van policies renderen alleen de loading-consumers (`GlobalProgressBar`, `LoadingStatus`, `SyncStatus`) en de componenten die de rollen tonen opnieuw; de zoekvelden en elke consumer die alleen acties gebruikt blijven ongemoeid. `useUnifiedPimData()` en `usePimData()` blijven bestaan als compatibiliteitshooks die de drie slices samenvoegen en daarom bij elke wijziging opnieuw renderen.
 
 ### Workload State Interface
 
 ```typescript
-interface WorkloadState<T> {
-    isConsented: boolean;
-    loading: {
-        phase: "idle" | "fetching" | "processing" | "complete" | "error";
-        progress: { current: number; total: number };
-        message?: string;
-        error?: string;
-    };
+interface WorkloadState<T, X = undefined> {
+    workload: WorkloadType;
     data: T[];
+    extras: X;                 // Directory Roles: authentication contexts, failed role ids
+    loading: {
+        phase: "idle" | "consent" | "fetching" | "processing" | "policies" | "complete" | "error";
+        progress: { current: number; total: number };
+        message: string;
+        error?: string;
+        percent?: number;      // blocking phase, 0 to 100
+        background?: { running: boolean; progress: { current: number; total: number } };
+    };
+    consent: WorkloadConsentState;
     lastFetched?: string;
 }
 ```
@@ -354,8 +359,21 @@ Na refactoring volgen alle services een consistent patroon:
 | Service | Doel | Bestandsnaam |
 |---------|------|--------------|
 | Directory Roles | Entra ID rollen + policies | `directoryRoleService.ts` |
-| PIM Groups | PIM-onboarded groups (beta resources endpoint) | `pimGroupService.ts` |
-| Intune (future) | Intune RBAC roles | `intuneService.ts` |
+| PIM for Groups | PIM-onboarded groups (beta resources endpoint) | `pimGroupService.ts` |
+| PIM Configuration | Het PIM-beleid van een directoryrol lezen en schrijven (`getRolePolicy`, `updatePimPolicy`) | `pimConfigurationService.ts` |
+| Configure Apply | De ene apply-engine van Configureren: eerst een snapshot, dan beleid en toewijzingen stap voor stap | `configureApplyService.ts` |
+| Custom Extensions | PIM custom extensions (Preview): de extension-objecten van de tenant lijsten en aanmaken (beta) | `customExtensionService.ts` |
+| Write Access | De reads van de Configure-toegangscheck: je rollen, eigen groepen en PIM-groepsinstanties | `writeAccessService.ts` |
+| Dry Run | De nieuwe toewijzingen van het mandje eenmalig als alleen-validatie verstuurd | `assignmentDryRunService.ts` |
+| Conditional Access | De optionele Conditional Access-check van de review | `conditionalAccessService.ts` |
+| Principal Lookup | De mensen uit een geïmporteerd bestand die de geladen data niet noemt | `principalLookupService.ts` |
+| Tenant | De weergavenaam van de tenant voor de accountknop | `tenantService.ts` |
+| Agent Blueprints | De blueprintnamen van Entra Agent ID's | `agentBlueprintService.ts` |
+| User Search | Gebruikers en groepen zoeken in Mensen toevoegen | `userSearchService.ts` |
+| Scope Options | Administratieve units en applicaties als scope van een nieuwe toewijzing | `scopeOptionsService.ts` |
+| Group Membership | Leden en eigenaren van een groep, op aanvraag gelezen in het Rapport | `groupMembershipService.ts` |
+| Policy Parser | PIM-beleidsregels parsen naar `PolicySettings` | `utils/policyParser.ts` |
+| Intune (gepland) | Intune RBAC roles | `intuneService.ts` |
 
 ---
 
@@ -392,7 +410,7 @@ Na refactoring volgen alle services een consistent patroon:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Fetch Sequence voor PIM Groups
+### Fetch Sequence voor PIM for Groups
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -425,7 +443,7 @@ Na refactoring volgen alle services een consistent patroon:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Note**: PIM Groups policy data (duration, MFA, approval) wordt opgehaald als onderdeel van het groepsdata-laden en is beschikbaar in de wizard PoliciesStep.
+> **Note**: PIM for Groups policy data (duration, MFA, approval) wordt opgehaald als onderdeel van het groepsdata-laden.
 
 ### Data Aggregation
 
@@ -459,22 +477,25 @@ interface AggregatedData {
 <ThemeProvider>                         ← Theme state (dark/light)
   <AuthProvider>                        ← MSAL authentication wrapper
     <ProtectedRoute>                    ← Route protection
-      <MobileMenuProvider>              ← Mobile menu state
-        <UnifiedPimProvider>            ← Multi-workload state
-          <PimDataProvider>             ← Directory Roles data (legacy name)
-            <ViewModeContext>           ← View mode state
+        <UnifiedPimProvider>            ← Multi-workload state, één engine per workload
+          <ErrorBoundary>               ← Vangt render-fouten, fallback UI
+            <ToastProvider>             ← Toast-notificaties
               <GlobalProgressBar />
-              <App />
-            </ViewModeContext>
-          </PimDataProvider>
+              <AppShell>{children}</AppShell>   ← Top bar, compact header, bottom navigation
+              <OnboardingWrapper />     ← Eerste-bezoek tour en feature highlights
+            </ToastProvider>
+          </ErrorBoundary>
         </UnifiedPimProvider>
-      </MobileMenuProvider>
     </ProtectedRoute>
   </AuthProvider>
 </ThemeProvider>
 ```
 
-> **Note:** `PimDataProvider` is the exported name from `DirectoryRoleContext.tsx` for backward compatibility.
+De providerboom staat in `components/AppProviders.tsx` (een client component die `app/layout.tsx` rendert). De MSAL redirect-bridgepagina `/redirect` wordt buiten deze boom gerenderd: MSAL v5 levert popup- en silent-tokenantwoorden op die pagina af, die ze naar het openende venster broadcast en niet in `MsalProvider` mag zitten.
+
+> **Let op:** `ViewModeProvider` maakt geen deel uit van de globale layout. Hij wordt alleen lokaal toegepast in `app/dashboard/page.tsx`. `ConfigureBasketProvider` wordt lokaal toegepast in `app/configure/page.tsx`.
+
+> **Let op:** De statische HTML en de hydration-pass renderen alleen de opstartspinner; de boom volgt op de client. In een demotabblad omhult `DemoModeProvider` hem en neemt `DemoAuthProvider` de plaats van `AuthProvider` in. De oude `PimDataProvider` en `DirectoryRoleContext` bestaan niet meer: Directory Roles zitten in `UnifiedPimProvider`.
 
 ### Caching Strategy
 
@@ -496,158 +517,9 @@ De applicatie gebruikt een **Hybrid State** aanpak voor navigatie:
 
 ---
 
-## Configure Wizard
+## Configure
 
-De **Configure Wizard** (`/configure`) biedt een begeleide multi-step workflow voor PIM-beheerders om roleassignments, policies en groepsinstellingen te configureren.
-
-### Wizard Architectuur
-
-**Belangrijkste Componenten:**
-- `src/app/configure/page.tsx` - Hoofd wizard pagina (456 regels)
-- `src/components/configure/ConfigureWizard.tsx` - Wizard orchestrator (124 regels)
-- `src/hooks/useWizardState.tsx` - Gecentraliseerd state management (429 regels)
-- `src/hooks/useNavigationGuard.ts` - Bescherming tegen onopgeslagen wijzigingen (80 regels)
-
-**Wizard Stappen (dynamisch, 8–10 totaal afhankelijk van selecties):**
-1. **BackupStep** - Data verversen en verifiëren dat data actueel is voor het maken van wijzigingen
-2. **WorkloadStep** - Selecteer workload(s): Directory Roles, PIM Groups, of beide
-3. **ConfigTypeStep** - Kies configuratietype: alleen policies, alleen toewijzingen, of beide
-4. **ScopeStep** - Selecteer specifieke rollen/groepen; kies scratch / huidige laden / klonen modus
-5. **PoliciesStep** *(per workload, indien policies geselecteerd)* - Activatie-, assignment-vervaldatum- en notificatie-instellingen
-6. **AssignmentsStep** *(per workload, indien toewijzingen geselecteerd)* - Maak eligible/actieve toewijzingen met principal- en scope-selectie
-7. **ReviewStep** - Bekijk alle wijzigingen voor toepassen
-8. **ApplyStep** - Voer uit via Graph API met real-time voortgangsregistratie
-9. **CheckpointStep** *(alleen bij dual-workload flows)* - Resultaten voor eerste workload; doorgaan of afsluiten
-10. **FinalStep** - Voltooiingssamenvatting met navigatielinks
-
-### State Management Pattern
-
-**Wizard Context Provider met Selector Pattern:**
-```typescript
-// src/hooks/useWizardState.tsx
-interface WizardData {
-    configType: "settings" | "assignment" | "both";
-    selectedRoleIds: string[];
-    selectedGroupIds: string[];
-    directoryRoles: WorkloadConfig;  // policies, assignments, configSource
-    pimGroups: WorkloadConfig;
-}
-
-// Selector hooks — voorkeur boven volledige context om re-renders te beperken
-const selectedRoles = useWizardData(data => data.selectedRoleIds);
-const { nextStep, prevStep } = useWizardNavigation();
-const { updateData } = useWizardActions();
-const steps = useWizardSteps();
-const isDirty = useWizardDirty();
-const roleConfig = useWorkloadConfig('directoryRoles');
-```
-
-**Key Features:**
-- Selector hooks voorkomen onnodige re-renders in leaf components
-- Step validatie met `WizardValidationService`
-- Dirty state tracking voor navigatie guards
-- Type-safe workload-specifieke configuraties per workload
-
-### Navigatie & Validatie
-
-**Navigation Guard:**
-- Browser navigatiebescherming via `beforeunload` event
-- React Router navigatie blokkering wanneer `isDirty === true`
-- Gebruikersbevestigingsdialoog voor onopgeslagen wijzigingen
-
-**Step Validatie:**
-```typescript
-// Elke stap moet validatie doorstaan voordat doorgegaan kan worden
-validateCurrentStep(): boolean {
-    switch (currentStep.id) {
-        case "scope": return selectedRoles.length > 0;
-        case "policies": return policies.isValid;
-        case "assignments": return assignments.length > 0;
-        // ...
-    }
-}
-```
-
-### Apply Service Architectuur
-
-**Uitvoeringsflow** (`src/services/wizardApplyService.ts` - 872 regels):
-
-1. **Backup Fase** (Optioneel)
-   - Exporteer bestaande role policies naar JSON
-   - Opslaan naar lokaal bestandssysteem
-
-2. **Policy Application Fase**
-   - Update role policy instellingen via Graph API
-   - Parallelle uitvoering met worker pool pattern
-   - Rate limiting: 200ms vertraging tussen requests
-
-3. **Assignment Creation Fase**
-   - Creëer eligible/active assignments
-   - Sequentiële uitvoering voor betrouwbaarheid
-   - Voortgangsregistratie met real-time UI updates
-
-**Error Handling:**
-- Individuele operatie error capture
-- Ondersteuning voor gedeeltelijk succes scenario's
-- Gedetailleerde foutrapportage per role/group
-- Rollback begeleiding bij fouten
-
-### Services & Utilities
-
-**Policy Parser Service** (`src/services/policyParserService.ts` - 323 regels):
-- Parseert bestaande Graph API policy responses
-- Normaliseert duration formats (ISO 8601 ↔ uren/dagen)
-- Type-safe policy transformaties
-
-**Wizard Validation Service** (`src/services/WizardValidationService.ts` - 61 regels):
-- Cross-step validatieregels
-- Business logic validatie
-- Voorkomt ongeldige configuraties
-
-**Duration Utilities** (`src/utils/durationUtils.ts` - 254 regels):
-- ISO 8601 duration parsing en formatting
-- Menselijk leesbare duration conversie
-- Validatie van min/max constraints
-
-### UI Components
-
-**Gespecialiseerde Componenten:**
-- `DurationSlider.tsx` (173 regels) - Duration input met presets
-- `PrincipalSelector.tsx` - User/group zoeken met Graph API integratie
-- `Toggle.tsx` (43 regels) - Toegankelijke toggle switches
-- `Skeleton.tsx` (92 regels) - Loading state placeholders
-
-**Design Patterns:**
-- React.memo voor dure step componenten (PoliciesStep, ScopeStep)
-- useMemo voor berekende waarden en gefilterde lijsten
-- useCallback voor event handlers om re-renders te voorkomen
-- Compound component pattern voor multi-part formulieren
-
-### Beveiliging & Data Validatie
-
-**Input Validatie:**
-- OData filter escaping in principal search queries
-- Duration range validatie (min/max constraints)
-- Principal ID validatie (GUID formaat)
-- Role/group existence verificatie
-
-**Permission Vereisten:**
-- Zelfde permissies als hoofdapplicatie (RoleManagement.ReadWrite.Directory)
-- Geen privilege elevatie tijdens wizard uitvoering
-- Read-only preview voor toepassen
-
-### Performance Overwegingen
-
-**Optimalisaties:**
-- Lazy loading van step componenten
-- Gevirtualiseerde lijsten voor grote role/group sets
-- Debounced search inputs (300ms vertraging)
-- Gecachte Graph API responses tijdens wizard sessie
-
-**Bekende Bottlenecks** (Zie Code Optimization Analysis):
-- Monolithische wizard context veroorzaakt brede re-renders
-- Sequentiële API calls bij assignment creation (25s voor 100 assignments)
-- JSON.stringify keys in PoliciesStep veroorzaken render overhead
+De **Configure-pagina** (`/configure`) heeft vier modi (Edit, Guided, Import, Access model) op één mandje met wijzigingen, één review en één apply-engine. Zie [Configuratiepagina](./09-configuratie-pagina.md) en de sectie Configure Feature in `docs/architecture/features.md` voor de bestanden.
 
 ---
 
@@ -684,18 +556,31 @@ async function runWorkerPool<TItem, TResult>({
 
 ### Rate Limiting Strategy
 
-| Workload / Operatie | Workers | Delay | Rationale |
-|---------------------|---------|-------|-----------|
-| Directory Roles — policy fetch | 12 | 200ms | Verhoogd van 8/300ms in v2.1.0; verkort full-tenant policy laadtijd met ~30% |
-| PIM Groups — hoofddata fetch | 3 | 500ms | Conservatief ter bescherming van group API quota |
-| PIM Groups — onbeheerde groepen | 5 | 200ms | Matige belasting voor aanvullende data |
-| PIM Groups — volledige refresh | 8 | 300ms | Maximale doorvoer bij expliciete gebruikersinitiatief |
-| Worker pool standaard (indien niet opgegeven) | 8 | 300ms | Valt terug op maximale doorvoer |
+| Workload / Operatie | Workers | Delay | Waar |
+|---------------------|---------|-------|------|
+| Directory Roles: policy fetch per rol | 12 | 200ms | `concurrentFetchPolicies` (aangeroepen door `workloads/directoryRolesAdapter.ts`); verhoogd van 8/300ms in v2.1.0 |
+| Directory Roles: scope-verrijking | 8 | 300ms | `enrichAssignmentsWithScope` |
+| PIM for Groups: beheerde groepen (volledig laden, 4 calls per groep) | 3 | 500ms | `fetchAllPimGroupData` |
+| PIM for Groups: beheerde groepen (slim verversen, 2 calls per groep) | 3 | 500ms | `refreshPimGroupAssignments` |
+| PIM for Groups: onbeheerde groepen | 5 | 200ms | `fetchAllPimGroupData`, `refreshPimGroupAssignments` (één lichte call per groep) |
+| PIM for Groups: ledenaantal van onbeheerde groepen | 6 | 500ms | `addMemberCounts` (`pimGroupService.ts`) |
+| Worker pool standaard (indien niet opgegeven) | 8 | 300ms | `runWorkerPool` |
+
+De Configure-apply (`services/configureApplyService.ts`) draait zijn stappen via `runWorkerPool` met 4 workers en 500 ms vertraging. `updatePimPolicy` loopt niet via een pool: de regels worden één voor één gePATCHt met een pauze van 300 ms. Elke Graph-call, gepoold of niet, gaat bovendien door `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window van 500 resource units per 10 seconden).
 
 **Microsoft Graph API Limieten (Identity & Access):**
 
-| Tenant Grootte | ResourceUnits per 10 sec | Policy Fetch Cost | Max Req/sec | Huidige Gebruik |
-|----------------|-------------------------|-------------------|-------------|-----------------|
+| Tenant Grootte | ResourceUnits per 10 sec | Eigen cap (500 RU) als deel van het budget |
+|----------------|-------------------------|---------------------------------------------|
+| Large (>500 users) | 8,000 RU | 6% |
+| Medium (50-500) | 5,000 RU | 10% |
+| Small (<50) | 3,500 RU | 14% |
+
+**Policy fetch cost:** 2 RU per request, afgeleid uit de Graph-regels (een request kost 1, `$expand` telt 1 erbij). Microsoft publiceert geen kost voor `/policies/roleManagementPolicyAssignments`, dus dit is niet gemeten; de response header `x-ms-resource-unit` toont de echte waarde.
+
+**Eigen cap:** `graphRateLimiter` houdt alle Graph-calls samen onder 500 RU per 10 seconden, ongeveer 25 policy-requests per seconde.
+
+----------------|-------------------------|-------------------|-------------|-----------------|
 | Large (>500 users) | 8,000 RU | ~3 RU/req | ~266 req/sec | 26 req/sec (10%) |
 | Medium (50-500) | 5,000 RU | ~3 RU/req | ~166 req/sec | 26 req/sec (16%) |
 | Small (<50) | 3,500 RU | ~3 RU/req | ~116 req/sec | 26 req/sec (22%) |
@@ -814,7 +699,7 @@ De applicatie binnen het externe ecosysteem:
 │    │ Identity │◄────►│  Graph API    │     │   Pages        │      │
 │    │ Platform │      │               │     │   (Hosting)    │      │
 │    │ (MSAL)   │      │ • Directory   │     │                │      │
-│    │          │      │ • PIM Groups  │     │ • Static files │      │
+│    │          │      │ • PIM for Groups  │     │ • Static files │      │
 │    │ OAuth2.0 │      │ • Policies    │     │ • Global CDN   │      │
 │    └──────────┘      └───────────────┘     └────────────────┘      │
 │                                                                      │
@@ -843,13 +728,13 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 
 | # | Beslissing | Status | Rationale |
 |---|------------|--------|-----------|
-| ADR-001 | **Client-side only** (geen backend) | ✅ Accepted | Vermijdt server kosten, simpler deployment, data blijft bij gebruiker |
-| ADR-002 | **Static Export** via Next.js | ✅ Accepted | Cloudflare Pages hosting, geen server-side rendering nodig |
-| ADR-003 | **UnifiedPimContext** voor multi-workload | ✅ Accepted | Single source of truth, schaalt naar nieuwe workloads |
-| ADR-004 | **Worker Pool pattern** voor API throttling | ✅ Accepted | Voorkomt 429 errors, 3x sneller dan sequentieel |
-| ADR-005 | **Aggregated cards** i.p.v. per-workload | ✅ Accepted | Cleaner UI, schaalt beter |
-| ADR-006 | **Incremental Consent** per workload | ✅ Accepted | Least privilege, user kiest welke data |
-| ADR-007 | **Beta API** voor isPrivileged property | ⚠️ Risk Accepted | Nodig voor security insights, fallback naar v1.0 |
+| ADR-001 | **Client-side only** (geen backend) | Accepted | Vermijdt server kosten, simpler deployment, data blijft bij gebruiker |
+| ADR-002 | **Static Export** via Next.js | Accepted | Cloudflare Pages hosting, geen server-side rendering nodig |
+| ADR-003 | **UnifiedPimContext** voor multi-workload | Accepted | Single source of truth, schaalt naar nieuwe workloads |
+| ADR-004 | **Worker Pool pattern** voor API throttling | Accepted | Voorkomt 429 errors, tot 8x sneller dan sequentieel |
+| ADR-005 | **Aggregated cards** i.p.v. per-workload | Accepted | Cleaner UI, schaalt beter |
+| ADR-006 | **Incremental Consent** per workload | Accepted | Least privilege, user kiest welke data |
+| ADR-007 | **Beta API** alleen waar v1.0 de data mist: `isPrivileged`, alerts, custom extensions, PIM for Groups-resources, groepsleden en ledenaantal | ⚠️ Risk Accepted | Nodig voor security insights en PIM for Groups; elke beta-aanroep heeft de reden in een codecommentaar. De `isPrivileged`-aanroep valt terug op v1.0 zonder dat veld |
 
 > Zie `docs/adr/` voor gedetailleerde ADR documenten (indien gecreëerd).
 
@@ -882,10 +767,12 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 │                              Platform                          │
 │                                                                │
 │  Token Scopes (cumulative):                                   │
-│  ├── Login: User.Read, openid, profile                        │
-│  ├── Roles: RoleManagement.Read.Directory                     │
-│  ├── PIM Groups: PrivilegedAccess.Read.AzureADGroup           │
-│  └── Configure: RoleManagement.ReadWrite.Directory            │
+│  ├── Login: tien leesscopes (zie Incremental Consent Strategie) │
+│  ├── Security Alerts: RoleManagementAlert.Read.Directory       │
+│  ├── PIM for Groups: PrivilegedAccess.Read.AzureADGroup,      │
+│  │     RoleManagementPolicy.Read.AzureADGroup                  │
+│  └── Configure: granulaire *.ReadWrite.Directory en           │
+│        *.ReadWrite.AzureADGroup scopes                         │
 │                                                                │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -922,9 +809,9 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 
 ### Logging Strategy
 
-- **Development**: Console.log/warn/error
-- **Production**: Error boundary catches unhandled exceptions
-- **Optional**: Sentry integration voor production monitoring
+- Alle logging loopt via `Logger` (`utils/logger.ts`); `src/` bevat geen directe `console.*` aanroepen
+- Het niveau is dynamisch: `localStorage.setItem('LOG_LEVEL', 'DEBUG')` zet debug-uitvoer aan in elke omgeving
+- Error boundaries (globaal) vangen onafgehandelde render-fouten; er is geen externe monitoringdienst gekoppeld
 
 ---
 
@@ -969,66 +856,85 @@ Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./08-deplo
 
 ```
 src/
+├── app/                          # Routes: /, dashboard, report, configure, settings, help, redirect, demo
 ├── components/
-│   ├── configure/                # Configure functie (Wizard, Handmatig, Bulk modi)
-│   │   ├── shared/               # Gedeelde componenten over modi
-│   │   │   └── PrincipalSelector.tsx  # Gebruiker/groep zoeken (Graph API)
-│   │   ├── wizard/               # Wizard modus stap componenten
-│   │   └── modes/                # ManualMode.tsx, BulkMode.tsx
-│   ├── ui/                       # Primitieve UI: Toggle, Skeleton, Toast, DurationSlider
+│   ├── AppProviders.tsx          # De providerboom (gerenderd door app/layout.tsx)
+│   ├── ui/                       # Primitieven: Button, Chip, Dialog, Menu, SegmentedControl, StatCard, Tag, Skeleton, Toast, DurationSlider, DemoLock, ...
+│   ├── charts/                   # Donut, StackedBar, BarList (eigen SVG-grafieken)
+│   ├── icons/                    # Icon.tsx, iconData.ts (eigen iconenset)
+│   ├── shell/                    # AppShell, ShellFrame, TopBar, CompactHeader, BottomNav, AccountMenu, HelpPanel, EnvironmentSwitcher, DemoBanner
+│   ├── pdf/                      # ReportDocument.tsx (PDF-export renderer)
 │   ├── ErrorBoundary.tsx         # Error catching + fallback UI
 │   ├── GlobalProgressBar.tsx     # Gecombineerde laadvoortgang
 │   ├── LoadingStatus.tsx         # Inline laadindicatoren
-│   ├── InteractiveStatCard.tsx   # Herbruikbare dashboard kaart
-│   ├── ScopeBadge.tsx            # Scope visualisatie
 │   ├── WorkloadChips.tsx         # Workload toggle chips
 │   └── ThemeProvider.tsx         # Donker/licht modus
+│
+├── workloads/                    # WorkloadEngine, sessiecache, adapters voor Directory Roles en PIM for Groups
 │
 ├── services/
 │   ├── directoryRoleService.ts   # Entra ID Roles + Policies
 │   ├── pimGroupService.ts        # PIM for Groups
-│   ├── pimConfigurationService.ts # Policy parsing + schrijf helpers
-│   ├── wizardApplyService.ts     # Bulk policy/toewijzing schrijven via Graph API
-│   ├── deltaService.ts           # Incrementele Graph API delta updates
-│   ├── CsvParserService.ts       # CSV parsen + valideren voor Bulk modus
-│   ├── WizardValidationService.ts # Cross-stap wizard validatieregels
-│   └── policyParserService.ts    # Parse Graph API policy regelstructuren
+│   ├── pimConfigurationService.ts # Lezen en schrijven van rolpolicies
+│   ├── configureApplyService.ts  # De apply-engine van Configureren
+│   ├── assignmentDryRunService.ts # Proefrun van nieuwe toewijzingen (isValidationOnly)
+│   ├── writeAccessService.ts     # Leesacties van de toegangscheck van Configureren
+│   ├── conditionalAccessService.ts # Optionele Conditional Access-check
+│   └── ...                       # customExtension, groupMembership, userSearch, scopeOptions, principalLookup, tenant, agentBlueprint
 │
 ├── contexts/
-│   ├── UnifiedPimContext.tsx     # Multi-workload state
-│   ├── DirectoryRoleContext.tsx  # Directory Roles data (exporteert PimDataProvider)
-│   ├── ViewModeContext.tsx       # View mode state
-│   ├── MobileMenuContext.tsx     # Mobile menu state
-│   └── ToastContext.tsx          # Toast notificatiesysteem
+│   ├── UnifiedPimContext.tsx     # Multi-workload state (data, loading, actions)
+│   ├── ConfigureBasketContext.tsx # Het mandje van Configureren
+│   ├── DemoModeContext.tsx       # Vlag van de live demo
+│   ├── ViewModeContext.tsx       # Weergavemodus state
+│   └── ToastContext.tsx          # Toast-notificatiesysteem
 │
 ├── hooks/
-│   ├── useWizardState.tsx        # Wizard context + selector hooks
-│   ├── usePimData.ts             # Directory Roles data toegang
-│   ├── usePimSelectors.ts        # Gememoïseerde selectors voor PIM data
+│   ├── usePimData.ts             # Directory Roles-selectors over UnifiedPimContext
+│   ├── usePimSelectors.ts        # Dunne selectors over UnifiedPimContext
 │   ├── useAggregatedData.ts      # Gecombineerde statistieken over workloads
-│   ├── useIncrementalConsent.ts  # Consent flow
-│   ├── useConsentedWorkloads.ts  # Consent detectie
-│   ├── useRoleFilters.ts         # Rol filter logica
-│   └── useNavigationGuard.ts    # Waarschuw bij onopgeslagen wijzigingen
+│   ├── useIncrementalConsent.ts  # Consent-flow
+│   ├── useConsentedWorkloads.ts  # Consent-detectie
+│   ├── useDashboardFilter.ts     # Het gedeelde filter `f` in de URL
+│   ├── useReportUrlState.ts      # URL-state van het Rapport
+│   ├── useWriteAccess.ts         # Toegangscheck van Configureren
+│   ├── useConfigureReview.ts     # Review van Configureren (pre-flight, proefrun)
+│   ├── useConfigureApply.ts      # Apply, resultaat en ongedaan maken in Configureren
+│   ├── useLeaveGuard.ts          # Waarschuwt bij niet-opgeslagen wijzigingen in Configureren
+│   ├── useOnboarding.ts          # Eerste-bezoek tour en feature highlights
+│   └── useUpdateCheck.ts         # GitHub release-check (alleen self-hosted)
 │
 ├── types/
-│   ├── directoryRole.types.ts    # Rol data types
-│   ├── pimGroup.types.ts         # Groep data types
-│   ├── wizard.types.ts           # Wizard data types
-│   ├── workload.ts               # Workload state types
-│   ├── roleFilters.ts            # Filter types
-│   └── securityAlerts.ts        # Security alert types
+│   ├── shared.types.ts           # Principal, AuthenticationContext, CustomExtensionSlots (gedeelde vormen)
+│   ├── directoryRole.types.ts    # Roldatatypes (PimPolicyRule, ApprovalStage, PrimaryApprover)
+│   ├── pimGroup.types.ts         # Groepsdatatypes
+│   ├── workload.types.ts         # Workload state types
+│   ├── configure.types.ts        # Het mandje van Configureren
+│   ├── dashboardFilter.types.ts  # Filtertypes
+│   ├── securityAlerts.types.ts   # Security alert types
+│
+├── demo/                         # De live demo: runtime-patches, nep-Graph, Contoso-tenant
 │
 └── utils/
-    ├── workerPool.ts             # Parallel fetch utility (standaard: 8 workers, 300ms)
+    ├── workerPool.ts             # Parallel ophalen (standaard: 8 workers, 300ms)
+    ├── rateLimiter.ts            # graphRateLimiter: sliding window, 500 RU per 10 s
+    ├── graphClient.ts            # createGraphClient, ThrottleWatcher (een 429 pauzeert de limiter)
     ├── retryUtils.ts             # withRetry() exponentiële backoff voor 429/5xx
-    ├── durationUtils.ts          # ISO 8601 duration parsing + formattering
-    ├── etagCache.ts              # ETag-gebaseerde HTTP caching
-    ├── scopeUtils.ts             # Scope type detectie (6 scope types)
+    ├── errorUtils.ts             # getErrorMessage/getErrorCode/isAbortError for catch (error: unknown)
+    ├── graphErrorMapping.ts      # Ruwe Graph-fouten naar begrijpelijke meldingen
+    ├── odataUtils.ts             # escapeODataString() en OData query helpers
+    ├── durationUtils.ts          # ISO 8601 duur parsen + formatteren
+    ├── policyRules.ts            # De ene schrijfmapper voor beleidsregels
+    ├── configureBasket.ts        # Reducers en opslag van het mandje
+    ├── configurePreflight.ts     # De checks van de review als data
+    ├── policyConflicts.ts        # Wat verandert voor wie activeert als een beleid wijzigt
+    ├── throttle.ts               # createTrailingThrottle voor gebundelde voortgangsupdates
+    ├── etagCache.ts              # ETag-gebaseerde HTTP-caching
+    ├── scopeUtils.ts             # Detectie van scopetypes (6 scopetypes)
     ├── logger.ts                 # Gestructureerde logging met dynamische niveaus
-    ├── authContextApi.ts         # Haal Conditional Access auth contexten op
-    ├── alertFormatting.ts        # Security alert iconen + kleuren
-    └── chartCapture.ts           # html2canvas wrapper voor PDF export
+    ├── authContextApi.ts         # Conditional Access auth contexts ophalen
+    ├── alertFormatting.ts        # Iconen + kleuren van security alerts
+    └── exportReport.ts           # inhoud van de PDF/CSV-export als data
 ```
 
 ---

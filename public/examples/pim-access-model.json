@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0.0",
+  "roles": [
+    { "displayName": "Global Administrator", "expectedConfig": { "maxActivationDuration": "PT2H", "requireMFA": true, "requireJustification": true, "requireApproval": true, "allowPermanentEligible": false, "allowPermanentActive": false } },
+    { "displayName": "Exchange Administrator", "expectedConfig": { "maxActivationDuration": "PT4H", "requireMFA": true, "requireJustification": true } },
+    { "displayName": "Reports Reader", "expectedConfig": { "maxActivationDuration": "PT8H", "requireMFA": true } }
+  ]
+}

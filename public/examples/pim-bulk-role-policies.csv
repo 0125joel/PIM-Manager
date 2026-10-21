@@ -1,0 +1,4 @@
+Role Name,Max Activation Duration,Require On Activation,Justification Required,Approval Required,Approver IDs,Eligible Assignment Admin Recipients
+Exchange Administrator,PT4H,mfa,Yes,Yes,manager,finance-it@contoso.com
+Helpdesk Administrator,PT8H,none,No,No,,
+Billing Administrator,PT2H,mfa,Yes,,,

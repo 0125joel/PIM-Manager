@@ -8,6 +8,7 @@
  */
 
 import { Logger } from './logger';
+import { graphRateLimiter } from './rateLimiter';
 
 interface RetryableError {
     statusCode?: number;
@@ -117,6 +118,8 @@ export async function withRetry<T>(
                     delay = retryAfterMs;
                     retryAfterSource = 'header';
                 }
+                // Every other worker pauses too, otherwise they keep the throttling going
+                graphRateLimiter.backOff(delay);
                 Logger.warn(
                     'Throttle',
                     `${operationName}: 429 throttled, retry-after=${delay}ms (source: ${retryAfterSource}), attempt ${attempt + 1}/${maxRetries}`

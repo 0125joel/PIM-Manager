@@ -1,6 +1,7 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { GRAPH_LOCALE } from "@/config/constants";
 import { Logger } from "@/utils/logger";
+import { withRetry } from "@/utils/retryUtils";
 
 export interface AuthenticationContext {
     id: string;              // e.g., "c1", "c2"
@@ -16,12 +17,15 @@ export interface AuthenticationContext {
  */
 export async function getAuthenticationContexts(client: Client): Promise<AuthenticationContext[]> {
     try {
-        const response = await client
-            .api("/identity/conditionalAccess/authenticationContextClassReferences")
-            .header("Accept-Language", GRAPH_LOCALE)
-            .get();
+        const response = await withRetry(
+            () => client
+                .api("/identity/conditionalAccess/authenticationContextClassReferences")
+                .header("Accept-Language", GRAPH_LOCALE)
+                .get(),
+            3, 1000, "getAuthenticationContexts"
+        );
 
-        return (response.value || []).map((ctx: any) => ({
+        return (response.value || []).map((ctx: { id: string; displayName: string; description?: string; isAvailable?: boolean }) => ({
             id: ctx.id,
             displayName: ctx.displayName,
             description: ctx.description || "",

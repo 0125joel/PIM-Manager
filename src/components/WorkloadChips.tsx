@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Shield, Users, AlertTriangle, Settings, EyeOff, Eye, ShieldOff } from "lucide-react";
+import { Chip } from "@/components/ui/Chip";
 import { WorkloadType } from '@/types/workload.types';
-import { getEnabledWorkloads } from "@/hooks/useIncrementalConsent";
-import { isWorkloadVisible, setWorkloadVisible } from "@/components/SettingsModal";
+import { getEnabledWorkloads, useIncrementalConsent, WORKLOAD_STATE_EVENT } from "@/hooks/useIncrementalConsent";
+import { isWorkloadVisible, setWorkloadVisible } from "@/utils/workloadPreferences";
 
 interface ChipConfig {
     id: string;
     name: string;
-    icon: React.ReactNode;
     type: "workload" | "feature";
     workloadId?: WorkloadType; // For features, indicates parent workload
 }
@@ -18,46 +17,49 @@ interface ChipConfig {
 // Chip configuration - maps to Settings workloads/features
 // Workload chips act as DATA FILTERS (not just visibility toggles)
 // Feature chips (like Security Alerts) toggle specific UI widgets
+// In the order of spec 4.1: Directory roles, PIM for Groups, Unmanaged groups, Agents, Security alerts
 const CHIP_CONFIG: ChipConfig[] = [
     {
         id: "directoryRoles",
         name: "Directory roles",
-        icon: <Shield className="h-3.5 w-3.5" />,
         type: "workload"
     },
     {
-        id: "securityAlerts",
-        name: "Security alerts",
-        icon: <AlertTriangle className="h-3.5 w-3.5" />,
-        type: "feature",
-        workloadId: "directoryRoles"
-    },
-    {
         id: "pimGroups",
-        name: "PIM groups",
-        icon: <Users className="h-3.5 w-3.5" />,
+        name: "PIM for Groups",
         type: "workload"
     },
     {
         id: "unmanagedGroups",
         name: "Unmanaged groups",
-        icon: <ShieldOff className="h-3.5 w-3.5" />,
         type: "feature",
         workloadId: "pimGroups"
+    },
+    {
+        id: "agents",
+        name: "Agents",
+        type: "feature",
+        workloadId: "directoryRoles"
+    },
+    {
+        id: "securityAlerts",
+        name: "Security alerts",
+        type: "feature",
+        workloadId: "directoryRoles"
     }
 ];
 
 interface WorkloadChipsProps {
-    onOpenSettings?: () => void;
     excludedChips?: string[];
     allowIndependentChildToggles?: boolean;
 }
 
-export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndependentChildToggles = false }: WorkloadChipsProps) {
+export function WorkloadChips({ excludedChips = [], allowIndependentChildToggles = false }: WorkloadChipsProps) {
     const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({});
     const [enabledWorkloads, setEnabledWorkloads] = useState<WorkloadType[]>([]);
 
     const searchParams = useSearchParams();
+    const { requestConsent } = useIncrementalConsent();
 
     // Load states on mount and on params change
     useEffect(() => {
@@ -92,15 +94,16 @@ export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndepen
 
         loadStates();
 
-        // Listen for storage changes (from Settings modal)
+        // Same-tab changes (Settings page, chips, consent) dispatch WORKLOAD_STATE_EVENT;
+        // the native `storage` event covers other tabs. No polling needed.
         const handleStorageChange = () => loadStates();
 
         window.addEventListener("storage", handleStorageChange);
-        const interval = setInterval(loadStates, 500);
+        window.addEventListener(WORKLOAD_STATE_EVENT, handleStorageChange);
 
         return () => {
             window.removeEventListener("storage", handleStorageChange);
-            clearInterval(interval);
+            window.removeEventListener(WORKLOAD_STATE_EVENT, handleStorageChange);
         };
     }, [searchParams]);
 
@@ -124,7 +127,7 @@ export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndepen
 
             // Also check current visibility state of parent?
             // User requested: "bij het uitschakelen van de toggle de data... verborgen worden" based on parent?
-            // Usually enabling a feature chip is independent, but if PIM Groups is NOT visible,
+            // Usually enabling a feature chip is independent, but if PIM for Groups is NOT visible,
             // the Unmanaged Groups toggle shouldn't be visible either.
             // UNLESS allowIndependentChildToggles is true (for Report page)
             if (!allowIndependentChildToggles && visibilityStates[chip.workloadId] === false) return false;
@@ -134,7 +137,7 @@ export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndepen
             return enabledWorkloads.includes(chip.id as WorkloadType);
         }
         // For features (like securityAlerts, unmanagedGroups), check if enabled in localStorage OR default to true?
-        // Let's rely on storage state (defaulting to enabled first time is handled in SettingsModal logic, or we force it here)
+        // Let's rely on storage state (defaulting to enabled first time is handled where consent is granted, or we force it here)
         if (typeof window === "undefined") return false;
 
         // Special case: Unmanaged Groups defaults to true (or handled by storage)
@@ -157,63 +160,35 @@ export function WorkloadChips({ onOpenSettings, excludedChips = [], allowIndepen
     // Only show chips for enabled (consented) workloads/features
     const visibleChips = CHIP_CONFIG.filter(chip => isChipEnabled(chip));
 
-    if (visibleChips.length === 0) {
+    // PIM for Groups without consent shows locked; the security alerts feature asks for its own consent where its block sits
+    const lockedChips = CHIP_CONFIG.filter(chip => chip.id === "pimGroups" && !excludedChips.includes(chip.id) && !enabledWorkloads.includes("pimGroups"));
+
+    if (visibleChips.length === 0 && lockedChips.length === 0) {
         return null;
     }
 
     return (
-        <div className="flex items-center gap-2 flex-wrap" data-tour="workload-chips">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 mr-1">View:</span>
+        <div className="flex flex-wrap items-center gap-2" data-tour="workload-chips" role="group" aria-label="Counting">
+            <span className="mr-1 font-mono text-xs text-muted max-sm:hidden">counting</span>
 
-            {visibleChips.map((chip) => {
-                const isVisible = visibilityStates[chip.id] !== false;
-                const canToggle = canToggleWorkloadChip(chip);
-
+            {CHIP_CONFIG.map((chip) => {
+                // A workload without consent: dashed chip with a lock, selecting it starts consent (spec 4.1)
+                if (lockedChips.includes(chip)) {
+                    return <Chip key={chip.id} kind="locked" label={chip.name} onSelect={() => void requestConsent(chip.id as WorkloadType)} />;
+                }
+                if (!visibleChips.includes(chip)) return null;
                 return (
-                    <button
+                    <Chip
                         key={chip.id}
-                        onClick={() => canToggle && toggleVisibility(chip.id)}
-                        disabled={!canToggle}
-                        className={`
-                            inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
-                            ${!canToggle
-                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 cursor-default opacity-80"
-                                : isVisible
-                                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 cursor-pointer"
-                                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer"
-                            }
-                        `}
-                        title={
-                            !canToggle
-                                ? "Cannot hide - at least one workload must be visible"
-                                : isVisible
-                                    ? "Click to hide from view"
-                                    : "Click to show"
-                        }
-                    >
-                        {chip.icon}
-                        <span className={!isVisible && canToggle ? "line-through" : ""}>{chip.name}</span>
-                        {canToggle && (
-                            isVisible ? (
-                                <Eye className="h-3 w-3 ml-0.5 opacity-60" />
-                            ) : (
-                                <EyeOff className="h-3 w-3 ml-0.5 opacity-60" />
-                            )
-                        )}
-                    </button>
+                        kind="toggle"
+                        label={chip.name}
+                        isOn={visibilityStates[chip.id] !== false}
+                        isDisabled={!canToggleWorkloadChip(chip)}
+                        disabledReason="At least one workload has to count"
+                        onToggle={() => toggleVisibility(chip.id)}
+                    />
                 );
             })}
-
-            {/* Settings button */}
-            {onOpenSettings && (
-                <button
-                    onClick={onOpenSettings}
-                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-full text-xs text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                    title="Manage workloads"
-                >
-                    <Settings className="h-3.5 w-3.5" />
-                </button>
-            )}
         </div>
     );
 }
@@ -250,11 +225,16 @@ export function useWorkloadVisibility(workloadId: string): boolean {
 
         checkVisibility();
 
-        // Poll for changes (same-tab updates from Settings modal or chips)
-        const interval = setInterval(checkVisibility, 300);
+        // Same-tab updates (Settings page or chips) arrive via WORKLOAD_STATE_EVENT,
+        // cross-tab updates via the native `storage` event
+        window.addEventListener(WORKLOAD_STATE_EVENT, checkVisibility);
+        window.addEventListener("storage", checkVisibility);
 
-        return () => clearInterval(interval);
-    }, [workloadId, searchParams]); // Add searchParams dependency
+        return () => {
+            window.removeEventListener(WORKLOAD_STATE_EVENT, checkVisibility);
+            window.removeEventListener("storage", checkVisibility);
+        };
+    }, [workloadId, searchParams]);
 
     return isVisible;
 }

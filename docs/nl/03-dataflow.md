@@ -307,25 +307,26 @@ De "Vernieuwen" knop op elke pagina:
 
 - Roept `refreshAllWorkloads()` aan vanuit `UnifiedPimContext`
 - Deze functie **delegeert** naar geregistreerde refresh handlers per workload
-- Elke workload (DirectoryRoles, PIM Groups, etc.) registreert zijn refresh functie via `registerWorkloadRefresh`
-- Gebruikt **Smart Refresh** (Delta Queries) indien mogelijk
+- Elke workload (DirectoryRoles, PIM for Groups, etc.) registreert zijn refresh functie via `registerWorkloadRefresh`
+- Gebruikt **Smart Refresh** (zie direct hieronder)
 
 > [!TIP]
 > Dit modulaire ontwerp betekent dat elke nieuwe pagina simpelweg `refreshAllWorkloads()` kan aanroepen en alle workloads correct verversen, inclusief Smart Refresh logica voor Directory Roles.
 
 ### Slim Verversen (Smart Refresh)
 
-Wanneer je op "Vernieuwen" klikt en er is een eerdere sync geweest:
+Graph heeft geen delta-query en geen change notifications voor PIM-toewijzingen of policies (`/directoryRoles/delta` meldt alleen geactiveerde rolobjecten, `/groups/delta` filtert alleen op `id`, en `lastModifiedDateTime` van een policy kan leeg zijn en is niet te filteren). Dus wanneer je na een eerdere load op "Refresh" klikt, leest de app beide opnieuw:
 
-1. App controleert op een **Delta Link** (opgeslagen token van vorige sync)
-2. Vraagt alleen **wijzigingen** op sinds laatste keer (via `/directoryRoles/delta`)
-3. Als er wijzigingen zijn:
-   - Identificeert getroffen rollen
-   - Update alleen die specifieke rollen in de lokale state
-   - Haalt policies opnieuw op voor _alleen_ de gewijzigde rollen
-4. Als Delta token verlopen is (410 Gone), valt automatisch terug op volledige verversing
+1. **Directory Roles** (`refreshRoleAssignments`): leest de roldefinities en alle assignment schedules opnieuw (de snelle fase, een handvol gepagineerde calls) zonder de pagina te blokkeren. De geladen policies blijven ondertussen staan.
+2. Daarna wordt elke rolpolicy op de achtergrond opnieuw gelezen: één gepagineerde call voor de hele tenant, rollen die daarin ontbreken per rol (12 workers, 200 ms). Elke rol toont zijn nieuwe policy zodra die binnen is.
+3. **PIM for Groups** (`refreshPimGroupAssignments`): leest de PIM-inventaris opnieuw en daarna per onboarded groep de eligibility- en assignment-schedule-instances en de Member- en Owner-policy (3 workers, 500 ms), met behoud van de al geladen groepsdetails. Groepen die nieuw zijn in PIM krijgen de volledige fetch per groep, groepen die PIM hebben verlaten blijven als onbeheerd staan, verwijderde groepen verdwijnen. Kosten: één inventarisatie plus drie calls per onboarded groep, onafhankelijk van het totale aantal groepen in de tenant.
+4. Namen van approvers blijven staan als een policy dezelfde approvers noemt als eerst (`utils/policyApprovers.ts`); alleen gewijzigde approvers worden opnieuw opgezocht.
 
-**Voordeel:** Verversen duurt vaak < 1 seconde in plaats van 10+ seconden.
+**Voordeel:** een instelling of toewijzing die in het Entra-beheercentrum is gewijzigd, is na één keer Refresh zichtbaar, zonder blokkerende herlaad.
+
+**Volledig verversen:** `refreshWorkload(workload, true)` slaat het slimme pad over, leegt de cache en laadt alles opnieuw met een blokkerende eerste fase. De app gebruikt het na het toepassen van wijzigingen in Configure en vanuit de banner "data incompleet".
+
+**Eerste keer laden:** pagina's roepen bij het mounten `fetchData()` aan, dat de TTL en de sessionStorage-cache respecteert. `refreshData()` is gereserveerd voor expliciete verversingen.
 
 ### Verzoek Annulering (AbortController)
 
@@ -333,7 +334,7 @@ Om race conditions en onnodig netwerkverkeer te voorkomen:
 
 1. **Snel Klikken:** Meerdere keren op "Vernieuwen" klikken annuleert het vorige onvoltooide verzoek voordat een nieuwe start.
 2. **Pagina Navigatie:** Het verlaten van een pagina annuleert automatisch alle lopende achtergrond fetches.
-3. **Consistentie:** Dit geldt voor zowel Directory Roles als PIM Groups workloads.
+3. **Consistentie:** Dit geldt voor zowel Directory Roles als PIM for Groups workloads.
 
 > [!NOTE]
 > Je kunt "Aborted" of "Cancelled" berichten zien in de console logs. Dit is verwacht gedrag en geeft aan dat het systeem oude requests netjes opruimt.

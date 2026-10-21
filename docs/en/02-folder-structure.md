@@ -47,7 +47,7 @@ Each subfolder represents a page in the application.
 | `app/page.tsx` | Landing page (login) |
 | `app/dashboard/` | Dashboard overview |
 | `app/report/` | Main report page with all role data |
-| `app/configure/` | PIM configuration page (Wizard, Manual, Bulk modes) |
+| `app/configure/` | PIM configuration page (Edit, Guided, Import, Access model) |
 | `app/layout.tsx` | Shared layout (navigation, providers) |
 | `app/globals.css` | Global styles |
 
@@ -63,14 +63,9 @@ Reusable building blocks used across pages.
 
 | Component | Purpose |
 |-----------|---------|
-| `Sidebar.tsx` | Side navigation bar |
-| `HelpModal.tsx` | Help documentation overlay |
 | `LoadingStatus.tsx` | Inline loading indicator for background policy fetch |
-| `ScopeBadge.tsx` | Badge showing assignment scope (Tenant-wide, App, RMAU) |
 | `RoleFilters.tsx` | Filter UI component for Report page |
 | `RoleList.tsx` | List of selectable roles (used in Configure) |
-| `RoleSettingsForm.tsx` | Form for PIM settings |
-| `ProgressModal.tsx` | Progress indicator for bulk operations |
 
 ---
 
@@ -78,7 +73,7 @@ Reusable building blocks used across pages.
 
 React Context for sharing data across pages.
 
-This section has been expanded below — see **📁 `src/contexts/`** for the full context list.
+This section has been expanded below, see **📁 `src/contexts/`** for the full context list.
 
 ---
 
@@ -89,13 +84,8 @@ Core logic for interacting with Microsoft Graph API.
 | File | Purpose |
 |------|---------|
 | `directoryRoleService.ts` | **Directory Roles**: Fetch role definitions, assignments, policies |
-| `pimGroupService.ts` | **PIM Groups**: Fetch PIM-onboarded groups and policies |
+| `pimGroupService.ts` | **PIM for Groups**: Fetch PIM-onboarded groups and policies |
 | `pimConfigurationService.ts` | **Policy Read/Write**: Parse rules, update PIM policies and assignments |
-| `wizardApplyService.ts` | **Wizard Apply**: Execute bulk policy/assignment writes via Graph API |
-| `deltaService.ts` | **Smart Refresh**: Delta queries for incremental updates |
-| `CsvParserService.ts` | **Bulk Mode**: Parse and validate CSV files for batch configuration |
-| `WizardValidationService.ts` | **Wizard Validation**: Cross-step business rule validation |
-| `policyParserService.ts` | **Policy Parsing**: Parse Graph API policy rule structures into typed settings |
 
 **directoryRoleService.ts** contains:
 - `getRoleDefinitions()` - Fetch all Entra ID role definitions
@@ -104,15 +94,10 @@ Core logic for interacting with Microsoft Graph API.
 - `getAllRolesOptimizedWithDeferredPolicies()` - Main data loading with deferred policies
 
 **pimGroupService.ts** contains:
-- `fetchAllPimGroupData()` - Fetch all PIM Groups data
+- `fetchAllPimGroupData()` - Full load: inventory, details, assignments and policies per group
+- `refreshPimGroupAssignments()` - Smart refresh: inventory plus eligibility and assignment instances and policies per onboarded group, group details kept
 - `fetchSingleGroupPolicy()` - Fetch policy for one group
-- `concurrentFetchGroupPolicies()` - Parallel group policy fetching
-- `syncGroupsWithDelta()` - Delta sync for groups
 
-**deltaService.ts** contains:
-- `fetchDirectoryRoleDeltas()` - Incremental updates for roles
-- `fetchGroupDeltas()` - Incremental updates for groups
-- `getStoredDeltaLink()` / `clearDeltaLink()` - Delta token management
 
 > [!WARNING]
 > **Throttling Protection**: Services use worker pools and delays to avoid Graph API throttling (429 errors). Do not remove these safeguards.
@@ -126,7 +111,7 @@ TypeScript interfaces describing data structures.
 | File | Purpose |
 |------|---------|
 | `directoryRole.types.ts` | Directory Roles types (RoleDefinition, PimPolicy, etc.) |
-| `pimGroup.types.ts` | PIM Groups types (PimGroup, GroupPolicy, etc.) |
+| `pimGroup.types.ts` | PIM for Groups types (PimGroup, GroupPolicy, etc.) |
 | `workload.ts` | Workload system types (WorkloadType, WorkloadData) |
 | `roleFilters.ts` | Filter types for role/group filtering |
 | `securityAlerts.ts` | Security alerts types |
@@ -152,6 +137,7 @@ Utility functions and API helpers.
 
 | File | Purpose |
 |------|---------|
+| `policyParser.ts` | **Policy Parsing**: `parseGraphPolicy`, Graph API policy rules into typed settings (pure, moved from `services/`) |
 | `workerPool.ts` | **Worker Pool**: Parallel API calls with concurrency control and throttling protection (default: 8 workers, 300ms) |
 | `retryUtils.ts` | **Retry Logic**: `withRetry()` with exponential backoff for 429/5xx errors |
 | `durationUtils.ts` | **Duration Helpers**: ISO 8601 parsing, formatting, and Graph API duration conversions |
@@ -160,7 +146,7 @@ Utility functions and API helpers.
 | `logger.ts` | **Centralized Logging**: Structured logging with dynamic level via localStorage |
 | `authContextApi.ts` | **Authentication Contexts**: Fetch Conditional Access authentication contexts |
 | `alertFormatting.ts` | **Alert Formatting**: Format and sort security alerts by severity |
-| `chartCapture.ts` | **PDF Generation**: Capture chart elements as images for PDF export |
+| `exportReport.ts` | **Export**: the content of the PDF and CSV export as plain data (tested); `ReportDocument.tsx` draws it |
 
 ---
 
@@ -172,11 +158,10 @@ Application configuration constants.
 |------|---------|
 | `authConfig.ts` | Microsoft Entra ID authentication configuration |
 | `constants.ts` | Application-wide constants |
-| `pdfExportConfig.ts` | **PDF Export configuration** - single source of truth for export sections and stats |
-| `locales/en.ts` | **Externalized Text** - Centralized UI strings (Help, Settings, etc.) |
+| `exportReport.ts` (`EXPORT_BLOCKS`) | **Export blocks** - single source of truth for the content blocks of the export |
 
 > [!TIP]
-> To add a new stat to the PDF export, simply add an entry to the `OVERVIEW_STATS` array in `pdfExportConfig.ts`. It will automatically appear in the export modal and PDF.
+> To add a block to the export, add it to `EXPORT_BLOCKS` and `buildExportReport` in `utils/exportReport.ts`. It appears in the export dialog and the PDF.
 
 > [!CAUTION]
 > The `authConfig.ts` file contains your **Microsoft Entra ID client ID**. Ensure this matches your app registration.
@@ -189,10 +174,9 @@ Reusable React hooks.
 
 | File | Purpose |
 |------|---------|
-| `useWizardState.tsx` | **Wizard State**: Full wizard context + selector hooks (useWizardData, useWizardActions, etc.) |
 | `usePimData.ts` | **Directory Roles Data**: Access roles data, policies, refresh functions |
 | `usePimSelectors.ts` | **Memoized Selectors**: Optimized selectors to avoid unnecessary re-renders |
-| `useAggregatedData.ts` | **Data Aggregation**: Combines data across multiple workloads (Directory Roles, PIM Groups) |
+| `useAggregatedData.ts` | **Data Aggregation**: Combines data across multiple workloads (Directory Roles, PIM for Groups) |
 | `useRoleFilters.ts` | **Filter Management**: Role/group filtering logic for Report and Dashboard pages |
 | `useConsentedWorkloads.ts` | **Workload Permissions**: Manages which workloads have user consent |
 | `useIncrementalConsent.ts` | **Consent Flow**: Handles incremental permission requests |
@@ -204,17 +188,15 @@ Global state management with React Context API.
 
 | File | Purpose |
 |------|---------|
-| `UnifiedPimContext.tsx` | **Main Orchestrator**: Manages all workloads (Directory Roles, PIM Groups, etc.) with unified refresh logic |
-| `DirectoryRoleContext.tsx` | **Directory Roles State**: Manages role data, policies, assignments with delta sync. Exports `PimDataProvider` for backward compat. |
+| `UnifiedPimContext.tsx` | **Main Orchestrator**: Manages all workloads (Directory Roles, PIM for Groups, etc.) with unified refresh logic |
+| `DirectoryRoleContext.tsx` | **Directory Roles State**: Manages role data, policies and assignments. Exports `PimDataProvider` for backward compat. |
 | `ViewModeContext.tsx` | **UI Preferences**: Manages Basic/Advanced view mode toggle with localStorage persistence |
-| `MobileMenuContext.tsx` | **Mobile UI State**: Controls mobile menu open/close state |
 | `ToastContext.tsx` | **Notifications**: Toast notification system (success/error/info, auto-dismiss 3s) |
 
 **Key Context Relationships:**
 - `UnifiedPimContext` orchestrates multiple workloads
 - `DirectoryRoleContext` provides directory role-specific data
 - Dashboard and Report pages consume both contexts
-- Delta sync happens transparently through contexts
 
 ---
 
@@ -237,7 +219,6 @@ flowchart TD
     subgraph "Services"
         G[directoryRoleService]
         H[pimGroupService]
-        I[deltaService]
     end
 
     subgraph "Utils"

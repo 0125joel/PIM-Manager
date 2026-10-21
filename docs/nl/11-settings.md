@@ -1,6 +1,6 @@
 # Instellingen & Consent Framework
 
-Dit document beschrijft de Settings modal en consent framework geïntroduceerd in Fase 2.
+Dit document beschrijft de Settings-pagina (`/settings`) en consent framework geïntroduceerd in Fase 2.
 
 ## Workloads
 
@@ -34,7 +34,7 @@ Features zijn sub-functionaliteiten die extra permissies vereisen bovenop de bas
 | **Security Alerts** | Directory Roles | `RoleManagementAlert.Read.Directory` |
 
 **Feature Kenmerken:**
-- Uitklapbare sub-items onder workload cards in Settings modal
+- Sub-items onder workloads op de Settings-pagina
 - Onafhankelijke Enable/Hide/Show controls
 - Afzonderlijke localStorage persistentie (`pim_feature_enabled_[featureId]`)
 - Graceful degradation bij permission denied (403)
@@ -45,14 +45,14 @@ Features zijn sub-functionaliteiten die extra permissies vereisen bovenop de bas
 |-------|--------|-------------------|
 | **Hide** | Alleen UI - data wordt nog opgehaald | Klik "Show" of toggle chip |
 | **Disable** | Stopt data ophalen | Klik "Enable" opnieuw |
-| **Revoke** | Verwijder permissie uit Entra ID | Entra Admin Center → Enterprise Apps |
+| **Revoke** | Verwijder permissie uit Entra ID | Microsoft Entra admin center → Enterprise Apps |
 
 ## View Chips
 
 De chip bar op Dashboard biedt snelle toggles:
 
 ```
-[Directory Roles 👁️] [PIM Groups 👁️]
+[Directory Roles 👁️] [PIM for Groups 👁️]
 ```
 
 - Klik chip = toggle visibility
@@ -64,7 +64,7 @@ De chip bar op Dashboard biedt snelle toggles:
 
 ## Settings Modal Tabs
 
-De Settings modal heeft twee tabs:
+De Settings-pagina heeft deze secties: Workloads en rechten, Weergave, Noodtoegangsaccounts en Geavanceerd. (De tabs van de vroegere modal waren:)
 
 ### Workloads Tab
 
@@ -109,7 +109,7 @@ De applicatie gebruikt specifieke localStorage keys voor persistentie:
 | `LOG_LEVEL` | Developer log level | `"INFO"` of `"DEBUG"` |
 
 **SessionStorage Keys** (apart van settings):
-- `pim_groups_data_cache`: Gecachte PIM Groups data
+- `pim_groups_data_cache`: Gecachte PIM for Groups data
 - `pim_groups_timestamp`: Laatste fetch timestamp voor groepen
 - `pim_data_cache`: Gecachte Directory Roles data
 - `pim_data_timestamp`: Laatste fetch timestamp voor rollen
@@ -120,7 +120,7 @@ De applicatie gebruikt specifieke localStorage keys voor persistentie:
 
 | Bestand | Doel |
 |---------|------|
-| `src/components/SettingsModal.tsx` | Settings modal UI (Workloads + Developer tabs) |
+| `src/app/settings/page.tsx` | Settings-pagina (rechtentabel, weergave, noodtoegangsaccounts, geavanceerd) |
 | `src/components/WorkloadChips.tsx` | Page-level chip bar |
 | `src/hooks/useIncrementalConsent.ts` | MSAL consent + localStorage persistentie |
 | `src/hooks/useConsentedWorkloads.ts` | Consent checking logica |

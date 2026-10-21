@@ -47,6 +47,8 @@ export interface RoleAssignment {
     condition?: string;
     conditionVersion?: string;
     principal?: Principal;
+    /** `userType` (Member or Guest) of the user principal, read from /users after the fast phase; undefined for groups, apps or when not read. */
+    principalUserType?: string;
     directoryScope?: DirectoryScope;
     scopeInfo?: ScopeInfo; // Enriched scope information
 }
@@ -56,6 +58,12 @@ export interface Principal {
     displayName?: string;
     userPrincipalName?: string;
     mail?: string;
+    /** Service principals: Application, ManagedIdentity, or ServiceIdentity (always and only for an agent identity) */
+    servicePrincipalType?: string | null;
+    /** An agent identity: the appId of the blueprint it was created from */
+    agentIdentityBlueprintId?: string | null;
+    /** An agent's user account: the object id of its agent identity */
+    identityParentId?: string | null;
     "@odata.type": string;
 }
 
@@ -78,6 +86,8 @@ export interface PimEligibilitySchedule {
     modifiedDateTime?: string;
     createdUsing?: string;
     principal?: Principal;
+    /** `userType` (Member or Guest) of the user principal, read from /users after the fast phase; undefined for groups, apps or when not read. */
+    principalUserType?: string;
     directoryScope?: DirectoryScope;
     scopeInfo?: ScopeInfo; // Enriched scope information
 }
@@ -91,10 +101,14 @@ export interface PimAssignmentSchedule {
     status: string;
     scheduleInfo?: ScheduleInfo;
     assignmentType?: string;
+    /** The activation came through membership of a group that is eligible for the role: the schedule instance says `memberType` Group (Report spec 5.6). Neither list names the group. */
+    viaGroup?: boolean;
     createdDateTime?: string;
     modifiedDateTime?: string;
     createdUsing?: string;
     principal?: Principal;
+    /** `userType` (Member or Guest) of the user principal, read from /users after the fast phase; undefined for groups, apps or when not read. */
+    principalUserType?: string;
     directoryScope?: DirectoryScope;
     scopeInfo?: ScopeInfo; // Enriched scope information
 }
@@ -102,7 +116,7 @@ export interface PimAssignmentSchedule {
 export interface ScheduleInfo {
     startDateTime?: string;
     expiration?: ExpirationPattern;
-    recurrence?: any;
+    recurrence?: Record<string, unknown>;
 }
 
 export interface ExpirationPattern {
@@ -123,6 +137,8 @@ export interface PimScheduleInstance {
     roleAssignmentOriginId?: string;
     roleAssignmentScheduleId?: string;
     principal?: Principal;
+    /** `userType` (Member or Guest) of the user principal, read from /users after the fast phase; undefined for groups, apps or when not read. */
+    principalUserType?: string;
     directoryScope?: DirectoryScope;
 }
 
@@ -142,24 +158,48 @@ export interface PimPolicy {
     description?: string;
     isOrganizationDefault?: boolean;
     lastModifiedDateTime?: string;
-    lastModifiedBy?: any;
+    lastModifiedBy?: Record<string, unknown>;
     rules?: PimPolicyRule[];
 }
 
+/**
+ * Generic PIM policy rule as returned by Graph. Every rule carries id, type and
+ * target; the remaining properties depend on the rule type and are optional here.
+ * The typed subclasses below narrow them for a specific "@odata.type".
+ */
 export interface PimPolicyRule {
     id: string;
     "@odata.type": string;
     target: RuleTarget;
-    [key: string]: any; // Additional properties based on rule type
+    // ExpirationRule
+    isExpirationRequired?: boolean;
+    maximumDuration?: string;
+    // EnablementRule
+    enabledRules?: string[];
+    // AuthenticationContextRule (isEnabled is shared with CustomExtensionRule)
+    isEnabled?: boolean;
+    claimValue?: string;
+    // ApprovalRule
+    setting?: ApprovalSettings;
+    // NotificationRule
+    notificationType?: string;
+    recipientType?: string | string[];
+    notificationLevel?: string;
+    isDefaultRecipientsEnabled?: boolean;
+    notificationRecipients?: string[];
+    // CustomExtensionRule (Preview)
+    customExtensionId?: string | null;
+    displayName?: string | null;
+    customAttributes?: string[] | null;
 }
 
 export interface RuleTarget {
     caller: string;
     operations: string[];
     level: string;
-    targetObjects?: any[];
-    inheritableSettings?: any[];
-    enforcedSettings?: any[];
+    targetObjects?: string[];
+    inheritableSettings?: string[];
+    enforcedSettings?: string[];
 }
 
 // Step 13-16: Approvers
@@ -169,7 +209,7 @@ export interface ApprovalRule extends PimPolicyRule {
 }
 
 export interface ApprovalSettings {
-    isApprovalRequired: boolean;
+    isApprovalRequired?: boolean;
     isApprovalRequiredForExtension?: boolean;
     isRequestorJustificationRequired?: boolean;
     approvalMode?: string;
@@ -177,12 +217,12 @@ export interface ApprovalSettings {
 }
 
 export interface ApprovalStage {
-    approvalStageTimeOutInDays: number;
-    isApproverJustificationRequired: boolean;
-    escalationTimeInMinutes: number;
-    isEscalationEnabled: boolean;
-    primaryApprovers: Approver[];
-    escalationApprovers?: Approver[];
+    approvalStageTimeOutInDays?: number;
+    isApproverJustificationRequired?: boolean;
+    escalationTimeInMinutes?: number;
+    isEscalationEnabled?: boolean;
+    primaryApprovers?: PrimaryApprover[];
+    escalationApprovers?: PrimaryApprover[];
 }
 
 /** Raw approver from Graph API before enrichment */
@@ -191,6 +231,7 @@ export interface PrimaryApprover {
     groupId?: string;
     userId?: string;
     "@odata.type": "#microsoft.graph.singleUser" | "#microsoft.graph.groupMembers" | "#microsoft.graph.requestorManager";
+    description?: string;
     isBackup?: boolean;
 }
 
@@ -244,6 +285,8 @@ export interface RoleDetailData {
         approvers: Approver[];
     } | null;
     configError?: string; // Error message if config failed to load
+    /** Graph answered 403 on this role's policy: not readable with the current access, not a failure and not "no policy" (FIX-12) */
+    policiesForbidden?: boolean;
     instances?: {
         eligible: PimScheduleInstance[];
         active: PimScheduleInstance[];

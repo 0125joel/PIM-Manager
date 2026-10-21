@@ -1,7 +1,7 @@
 // Types for PIM for Groups data
 // Reuses Principal and ScheduleInfo from roleData.ts for consistency
 
-import { Principal, ScheduleInfo, ScopeInfo } from "./directoryRole.types";
+import { Approver, Principal, ScheduleInfo, ScopeInfo } from "./directoryRole.types";
 import { WorkloadLink } from "./workload.types";
 
 // Group types
@@ -19,6 +19,10 @@ export interface PimGroup {
     membershipRule?: string; // For dynamic groups
     membershipRuleProcessingState?: string;
     isAssignableToRole?: boolean; // True if role-assignable group
+    /** Synced from on-premises: PIM cannot manage it (Configure locks it) */
+    onPremisesSyncEnabled?: boolean | null;
+    /** In a restricted management administrative unit: PIM does not support it (Configure locks it, M-07) */
+    isManagementRestricted?: boolean | null;
 }
 
 // Access type for group PIM
@@ -33,8 +37,15 @@ export interface GroupPimAssignment {
     groupId: string;
     principalId: string;
     principal?: Principal;
+    /** `userType` (Member or Guest) of a user principal, read from /users after the assignments (Report spec 5.3b); undefined for groups, apps or when not read */
+    principalUserType?: string;
     accessType: GroupAccessType;
     assignmentType: GroupAssignmentType;
+    /**
+     * How an active instance came about, Graph's own `assignmentType` on the schedule instance: `assigned` (an
+     * administrator gave it) or `activated` (someone activated an eligibility). Undefined for eligible instances.
+     */
+    assignmentOrigin?: "assigned" | "activated";
     memberType?: string; // "Direct" | "Group"
     status?: string;
     startDateTime?: string;
@@ -63,8 +74,15 @@ export interface PimGroupData {
     // Computed settings from policies (for easy access)
     settings?: GroupPimSettings;
 
+    // Graph answered 403 on this group's policies: this admin may not read them. Then policies and settings are absent
+    // (never "no policy"), and the screens say the settings are not readable (utils/policyReadAccess.ts)
+    policiesForbidden?: boolean;
+
     // Flag for unmanaged groups (added in Phase 6)
     isManaged?: boolean;
+
+    // Direct members of a role-assignable group outside PIM (spec 5.4); undefined when not read yet or the call failed
+    memberCount?: number;
 }
 
 // Computed settings derived from policies
@@ -89,9 +107,29 @@ export interface GroupPimPolicy {
     policyType: "member" | "owner";
     displayName?: string;
     rules: GroupPolicyRule[];
+    /** The approvers of the approval rule with their names, resolved in the background after the policy (Report spec 5.2). Undefined until resolved; an empty list means there are none to show. */
+    approvers?: Approver[];
 }
 
 // Policy rule (same structure as Directory Roles)
+export interface GroupApprover {
+    "@odata.type"?: string;
+    id?: string;
+    userId?: string;
+    groupId?: string;
+    description?: string;
+    isBackup?: boolean;
+}
+
+export interface GroupApprovalStage {
+    approvalStageTimeOutInDays?: number;
+    isApproverJustificationRequired?: boolean;
+    escalationTimeInMinutes?: number;
+    isEscalationEnabled?: boolean;
+    primaryApprovers?: GroupApprover[];
+    escalationApprovers?: GroupApprover[];
+}
+
 export interface GroupPolicyRule {
     "@odata.type": string;
     id: string;
@@ -112,14 +150,21 @@ export interface GroupPolicyRule {
         isApprovalRequiredForExtension?: boolean;
         isRequestorJustificationRequired?: boolean;
         approvalMode?: string;
-        approvalStages?: any[];
+        approvalStages?: GroupApprovalStage[];
     };
+    // AuthenticationContextRule properties (isEnabled is shared with CustomExtensionRule)
+    isEnabled?: boolean;
+    claimValue?: string;
     // NotificationRule properties
     notificationType?: string;
     recipientType?: string;
     notificationLevel?: string;
     isDefaultRecipientsEnabled?: boolean;
     notificationRecipients?: string[];
+    // CustomExtensionRule properties (Preview)
+    customExtensionId?: string | null;
+    displayName?: string | null;
+    customAttributes?: string[] | null;
 }
 
 // Known roleDefinitionIds for Group PIM policies
@@ -138,7 +183,7 @@ export function extractGroupPolicySettings(policy: GroupPimPolicy): Partial<Grou
 
     // Helper to find specific rule
     const findRule = (ruleTypePart: string, caller: string, level: string) =>
-        policy.rules.find((r: any) =>
+        policy.rules.find((r) =>
             r["@odata.type"]?.includes(ruleTypePart) &&
             r.target?.caller === caller &&
             r.target?.level === level
@@ -160,7 +205,7 @@ export function extractGroupPolicySettings(policy: GroupPimPolicy): Partial<Grou
     }
 
     if (activationEnablement) {
-        const enabled = (activationEnablement as any).enabledRules || [];
+        const enabled = activationEnablement.enabledRules || [];
         if (prefix === "member") {
             settings.memberRequiresMfa = enabled.includes("MultiFactorAuthentication");
             settings.memberRequiresJustification = enabled.includes("Justification");
@@ -172,9 +217,9 @@ export function extractGroupPolicySettings(policy: GroupPimPolicy): Partial<Grou
 
     if (activationApproval) {
         if (prefix === "member") {
-            settings.memberRequiresApproval = (activationApproval as any).setting?.isApprovalRequired;
+            settings.memberRequiresApproval = activationApproval.setting?.isApprovalRequired;
         } else {
-            settings.ownerRequiresApproval = (activationApproval as any).setting?.isApprovalRequired;
+            settings.ownerRequiresApproval = activationApproval.setting?.isApprovalRequired;
         }
     }
 
@@ -223,6 +268,7 @@ export function computeGroupStats(assignments: GroupPimAssignment[]): PimGroupSt
 export interface GroupEligibilityScheduleInstance {
     id: string;
     principalId: string;
+    principal?: Principal;
     groupId: string;
     accessId: "member" | "owner";
     memberType: string;
@@ -235,6 +281,7 @@ export interface GroupEligibilityScheduleInstance {
 export interface GroupAssignmentScheduleInstance {
     id: string;
     principalId: string;
+    principal?: Principal;
     groupId: string;
     accessId: "member" | "owner";
     memberType: string;

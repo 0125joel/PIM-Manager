@@ -1,7 +1,7 @@
 /**
  * useAggregatedData Hook
  *
- * Combines data from Directory Roles and PIM Groups into unified metrics
+ * Combines data from Directory Roles and PIM for Groups into unified metrics
  * for dashboard cards and charts.
  *
  * Strategy (from implementation_plan.md):
@@ -12,11 +12,11 @@
  */
 
 import { useMemo, useState, useEffect } from "react";
-import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
-import { usePimData } from "@/hooks/usePimData";
+import { useUnifiedData, useUnifiedLoading } from "@/contexts/UnifiedPimContext";
+import { useRolesData, useRolesLoading } from "@/hooks/usePimData";
 import { RoleDetailData } from "@/types/directoryRole.types";
 import { PimGroupData } from "@/types/pimGroup.types";
-import { isWorkloadVisible } from "@/components/SettingsModal";
+import { isWorkloadVisible } from "@/utils/workloadPreferences";
 
 // Aggregated data interface
 export interface AggregatedData {
@@ -153,23 +153,26 @@ function useWorkloadVisibility() {
  *
  * Respects workload toggle state for ALL workloads:
  * - If Directory Roles toggle is OFF, role data is excluded
- * - If PIM Groups toggle is OFF, group data is excluded
+ * - If PIM for Groups toggle is OFF, group data is excluded
  * - Works with any combination (roles only, groups only, both, neither)
  */
 export function useAggregatedData(): AggregatedData {
     // Get data from both contexts
-    const { rolesData: allRolesData, loading: rolesLoading, policiesLoading } = usePimData();
-    const { workloads } = useUnifiedPimData();
+    const { rolesData: allRolesData } = useRolesData();
+    const { loading: rolesLoading, policiesLoading } = useRolesLoading();
+    const { workloads } = useUnifiedData();
+    const { workloads: workloadLoading } = useUnifiedLoading();
 
     const allGroupsData = workloads.pimGroups.data as PimGroupData[];
-    const groupsLoading = workloads.pimGroups.loading.phase === "fetching";
+    const groupsLoading = workloadLoading.pimGroups.phase === "fetching";
 
     // Check visibility for ALL workloads (universal/modular)
     const { directoryRoles: rolesVisible, pimGroups: groupsVisible } = useWorkloadVisibility();
 
-    // Only use data if toggle is ON
-    const rolesData = rolesVisible ? allRolesData : [];
-    const groupsData = groupsVisible ? allGroupsData : [];
+    // Only use data if toggle is ON. Memoized so a hidden workload yields a stable empty
+    // array instead of a new reference per render (which would defeat the memo below).
+    const rolesData = useMemo(() => (rolesVisible ? allRolesData : []), [rolesVisible, allRolesData]);
+    const groupsData = useMemo(() => (groupsVisible ? allGroupsData : []), [groupsVisible, allGroupsData]);
 
     // Memoize aggregation to avoid recalculating on every render
     return useMemo(() => {

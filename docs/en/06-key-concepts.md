@@ -259,4 +259,4 @@ This context manages data from all workloads and ensures components (like the Ex
 ## Next Steps
 
 - [Report Page](./07-report-page.md) - Feature documentation
-- [Configure Page](./08-configure-page.md) - Configuration features
+- [Configure Page](./09-configure-page.md) - Configuration features

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { Component, ReactNode } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import React, { Component, type CSSProperties, type ReactNode } from "react";
+import { Icon } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
 import { Logger } from "@/utils/logger";
 
 interface Props {
@@ -75,30 +76,21 @@ interface ErrorFallbackProps {
 
 export function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 p-4">
-            <div className="max-w-md w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg p-6 text-center">
-                {/* Icon */}
-                <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
-                    <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+        <div className="flex min-h-screen items-center justify-center bg-page p-4">
+            <div role="alert" className="w-full max-w-md rounded border border-line bg-surface p-6" style={{ "--pim-icon-accent": "var(--danger-text)" } as CSSProperties}>
+                <div className="flex items-start gap-3">
+                    <Icon name="error" size={24} className="shrink-0 text-ink" />
+                    <div className="min-w-0 flex-1">
+                        <h2 className="text-xl leading-[26px] font-semibold text-ink">Something went wrong</h2>
+                        <p className="mt-1 text-sm leading-5 text-body">An unexpected error occurred. This has been logged for investigation.</p>
+                    </div>
                 </div>
 
-                {/* Title */}
-                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
-                    Something went wrong
-                </h2>
-
-                {/* Description */}
-                <p className="text-zinc-600 dark:text-zinc-400 mb-4">
-                    An unexpected error occurred. This has been logged for investigation.
-                </p>
-
-                {/* Error details (development only — never expose stack traces in production) */}
+                {/* Error details (development only, never expose stack traces in production) */}
                 {error && process.env.NODE_ENV === 'development' && (
-                    <details className="text-left mb-4 text-sm">
-                        <summary className="cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-                            View error details
-                        </summary>
-                        <pre className="mt-2 p-3 bg-zinc-100 dark:bg-zinc-900 rounded-lg overflow-auto text-xs text-red-600 dark:text-red-400">
+                    <details className="mt-4 text-left text-sm">
+                        <summary className="cursor-pointer text-muted hover:text-ink">View error details</summary>
+                        <pre className="mt-2 overflow-auto rounded bg-danger-tint p-3 text-xs text-danger-text">
                             {error.message}
                             {error.stack && (
                                 <>
@@ -110,21 +102,9 @@ export function ErrorFallback({ error, onReset }: ErrorFallbackProps) {
                     </details>
                 )}
 
-                {/* Actions */}
-                <div className="flex gap-3 justify-center">
-                    <button
-                        onClick={onReset}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                        Try Again
-                    </button>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-900 dark:text-zinc-100 rounded-lg font-medium transition-colors"
-                    >
-                        Refresh Page
-                    </button>
+                <div className="mt-5 flex flex-wrap gap-3">
+                    <Button variant="primary" onClick={onReset}>Try again</Button>
+                    <Button onClick={() => window.location.reload()}>Reload the page</Button>
                 </div>
             </div>
         </div>

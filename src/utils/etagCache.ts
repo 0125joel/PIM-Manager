@@ -146,7 +146,7 @@ export function generateCacheKey(endpoint: string, options?: Record<string, unkn
 
     // Include relevant options in cache key
     const optionParts = Object.entries(options)
-        .filter(([_, v]) => v !== undefined)
+        .filter(([, v]) => v !== undefined)
         .map(([k, v]) => `${k}=${String(v)}`)
         .sort()
         .join("_");

@@ -1,78 +1,52 @@
 /**
  * PIM Context Selector Hooks
  *
- * These hooks implement the selector pattern to prevent unnecessary re-renders.
- * Instead of subscribing to the entire UnifiedPimContext (which triggers re-renders
- * on ANY state change), these hooks select only the specific data needed.
- *
- * Performance Impact:
- * - Before: 1 state change → 20+ component re-renders
- * - After: 1 state change → Only affected components re-render
+ * Thin wrappers over the three UnifiedPimContext slices (data, loading, actions).
+ * Each hook subscribes only to the slice it needs, so a component that reads
+ * data does not re-render on loading progress ticks and a component that only
+ * needs an action never re-renders because of context updates.
  *
  * Usage:
  * ```tsx
- * // Instead of:
- * const { workloads } = useUnifiedPimData();
- * const groups = workloads.pimGroups.data;
- *
- * // Use:
- * const groups = usePimGroupsData();
+ * const groups = usePimGroupsData();          // data slice
+ * const loading = usePimGroupsLoading();      // loading slice
+ * const refresh = useRefreshWorkload("pimGroups"); // actions slice
  * ```
  */
 
-import { useMemo, useRef, useCallback } from "react";
-import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
+import { useMemo, useCallback } from "react";
+import { useUnifiedPimData, useUnifiedData, useUnifiedLoading, useUnifiedActions } from "@/contexts/UnifiedPimContext";
 import { WorkloadType, WorkloadLoadingState } from '@/types/workload.types';
 import { PimGroupData } from "@/types/pimGroup.types";
 import { Client } from "@microsoft/microsoft-graph-client";
 
 // Re-export for convenience
-export { useUnifiedPimData };
+export { useUnifiedPimData, useUnifiedData, useUnifiedLoading, useUnifiedActions };
 
 // ============================================================================
 // Workload Data Selectors
 // ============================================================================
 
 /**
- * Select only PIM Groups data
- * Re-renders only when pimGroups.data reference changes
+ * Select only PIM for Groups data
+ * Re-renders only when the data slice changes
  */
 export function usePimGroupsData(): PimGroupData[] {
-    const context = useUnifiedPimData();
-    return context.workloads.pimGroups.data;
+    return useUnifiedData().workloads.pimGroups.data;
 }
 
 /**
- * Select only PIM Groups loading state
- * Re-renders only when loading properties change
+ * Select only PIM for Groups loading state
  */
 export function usePimGroupsLoading(): WorkloadLoadingState {
-    const context = useUnifiedPimData();
-    const loading = context.workloads.pimGroups.loading;
-
-    const prevRef = useRef<WorkloadLoadingState>(loading);
-
-    return useMemo(() => {
-        const prev = prevRef.current;
-        if (
-            prev.phase === loading.phase &&
-            prev.progress.current === loading.progress.current &&
-            prev.progress.total === loading.progress.total &&
-            prev.message === loading.message
-        ) {
-            return prev;
-        }
-        prevRef.current = loading;
-        return loading;
-    }, [loading.phase, loading.progress.current, loading.progress.total, loading.message]);
+    return useUnifiedLoading().workloads.pimGroups;
 }
 
 /**
- * Check if PIM Groups workload is consented
+ * Check if PIM for Groups workload is consented
  */
 export function usePimGroupsConsented(): boolean {
-    const context = useUnifiedPimData();
-    return context.workloads.pimGroups.consent.consented;
+    return useUnifiedData().workloads.pimGroups.consent.consented;
 }
 
 // ============================================================================
@@ -84,32 +58,14 @@ export function usePimGroupsConsented(): boolean {
  * Type-safe based on workload type
  */
 export function useWorkloadData<T>(workload: WorkloadType): T[] {
-    const context = useUnifiedPimData();
-    return context.workloads[workload].data as unknown as T[];
+    return useUnifiedData().workloads[workload].data as unknown as T[];
 }
 
 /**
  * Select loading state for any workload
- * Memoized to prevent re-renders on identical values
  */
 export function useWorkloadLoading(workload: WorkloadType): WorkloadLoadingState {
-    const context = useUnifiedPimData();
-    const loading = context.workloads[workload].loading;
-
-    const prevRef = useRef<WorkloadLoadingState>(loading);
-
-    return useMemo(() => {
-        const prev = prevRef.current;
-        if (
-            prev.phase === loading.phase &&
-            prev.progress.current === loading.progress.current &&
-            prev.progress.total === loading.progress.total
-        ) {
-            return prev;
-        }
-        prevRef.current = loading;
-        return loading;
-    }, [loading.phase, loading.progress.current, loading.progress.total]);
+    return useUnifiedLoading().workloads[workload];
 }
 
 /**
@@ -124,8 +80,7 @@ export function useIsWorkloadLoading(workload: WorkloadType): boolean {
  * Check if workload is consented
  */
 export function useWorkloadConsented(workload: WorkloadType): boolean {
-    const context = useUnifiedPimData();
-    return context.workloads[workload].consent.consented;
+    return useUnifiedData().workloads[workload].consent.consented;
 }
 
 // ============================================================================
@@ -136,24 +91,21 @@ export function useWorkloadConsented(workload: WorkloadType): boolean {
  * Select sync history (for SyncStatus component)
  */
 export function useSyncHistory() {
-    const context = useUnifiedPimData();
-    return context.syncHistory;
+    return useUnifiedLoading().syncHistory;
 }
 
 /**
  * Select active workloads list
  */
 export function useActiveWorkloads(): WorkloadType[] {
-    const context = useUnifiedPimData();
-    return context.activeWorkloads;
+    return useUnifiedData().activeWorkloads;
 }
 
 /**
  * Check if context is initialized
  */
 export function useIsInitialized(): boolean {
-    const context = useUnifiedPimData();
-    return context.initialized;
+    return useUnifiedData().initialized;
 }
 
 // ============================================================================
@@ -164,11 +116,11 @@ export function useIsInitialized(): boolean {
  * Get stable refresh function for a workload
  */
 export function useRefreshWorkload(workload: WorkloadType): (force?: boolean) => Promise<void> {
-    const context = useUnifiedPimData();
+    const { refreshWorkload } = useUnifiedActions();
 
     return useCallback(
-        (force?: boolean) => context.refreshWorkload(workload, force),
-        [context.refreshWorkload, workload]
+        (force?: boolean) => refreshWorkload(workload, force),
+        [refreshWorkload, workload]
     );
 }
 
@@ -176,16 +128,14 @@ export function useRefreshWorkload(workload: WorkloadType): (force?: boolean) =>
  * Get stable refresh all function
  */
 export function useRefreshAllWorkloads(): (force?: boolean) => Promise<void> {
-    const context = useUnifiedPimData();
-    return context.refreshAllWorkloads;
+    return useUnifiedActions().refreshAllWorkloads;
 }
 
 /**
  * Get Graph client factory (stable reference)
  */
 export function useGraphClient(): () => Promise<Client> {
-    const context = useUnifiedPimData();
-    return context.getGraphClient;
+    return useUnifiedActions().getGraphClient;
 }
 
 // ============================================================================
@@ -216,7 +166,7 @@ export function useWorkloadState<T>(workload: WorkloadType): {
 }
 
 /**
- * Select PIM Groups state (convenience hook)
+ * Select PIM for Groups state (convenience hook)
  */
 export function usePimGroupsState() {
     return useWorkloadState<PimGroupData>("pimGroups");
@@ -235,9 +185,9 @@ export function useAllWorkloadsLoading(): {
     pimGroups: WorkloadLoadingState;
     anyLoading: boolean;
 } {
-    const context = useUnifiedPimData();
-    const dr = context.workloads.directoryRoles.loading;
-    const pg = context.workloads.pimGroups.loading;
+    const { workloads } = useUnifiedLoading();
+    const dr = workloads.directoryRoles;
+    const pg = workloads.pimGroups;
 
     return useMemo(() => ({
         directoryRoles: dr,

@@ -32,6 +32,27 @@ Dit document beschrijft alle Microsoft Graph API endpoints die PIM Manager gebru
 |----------|------|----------------------|
 | roleManagementAlerts/alerts | Beveiligingswaarschuwingen ophalen | RoleManagementAlert.Read.Directory |
 
+### Custom Extensions (Optioneel, Preview)
+
+| Endpoint | Doel | Vereiste Machtigingen |
+|----------|------|----------------------|
+| privilegedAccess/customExtensions | De PIM custom extensions van de tenant ophalen (keuzelijst, controle op verweesde koppelingen) | PrivilegedAccess-CustomExt.Read.All |
+| roleManagementPolicyAssignments (rules) | Welke extension een beleid koppelt; komt mee met de gewone beleidslezing | RoleManagementPolicy.Read.Directory / .AzureADGroup |
+
+### Configureren (lezen)
+
+| Endpoint | Doel | Vereiste Machtigingen |
+|----------|------|----------------------|
+| roleAssignmentScheduleInstances / roleEligibilityScheduleInstances `filterByCurrentUser(on='principal')` | De toegangscheck: de actieve en eligible rollen van de beheerder | RoleAssignmentSchedule.Read.Directory, RoleEligibilitySchedule.Read.Directory |
+| privilegedAccess/group/{assignment,eligibility}ScheduleInstances `filterByCurrentUser(on='principal')` | De toegangscheck: PIM-lidmaatschappen en -eigenaarschappen van de beheerder | PrivilegedAccess.Read.AzureADGroup |
+| me/ownedObjects/microsoft.graph.group | De toegangscheck: groepen waarvan de beheerder eigenaar is | User.Read |
+| directory/administrativeUnits/{id}/members/microsoft.graph.group, groups/{id} | De toegangscheck: groepen in een eenheid of in de scope van een rol (`membershipRule`, `onPremisesSyncEnabled`) | AdministrativeUnit.Read.All, Group.Read.All |
+| roleEligibilityScheduleRequests / roleAssignmentScheduleRequests (rollen en groepen) met `isValidationOnly` | De proefrun van nieuwe toewijzingen in de review; er wordt niets geschreven | De schrijfscopes van de workload |
+| identity/conditionalAccess/policies | De optionele Conditional Access-check van de review | Policy.Read.All (op verzoek) en een rol die Conditional Access mag lezen |
+| users, groups (`$search`, `startswith` als terugval) | Personen zoeken in Add people en de goedkeurderskeuze | User.Read.All, Group.Read.All |
+| directory/administrativeUnits, applications (`$search`) | De scopes van een nieuwe roltoewijzing | AdministrativeUnit.Read.All, Application.Read.All |
+| users, groups, servicePrincipals (`id in (...)`, `userPrincipalName in (...)`) | Import: de personen uit een bestand die de geladen toewijzingen niet noemen | User.Read.All, Group.Read.All, Application.Read.All |
+
 ---
 
 ## Fase 1: Initiële Lading
@@ -70,8 +91,6 @@ GET /roleManagement/directory/roleAssignments?$expand=principal
 > Permanente toewijzingen omzeilen PIM volledig. Deze gebruikers hoeven hun rol niet te activeren.
 
 ### 1. Unified PIM Context (`UnifiedPimContext.tsx`)
-- `GET /directoryRoles/delta` (Delta Query voor Rolwijzigingen)
-- `GET /groups/delta` (Delta Query voor Groep Metadata)
 - `GET /roleManagement/directory/roleDefinitions` (Fallback Full Sync)
 - `GET /roleManagement/directory/roleAssignmentScheduleInstances`
 - `GET /roleManagement/directory/roleEligibilityScheduleInstances`
@@ -181,12 +200,8 @@ GET /groups/{id}/members
 
 ## Smart Refresh Strategie
 Om prestaties te verbeteren, implementeert de app een **Smart Refresh** logica:
-1.  **Directory Roles**: Gebruikt `/directoryRoles/delta` om *alleen* gewijzigde rollen op te halen.
-    *   Als er een delta token is, vragen we wijzigingen op.
-    *   Bij expired token (410) vallen we terug op Full Sync.
-2.  **PIM Groups**: Gebruikt een Hybride aanpak.
-    *   `/groups/delta`: Controleert direct op hernoemde/verwijderde groepen.
-    *   **Full Content Fetch**: Haalt Assignments én Policies parallel op voor alle groepen voor maximale betrouwbaarheid.
+1.  **Directory Roles**: Graph heeft geen delta voor PIM-toewijzingen of policies (`/directoryRoles/delta` meldt alleen geactiveerde rolobjecten), dus Refresh leest de definities en assignment schedules opnieuw zonder de pagina te blokkeren en daarna elke policy op de achtergrond (één gepagineerde call voor de tenant). Namen van approvers blijven staan bij policies waarvan de approvers niet veranderd zijn.
+2.  **PIM for Groups**: Geen delta. Graph's `/groups/delta` filtert alleen op `id` en rapporteert nooit PIM-eligibility- of policywijzigingen, dus de app leest de PIM-inventaris (`/identityGovernance/privilegedAccess/group/resources` plus de role-assignable groepen) en daarna per onboarded groep de eligibility- en assignment-schedule-instances en de policies (3 workers, 500 ms). Groepsdetails blijven zoals geladen.
 3.  **Parallelle Uitvoering**: Beide workloads verversen tegelijkertijd.
 
 ### Batching & Throttling
@@ -404,9 +419,9 @@ GET /identityGovernance/roleManagementAlerts/alerts
 | `RoleManagementPolicy.ReadWrite.Directory` | Gedelegeerd | PIM-beleidsregels updaten voor Directory Roles |
 | `RoleEligibilitySchedule.ReadWrite.Directory` | Gedelegeerd | Eligible toewijzingen aanmaken voor Directory Roles |
 | `RoleAssignmentSchedule.ReadWrite.Directory` | Gedelegeerd | Actieve toewijzingen aanmaken voor Directory Roles |
-| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Gedelegeerd | PIM-beleidsregels updaten voor PIM Groups |
-| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Eligible toewijzingen aanmaken voor PIM Groups |
-| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Actieve toewijzingen aanmaken voor PIM Groups |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Gedelegeerd | PIM-beleidsregels updaten voor PIM for Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Eligible toewijzingen aanmaken voor PIM for Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Gedelegeerd | Actieve toewijzingen aanmaken voor PIM for Groups |
 
 > [!NOTE]
 > Schrijfmachtigingen worden via incrementele consent aangevraagd, alleen wanneer de gebruiker de Configuratiepagina opent. Ze zijn niet inbegrepen in het initiële inlogverzoek.
@@ -423,16 +438,18 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ---
 
-### Optionele Machtigingen (PIM Groups & Security Alerts)
+### Optionele Machtigingen (PIM for Groups, Security Alerts, Custom Extensions, Conditional Access)
 
 | Machtiging | Scope | Gebruikt Voor |
 |------------|-------|---------------|
-| `PrivilegedAccess.Read.AzureADGroup` | Gedelegeerd | PIM Groups toewijzingen en resources lezen |
+| `PrivilegedAccess.Read.AzureADGroup` | Gedelegeerd | PIM for Groups toewijzingen en resources lezen |
 | `RoleManagementPolicy.Read.AzureADGroup` | Gedelegeerd | PIM-beleid voor groepen lezen (Member/Owner) |
 | `RoleManagementAlert.Read.Directory` | Gedelegeerd | Beveiligingswaarschuwingen voor rollen lezen |
+| `PrivilegedAccess-CustomExt.Read.All` | Gedelegeerd | De PIM custom extensions van de tenant ophalen (Preview) |
+| `Policy.Read.All` | Gedelegeerd | De optionele Conditional Access-check van Configureren, op verzoek gevraagd |
 
 > [!TIP]
-> De applicatie volgt het **least privilege principe** door granulaire machtigingen te gebruiken in plaats van brede machtigingen zoals `Directory.Read.All` of `Policy.Read.All`.
+> De applicatie volgt het **least privilege principe** door granulaire machtigingen te gebruiken in plaats van brede machtigingen zoals `Directory.Read.All`. `Policy.Read.All` wordt alleen gevraagd wanneer je de optionele Conditional Access-check in Configureren start.
 
 > [!IMPORTANT]
 > Alle machtigingen zijn **gedelegeerd**. De app handelt namens de ingelogde gebruiker, met hun machtigingen in Microsoft Entra ID.

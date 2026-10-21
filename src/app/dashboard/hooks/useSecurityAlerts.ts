@@ -4,11 +4,38 @@ import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { SecurityAlert } from '@/types/securityAlerts.types';
 import { fetchSecurityAlerts } from "@/utils/alertsApi";
 import { Logger } from "@/utils/logger";
+import { describeLoadFailure } from "@/utils/errorUtils";
+import { ALERTS_PERMISSION } from "@/config/constants";
 
 const DISMISSED_ALERTS_KEY = "pim-dismissed-alerts";
-const ALERTS_PERMISSION = "RoleManagementAlert.Read.Directory";
 
-export function useSecurityAlerts() {
+/** MSAL errors carry their code in `errorCode` */
+function getMsalErrorCode(error: unknown): string | undefined {
+    if (error && typeof error === "object" && "errorCode" in error) {
+        const code = (error as { errorCode?: unknown }).errorCode;
+        if (typeof code === "string") return code;
+    }
+    return undefined;
+}
+
+/** One alerts read at a time: strict mode and a quick second mount must not send the same request twice */
+let alertsInFlight: Promise<SecurityAlert[]> | null = null;
+
+function fetchSecurityAlertsOnce(accessToken: string): Promise<SecurityAlert[]> {
+    if (!alertsInFlight) {
+        alertsInFlight = fetchSecurityAlerts(accessToken).finally(() => {
+            alertsInFlight = null;
+        });
+    }
+    return alertsInFlight;
+}
+
+interface UseSecurityAlertsOptions {
+    /** False holds the first read back, so it does not compete with the roles for the tenant's request budget */
+    enabled?: boolean;
+}
+
+export function useSecurityAlerts({ enabled = true }: UseSecurityAlertsOptions = {}) {
     const { instance, accounts } = useMsal();
 
     // State
@@ -59,6 +86,7 @@ export function useSecurityAlerts() {
     // Fetch alerts
     const loadAlerts = useCallback(async () => {
         const accessToken = await getAccessToken();
+        setError(null);
 
         if (!accessToken) {
             // No token means permission not granted yet
@@ -70,14 +98,14 @@ export function useSecurityAlerts() {
         setError(null);
 
         try {
-            const fetchedAlerts = await fetchSecurityAlerts(accessToken);
+            const fetchedAlerts = await fetchSecurityAlertsOnce(accessToken);
             setAlerts(fetchedAlerts);
             setHasPermission(true);
         } catch (err: unknown) {
             if (err instanceof Error && err.message === 'PERMISSION_DENIED') {
                 setHasPermission(false);
             } else {
-                setError("Failed to load security alerts");
+                setError(describeLoadFailure(err));
                 Logger.error("useSecurityAlerts", "Alerts fetch error", err);
             }
         } finally {
@@ -106,16 +134,21 @@ export function useSecurityAlerts() {
                 const fetchedAlerts = await fetchSecurityAlerts(response.accessToken);
                 setAlerts(fetchedAlerts);
             } catch (err) {
-                setError("Failed to load security alerts");
+                setError(describeLoadFailure(err));
                 Logger.error("useSecurityAlerts", "Alerts fetch error after permission:", err);
             } finally {
                 setLoading(false);
             }
 
         } catch (err) {
-            if (err instanceof InteractionRequiredAuthError) {
+            const code = getMsalErrorCode(err);
+            if (err instanceof InteractionRequiredAuthError || code === "user_cancelled") {
                 // User cancelled or interaction needed
                 setError("Permission request was cancelled");
+            } else if (code === "timed_out") {
+                // The popup was closed or never finished before MSAL's timeout: a user outcome, not an app failure
+                setError("The permission window timed out before consent was given. Try again and finish the prompt.");
+                Logger.warn("useSecurityAlerts", "Permission popup timed out before consent");
             } else {
                 setError("Failed to request permission");
                 Logger.error("useSecurityAlerts", "Permission request error", err);
@@ -127,10 +160,10 @@ export function useSecurityAlerts() {
 
     // Check permission on mount
     useEffect(() => {
-        if (accounts.length > 0 && hasPermission === null) {
+        if (enabled && accounts.length > 0 && hasPermission === null) {
             loadAlerts();
         }
-    }, [accounts.length, hasPermission, loadAlerts]);
+    }, [enabled, accounts.length, hasPermission, loadAlerts]);
 
     // Actions
     const dismissAlert = (alertId: string) => {

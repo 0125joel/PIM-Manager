@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main, NextGen]
+  push:
+    branches: [dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Runtime dependencies only: the dev-only braces advisory (GHSA-vfj7-8cjw-p6xm, no patched version) must not block the build
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests with the Configure coverage floor
+        # Same tests as npm test, plus the per-file floor of vitest.config.mts (N-014)
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+        env:
+          # Placeholder only: the build needs a value, the CI output is never deployed.
+          NEXT_PUBLIC_CLIENT_ID: 00000000-0000-0000-0000-000000000000

@@ -1,324 +1,234 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { usePimData } from "@/hooks/usePimData";
-import { useRoleFilters } from "@/hooks/useRoleFilters";
+import { useRolesData, useRolesLoading, useRolesActions } from "@/hooks/usePimData";
 import { useSecurityAlerts } from "./hooks/useSecurityAlerts";
-import { OverviewCards } from "./components/OverviewCards";
-import { SecurityCharts, ChartsData } from "./components/SecurityCharts";
-import { DashboardRoleOverview } from "./components/DashboardRoleOverview";
-import { SecurityAlerts } from "./components/SecurityAlerts";
-import { RecentActivations } from "./components/RecentActivations";
-import { ExpiringSoon } from "./components/ExpiringSoon";
-import { TopUsers } from "./components/TopUsers";
-import { ApproversOverview } from "./components/ApproversOverview";
-import { ConfigurationErrors } from "./components/ConfigurationErrors";
-import { GroupsOverview } from "./components/GroupsOverview";
-import { ProTip } from "./components/ProTip";
-import { RefreshCw, X, ArrowRight, FileDown, User } from "lucide-react";
 import { LoadingStatus } from "@/components/LoadingStatus";
 import { DataWarningBanner } from "@/components/DataWarningBanner";
 import { ViewModeProvider, useViewMode } from "@/contexts/ViewModeContext";
-import { ViewModeToggle } from "@/components/ViewModeToggle";
-import { PdfExportModal } from "@/components/PdfExportModal";
+import { ExportDialog } from "@/components/ExportDialog";
+import { useTenantName } from "@/hooks/useTenantName";
 import { SyncStatus } from "@/components/SyncStatus";
 import { WorkloadChips, useWorkloadVisibility } from "@/components/WorkloadChips";
-import { SettingsModal } from "@/components/SettingsModal";
-import { useUnifiedPimData } from "@/contexts/UnifiedPimContext";
-import Link from "next/link";
+import { useUnifiedData, useUnifiedLoading, useUnifiedActions } from "@/contexts/UnifiedPimContext";
+import { setWorkloadVisible } from "@/utils/workloadPreferences";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
+import { StatusBox } from "@/components/ui/StatusBox";
+import { RefreshButton } from "@/components/ui/RefreshButton";
+import { DashboardHead } from "./components/basic/DashboardHead";
+import { useWriteAccess } from "@/hooks/useWriteAccess";
+import { changeInConfigureHref } from "@/utils/configureLinks";
+import { DashboardOverview } from "./components/basic/DashboardOverview";
+import { useDashboardFilter } from "@/hooks/useDashboardFilter";
+import { useEscapeClearsFilter } from "@/hooks/useEscapeClearsFilter";
+import { summarizeAlerts } from "@/utils/alertSummary";
+import { useIncrementalConsent } from "@/hooks/useIncrementalConsent";
+import { useEmergencyAccountIds } from "@/hooks/useEmergencyAccountIds";
+import { useDashboardScope } from "@/hooks/useDashboardScope";
+import { useCustomExtensions } from "@/hooks/useCustomExtensions";
+import { ScopeControl } from "./components/advanced/ScopeControl";
+import { buildFilterNames, getFilterLabels, isEmptyDashboardFilter } from "@/utils/dashboardFilter";
+import { getEffectiveDashboardFilter } from "@/utils/dashboardStats";
+import { POLICY_NOT_READABLE } from "@/utils/policyReadAccess";
+import { withoutAgents } from "@/utils/agentCounting";
 
 
 function DashboardContent() {
-    const { rolesData, loading, error, refreshData, failedRoleIds, policiesLoading, authenticationContexts } = usePimData();
+    const writeAccess = useWriteAccess();
+    const { rolesData, error, failedRoleIds, authenticationContexts } = useRolesData();
+    const { loading, policiesLoading } = useRolesLoading();
+    const { fetchData, refreshData } = useRolesActions();
     const { accounts } = useMsal();
-    const { isBasic, isAdvanced } = useViewMode();
-    const searchParams = useSearchParams();
+    const { viewMode, setViewMode, isBasic, isAdvanced } = useViewMode();
+    const { filter: dashboardFilter, setFilter: setDashboardFilter, clearFilter: clearDashboardFilter, removeKey: removeDashboardFilterKey, isActive: isDashboardFilterActive } = useDashboardFilter();
+    const emergencyAccountIds = useEmergencyAccountIds();
+    const [scope, setScope] = useDashboardScope();
+    // The side reads (custom extensions, alerts) wait until the roles are in or failed: together with the roles they
+    // used to push a cold load over the tenant's request budget (429 on the core reads)
+    const rolesSettled = rolesData.length > 0 || error !== null;
+    const { extensions: tenantExtensions, hasPermission: hasExtensionsPermission } = useCustomExtensions({ autoLoad: isAdvanced && rolesSettled });
+    const tenantExtensionIds = useMemo(() => (hasExtensionsPermission === true ? new Set(tenantExtensions.map((e) => e.id)) : null), [hasExtensionsPermission, tenantExtensions]);
 
-    // Security alerts for PDF export (uses the same hook as SecurityAlerts component)
-    const { alerts: securityAlerts, hasPermission: hasAlertsPermission } = useSecurityAlerts();
+    // Security alerts: the "From Microsoft" block and the PDF export
+    const {
+        alerts: securityAlerts,
+        hasPermission: hasAlertsPermission,
+        loading: alertsLoading,
+        error: alertsError,
+        requestingPermission: alertsRequesting,
+        dismissedAlerts,
+        loadAlerts,
+        requestPermission: requestAlertsPermission,
+        dismissAlert,
+        restoreAll: restoreAllAlerts,
+    } = useSecurityAlerts({ enabled: rolesSettled });
+    const [showDismissedAlerts, setShowDismissedAlerts] = useState(false);
+    const [dismissedRolesError, setDismissedRolesError] = useState<string | null>(null);
+    const alertsSummary = useMemo(() => summarizeAlerts(securityAlerts, dismissedAlerts, showDismissedAlerts), [securityAlerts, dismissedAlerts, showDismissedAlerts]);
+    const { requestConsent } = useIncrementalConsent();
 
     // Workload/feature visibility state
     const isSecurityAlertsVisible = useWorkloadVisibility("securityAlerts");
     const isDirectoryRolesVisible = useWorkloadVisibility("directoryRoles");
     const isPimGroupsVisible = useWorkloadVisibility("pimGroups");
     const isUnmanagedGroupsVisible = useWorkloadVisibility("unmanagedGroups");
+    const isAgentsVisible = useWorkloadVisibility("agents");
 
-    // Get PIM Groups data and refresh function from UnifiedPimContext
-    const { workloads, refreshAllWorkloads } = useUnifiedPimData();
+    // Get PIM for Groups data and refresh function from UnifiedPimContext
+    const { workloads } = useUnifiedData();
+    const { workloads: workloadLoading } = useUnifiedLoading();
+    const { refreshWorkload, enableWorkload } = useUnifiedActions();
     const pimGroupsData = workloads.pimGroups.data;
-    const pimGroupsLoading = workloads.pimGroups.loading.phase === "fetching" ||
-        workloads.pimGroups.loading.phase === "processing" ||
-        workloads.pimGroups.loading.phase === "consent";
+    // Settings Graph would not show to this admin (FIX-11, FIX-12): the numbers about settings leave them out and say so
+    const notReadableRoleCount = rolesData.filter((r) => r.policiesForbidden).length;
+    const notReadableGroupCount = pimGroupsData.filter((g) => g.policiesForbidden).length;
+
+    // What the numbers count: the chips on this page, and only workloads that have consent
+    const counting = useMemo(() => ({
+        directoryRoles: isDirectoryRolesVisible,
+        pimGroups: isPimGroupsVisible && workloads.pimGroups.consent.consented,
+        unmanagedGroups: isUnmanagedGroupsVisible,
+        agents: isAgentsVisible,
+    }), [isDirectoryRolesVisible, isPimGroupsVisible, isUnmanagedGroupsVisible, isAgentsVisible, workloads.pimGroups.consent.consented]);
+
+    // The chip Agents off: every number, block and the export leave agent assignments out (decision D4)
+    const counted = useMemo(
+        () => (counting.agents ? { roles: rolesData, groups: pimGroupsData } : withoutAgents(rolesData, pimGroupsData)),
+        [counting.agents, rolesData, pimGroupsData]
+    );
+
+    useEscapeClearsFilter(isDashboardFilterActive, clearDashboardFilter);
 
     // Get account info for display and PDF export (MSAL data only - no extra permissions needed)
     const account = accounts[0];
     const tenantId = account?.tenantId;
     const userPrincipalName = account?.username;
-    const userName = account?.name;
 
-    // Universal filter system - reads from URL, filters data, provides setters
-    const {
-        filteredRoles,
-        hasActiveFilters,
-        activeFilterCount,
-        resetFilters,
-        toggleFilter,
-        updateURLParam
-    } = useRoleFilters(rolesData);
+    // Export: the dialog applies its options to the data the page holds
+    const [showExport, setShowExport] = useState(false);
+    const tenantName = useTenantName(tenantId);
+    const { syncHistory } = useUnifiedLoading();
+    const effectiveFilter = useMemo(() => getEffectiveDashboardFilter(dashboardFilter), [dashboardFilter]);
+    const filterSentence = isEmptyDashboardFilter(effectiveFilter) ? "" : getFilterLabels(effectiveFilter, buildFilterNames(rolesData)).map((l) => l.label).join(", ");
 
-    // PDF Export state
-    const [showPdfModal, setShowPdfModal] = useState(false);
-    const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [chartsData, setChartsData] = useState<ChartsData | null>(null);
-    const handleChartsDataReady = useCallback((data: ChartsData) => {
-        setChartsData(data);
-    }, []);
-
-    // Unified refresh handler - uses central refreshAllWorkloads (modular, universal)
-    const handleRefreshAll = useCallback(async () => {
-        await refreshAllWorkloads();
-    }, [refreshAllWorkloads]);
-
-    // Initial load effect - auto-fetch if no data
+    // Initial load effect: auto-fetch if no data. fetchData honours the 60 minute cache TTL
+    // and the sessionStorage cache; refreshData is reserved for explicit refreshes.
     useEffect(() => {
         if (rolesData.length === 0 && !loading && !error) {
-            refreshData();
+            fetchData();
         }
-    }, [rolesData.length, loading, error, refreshData]);
+    }, [rolesData.length, loading, error, fetchData]);
 
-    const totalRoles = rolesData.length;
-
-    // Helper to convert RoleFilterState keys to URL param names
-    const handleFilterClick = (key: string, value: string) => {
-        const paramMap: Record<string, string> = {
-            filterAssignmentType: 'assignmentType',
-            filterMemberType: 'memberType',
-            filterMfaRequired: 'mfaType',
-            filterApprovalRequired: 'approval',
-            filterMaxDuration: 'maxDuration',
-            filterPrivileged: 'privileged',
-            filterPimConfigured: 'pimConfigured',
-            filterRoleType: 'roleType',
-            filterHasAssignments: 'hasAssignments',
-        };
-        const paramName = paramMap[key] || key;
-        toggleFilter(paramName, value);
-    };
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-                        Security dashboard
-                    </h1>
-                    <p className="text-zinc-500 dark:text-zinc-400 mt-1">
-                        Overview of your Privileged Identity Management posture
-                    </p>
-                    {/* User and Tenant Info Subtitle */}
-                    {userPrincipalName && (
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2 flex items-center gap-2">
-                            <User className="h-3 w-3" />
-                            <span>Signed in as {userPrincipalName}</span>
-                            {tenantId && (
-                                <>
-                                    <span className="text-zinc-300 dark:text-zinc-600">•</span>
-                                    <span>Tenant ID: {tenantId}</span>
-                                </>
-                            )}
-                        </p>
-                    )}
-                </div>
-                <div className="flex items-start gap-3 w-full md:w-auto">
-                    <ViewModeToggle />
-                    <div className="flex flex-col gap-2 flex-1 md:flex-none">
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={handleRefreshAll}
-                                disabled={loading || policiesLoading || pimGroupsLoading}
-                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 whitespace-nowrap flex-1 md:flex-none"
-                            >
-                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh data
-                            </button>
-                            <button
-                                onClick={() => setShowPdfModal(true)}
-                                disabled={loading || policiesLoading || !chartsData}
-                                data-tour="dashboard-export-pdf"
-                                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-1 md:flex-none"
-                            >
-                                <FileDown className="h-4 w-4" />
-                                Export PDF
-                            </button>
-                        </div>
-                        <LoadingStatus />
-                        <SyncStatus />
-                    </div>
-                </div>
+        <div data-focus-fallback tabIndex={-1} className="mx-auto flex max-w-[1376px] flex-col gap-4 outline-none">
+            <div className="flex flex-col gap-4">
+                <DashboardHead
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    syncStatus={<SyncStatus />}
+                    refresh={<RefreshButton />}
+                    isExportDisabled={loading || policiesLoading || rolesData.length === 0}
+                    onExport={() => setShowExport(true)}
+                    scopeControl={isAdvanced ? <ScopeControl scope={scope} onChange={setScope} /> : undefined}
+                />
+                <LoadingStatus />
+                <WorkloadChips />
             </div>
-
-            {/* Workload Chips */}
-            <div className="mb-6">
-                <WorkloadChips onOpenSettings={() => setShowSettingsModal(true)} />
-            </div>
-
-            {/* Active Filters Banner */}
-            {hasActiveFilters && (
-                <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                                Showing {filteredRoles.length} of {totalRoles} roles ({activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'} active)
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Link
-                                href={searchParams?.toString() ? `/report?${searchParams.toString()}` : '/report'}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-md transition-colors"
-                            >
-                                View Report
-                                <ArrowRight className="h-4 w-4" />
-                            </Link>
-                            <button
-                                onClick={resetFilters}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-md transition-colors"
-                            >
-                                <X className="h-4 w-4" />
-                                Clear all filters
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Data incomplete warning banner */}
             <DataWarningBanner
                 failedCount={failedRoleIds.length}
                 totalCount={rolesData.length}
-                onRefresh={refreshData}
+                onRefresh={() => refreshData(true)}
+                className=""
             />
 
-            {/* Overview Cards */}
-            <OverviewCards
-                rolesData={filteredRoles}
-                loading={loading}
-                policiesLoading={policiesLoading}
-                onFilterClick={handleFilterClick}
-                viewMode={isAdvanced ? "advanced" : "basic"}
-            />
+            {notReadableRoleCount + notReadableGroupCount > 0 && (
+                <p role="note" className="text-[13px] leading-5 text-body">
+                    {[notReadableRoleCount > 0 && `${notReadableRoleCount} of ${rolesData.length} roles`, notReadableGroupCount > 0 && `${notReadableGroupCount} of ${pimGroupsData.length} groups`].filter(Boolean).join(" and ")}
+                    {": "}{POLICY_NOT_READABLE}
+                </p>
+            )}
 
-            {/* Security Charts - combines data from all enabled workloads */}
-            <SecurityCharts
-                rolesData={filteredRoles}
-                groupsData={pimGroupsData}
-                loading={loading}
+            {/* Directory roles failed to load: a block with the cause and Try again, never a toast (spec 4.7) */}
+            {error && dismissedRolesError !== error && (
+                <StatusBox variant="error" title={rolesData.length === 0 ? "Directory roles could not be loaded" : "Directory roles could not be refreshed"} dismissLabel="Dismiss: Directory roles error" onDismiss={() => setDismissedRolesError(error)} action={<Button size="sm" onClick={() => void refreshData(true)}>Try again</Button>}>
+                    {error}{rolesData.length > 0 && " The numbers below are from the last load."}
+                </StatusBox>
+            )}
+
+            {/* Filter bar, the eight cards and, in Basic, Who and Terms */}
+            <DashboardOverview
+                changeHrefFor={(target) => changeInConfigureHref(writeAccess.access, target)}
+                rolesData={counted.roles}
+                groupsData={counted.groups}
+                counting={counting}
+                filter={dashboardFilter}
+                isRolesLoading={loading || (rolesData.length === 0 && !error)}
+                isGroupsLoading={["idle", "consent", "fetching", "processing"].includes(workloadLoading.pimGroups.phase)}
                 policiesLoading={policiesLoading}
-                onFilterClick={handleFilterClick}
-                viewMode={isAdvanced ? "advanced" : "basic"}
-                activeFilters={{
-                    assignmentType: searchParams?.get('assignmentType') || undefined,
-                    memberType: searchParams?.get('memberType') || undefined,
+                emergencyAccountIds={emergencyAccountIds}
+                onSetFilter={setDashboardFilter}
+                onRemoveFilterKey={removeDashboardFilterKey}
+                showBlocks={isBasic}
+                showAdvanced={isAdvanced}
+                scope={isAdvanced ? scope : "privileged"}
+                tenantExtensionIds={tenantExtensionIds}
+                rolesError={error}
+                pimGroupsConsented={workloads.pimGroups.consent.consented}
+                pimGroupsError={workloadLoading.pimGroups.phase === "error" ? workloadLoading.pimGroups.error ?? "Microsoft Graph did not answer." : null}
+                onRetryPimGroups={() => void refreshWorkload("pimGroups", true)}
+                // The popup alone leaves the workload off until a reload: switch it on and read it, as Settings does
+                onGrantPimGroups={() => {
+                    void requestConsent("pimGroups").then(async (isGranted) => {
+                        if (!isGranted) return;
+                        await enableWorkload("pimGroups");
+                        setWorkloadVisible("pimGroups", true);
+                    });
                 }}
-                onChartsDataReady={handleChartsDataReady}
-                authenticationContexts={authenticationContexts}
+                alerts={isSecurityAlertsVisible ? {
+                    state: hasAlertsPermission === false ? "noConsent" : alertsError ? "error" : alertsLoading || hasAlertsPermission === null ? "loading" : "ready",
+                    summary: alertsSummary,
+                    errorMessage: alertsError,
+                    isGranting: alertsRequesting,
+                    showDismissed: showDismissedAlerts,
+                    onGrant: requestAlertsPermission,
+                    onRetry: loadAlerts,
+                    onDismiss: dismissAlert,
+                    onRestoreDismissed: restoreAllAlerts,
+                    onShowDismissedChange: setShowDismissedAlerts,
+                } : null}
             />
 
-            {/* Pro Tip - Basic mode only */}
-            {isBasic && (
-                <div className="mb-8">
-                    <ProTip />
-                </div>
-            )}
-
-            {/* Recent Activity Section - Advanced only */}
-            {isAdvanced && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <RecentActivations rolesData={rolesData} loading={loading} />
-                    <ExpiringSoon rolesData={rolesData} loading={loading} />
-                </div>
-            )}
-
-            {/* Main Content Section - Role & Groups Overview side by side */}
-            {(isDirectoryRolesVisible || isPimGroupsVisible) && (
-                <div className={`grid gap-6 mb-8 items-stretch ${isDirectoryRolesVisible && isPimGroupsVisible
-                    ? "grid-cols-1 lg:grid-cols-2"
-                    : "grid-cols-1"
-                    }`}>
-                    {/* Role Overview - only if toggle ON */}
-                    {isDirectoryRolesVisible && (
-                        <DashboardRoleOverview
-                            rolesData={rolesData}
-                            loading={loading}
-                            viewMode={isAdvanced ? "advanced" : "basic"}
-                            hasUnmanagedGroups={isUnmanagedGroupsVisible && pimGroupsData.some(g => g.isManaged === false)}
-                        />
-                    )}
-
-                    {/* Groups Overview - only if toggle ON */}
-                    {isPimGroupsVisible && (
-                        <GroupsOverview
-                            groupsData={pimGroupsData}
-                            loading={pimGroupsLoading}
-                            viewMode={isAdvanced ? "advanced" : "basic"}
-                        />
-                    )}
-                </div>
-            )}
-
-            {/* Security Alerts - Basic mode, separate row */}
-            {isBasic && isSecurityAlertsVisible && (
-                <div className="mb-8">
-                    <SecurityAlerts />
-                </div>
-            )}
-
-            {/* Top Users - Advanced mode */}
-            {isAdvanced && (
-                <div className="mb-8">
-                    <TopUsers rolesData={rolesData} loading={loading} />
-                </div>
-            )}
-
-            {/* Bottom Section - Advanced only */}
-            {isAdvanced && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <ApproversOverview rolesData={rolesData} loading={loading} />
-                    <ConfigurationErrors rolesData={rolesData} loading={loading} onRefresh={refreshData} />
-                </div>
-            )}
-
-            {/* PDF Export Modal */}
-            {chartsData && (
-                <PdfExportModal
-                    isOpen={showPdfModal}
-                    onClose={() => setShowPdfModal(false)}
-                    chartData={{
-                        assignmentData: chartsData.assignmentData,
-                        assignmentMethodData: chartsData.assignmentMethodData,
-                        mfaData: chartsData.mfaData,
-                        approvalData: chartsData.approvalData,
-                        durationData: chartsData.durationData,
-                        authContextData: chartsData.authContextData,
-                        managedData: chartsData.managedData,
+            {showExport && (
+                <ExportDialog
+                    isOpen={showExport}
+                    onClose={() => setShowExport(false)}
+                    input={{
+                        rolesData: counted.roles,
+                        groupsData: counted.groups,
+                        filter: dashboardFilter,
+                        emergencyAccountIds,
+                        authenticationContexts,
+                        alerts: hasAlertsPermission ? securityAlerts : null,
+                        dismissedAlertIds: dismissedAlerts,
+                        tenantExtensionIds,
+                        policiesLoading,
                     }}
-                    rolesData={filteredRoles}
-                    groupsData={pimGroupsData}
-                    initialWorkloadSelection={{
-                        directoryRoles: isDirectoryRolesVisible,
-                        pimGroups: isPimGroupsVisible
+                    meta={{ tenantName, tenantId, exporter: account?.name ? `${account.name} (${userPrincipalName})` : userPrincipalName ?? "unknown", version: process.env.NEXT_PUBLIC_APP_VERSION ?? "", dataReadAt: syncHistory && syncHistory.length > 0 ? new Date(syncHistory[0].timestamp) : undefined }}
+                    counting={{ ...counting, securityAlerts: isSecurityAlertsVisible && hasAlertsPermission === true }}
+                    availability={{
+                        directoryRoles: { available: rolesData.length > 0, count: rolesData.length },
+                        pimGroups: { available: workloads.pimGroups.consent.consented, count: pimGroupsData.filter((g) => g.isManaged !== false).length },
+                        unmanagedGroups: { available: workloads.pimGroups.consent.consented },
+                        securityAlerts: { available: hasAlertsPermission === true },
                     }}
-                    viewMode={isAdvanced ? "advanced" : "basic"}
-                    filterSummary={hasActiveFilters ? `${activeFilterCount} filters active` : undefined}
-                    tenantId={tenantId}
-                    userPrincipalName={userPrincipalName}
-                    securityAlerts={hasAlertsPermission ? securityAlerts : undefined}
+                    filterSentence={filterSentence}
                 />
             )}
-
-            {/* Settings Modal */}
-            <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
         </div>
     );
 }
@@ -327,16 +237,15 @@ function DashboardContent() {
 export default function DashboardPage() {
     return (
         <ViewModeProvider>
+            {/* Before the page can read the URL: the head and the eight cards as skeletons, in the layout of the page (spec 4.7) */}
             <Suspense fallback={
-                <div className="container mx-auto px-4 py-8 max-w-7xl">
-                    <div className="animate-pulse">
-                        <div className="h-8 w-64 bg-zinc-200 dark:bg-zinc-800 rounded mb-2" />
-                        <div className="h-4 w-96 bg-zinc-200 dark:bg-zinc-800 rounded mb-8" />
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {[1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-                            ))}
-                        </div>
+                <div className="mx-auto flex max-w-[1376px] flex-col gap-4">
+                    <Skeleton className="block" width={240} height={34} />
+                    <Skeleton className="block" width={360} height={28} />
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                            <Skeleton key={i} className="block w-full" height={92} />
+                        ))}
                     </div>
                 </div>
             }>

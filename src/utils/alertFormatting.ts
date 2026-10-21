@@ -1,4 +1,5 @@
 import { SecurityAlert } from '@/types/securityAlerts.types';
+import { isoToApproxDays } from '@/utils/durationUtils';
 
 /**
  * Formats a security alert string by replacing placeholders with actual values.
@@ -24,8 +25,10 @@ export function formatAlertString(text: string | undefined, alert: SecurityAlert
         const config = alert.alertConfiguration || {};
         const configValue = config.duration || config.days || config.threshold || config.period || "30"; // Fallback to 30 if not found
 
-        // Remove ISODuration format if present (e.g. "P30D" -> "30")
-        const cleanValue = configValue.toString().replace(/^P/, '').replace(/D$/, '');
+        // ISO durations (for example "P30D") become a day count via the shared utility;
+        // plain numbers are used as-is
+        const raw = configValue.toString();
+        const cleanValue = /^P/i.test(raw) ? String(Math.round(isoToApproxDays(raw))) : raw;
 
         formatted = formatted.replace(/\{1\}/g, cleanValue);
     }

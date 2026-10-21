@@ -11,6 +11,7 @@
  */
 
 import { Logger } from './logger';
+import { getErrorMessage, getErrorStatusCode } from './errorUtils';
 import type { RateLimiter } from './rateLimiter';
 
 // Helper to add delay for throttling protection
@@ -85,6 +86,13 @@ export interface WorkerPoolOptions<TItem, TResult> {
      * If provided, each worker acquires permission before processing an item
      */
     rateLimiter?: RateLimiter;
+
+    /**
+     * Resource units one item costs: the number of Graph requests its processor makes, weighted by what Graph
+     * charges (an `$expand` adds 1, a members count costs 3). A number, or a function of the item. Default 1.
+     * Only used together with `rateLimiter`.
+     */
+    costPerItem?: number | ((item: TItem) => number);
 }
 
 /**
@@ -124,7 +132,8 @@ export async function runWorkerPool<TItem, TResult>(
         onItemError,
         signal,
         maxRetries = 3,
-        rateLimiter
+        rateLimiter,
+        costPerItem = 1
     } = options;
 
     const total = items.length;
@@ -148,12 +157,15 @@ export async function runWorkerPool<TItem, TResult>(
     const processWithRetry = async (item: TItem, workerId: number): Promise<TResult | null> => {
         for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
+                // Every attempt is a real request: a retry after a 429 pays again
+                await rateLimiter?.acquire(typeof costPerItem === 'function' ? costPerItem(item) : costPerItem, signal);
                 return await processor(item, workerId);
-            } catch (error: any) {
-                const is429 = error?.statusCode === 429 || error?.message?.includes('Too Many Requests');
+            } catch (error: unknown) {
+                const is429 = getErrorStatusCode(error) === 429 || getErrorMessage(error).includes('Too Many Requests');
                 if (is429 && attempt <= maxRetries) {
                     const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
                     Logger.warn('WorkerPool', `Worker ${workerId} rate limited (429). Backing off ${backoffMs}ms (attempt ${attempt}/${maxRetries})`);
+                    rateLimiter?.backOff(backoffMs);
                     await delay(backoffMs);
                     continue;
                 }
@@ -179,9 +191,6 @@ export async function runWorkerPool<TItem, TResult>(
             const item = workerItems[i];
 
             try {
-                // Acquire rate-limit permission if limiter is provided
-                await rateLimiter?.acquire(1, signal);
-
                 const result = await processWithRetry(item, workerId);
 
                 if (result !== null) {
@@ -192,14 +201,14 @@ export async function runWorkerPool<TItem, TResult>(
                     // null result means processor handled it but returned nothing
                     succeededCount++;
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 // Ignore errors if aborted during processing
                 if (signal?.aborted) {
                     isAborted = true;
                     return;
                 }
 
-                const errorMsg = error.message || String(error);
+                const errorMsg = getErrorMessage(error);
                 Logger.error('WorkerPool', `Worker ${workerId} failed for item: ${errorMsg}`);
                 failedCount++;
                 onItemError?.(item, errorMsg);

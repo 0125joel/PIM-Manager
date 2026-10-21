@@ -3,7 +3,7 @@ import { Configuration, PopupRequest } from "@azure/msal-browser";
 // Resolve Client ID at runtime.
 // Priority: runtime config (self-hosted via Azure) → build-time env var (SaaS / local dev)
 // During static export build (SSR context, typeof window === "undefined"), no Client ID is
-// available — return a placeholder so the build succeeds. The real Client ID is always
+// available, return a placeholder so the build succeeds. The real Client ID is always
 // resolved in the browser before MSAL initialises.
 function getClientId(): string {
     if (typeof window !== "undefined") {
@@ -20,15 +20,26 @@ function getClientId(): string {
     return process.env.NEXT_PUBLIC_CLIENT_ID ?? "00000000-0000-0000-0000-000000000000";
 }
 
+/** Path of the redirect bridge page (src/app/redirect/page.tsx) */
+export const REDIRECT_BRIDGE_PATH = "/redirect";
+
+function getRedirectUri(): string {
+    if (process.env.NEXT_PUBLIC_REDIRECT_URI) return process.env.NEXT_PUBLIC_REDIRECT_URI;
+    if (typeof window !== "undefined") return `${window.location.origin}${REDIRECT_BRIDGE_PATH}`;
+    return `http://localhost:3000${REDIRECT_BRIDGE_PATH}`;
+}
+
 export const msalConfig: Configuration = {
     auth: {
         clientId: getClientId(),
         authority: "https://login.microsoftonline.com/organizations",
-        redirectUri: typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_REDIRECT_URI || "http://localhost:3000"),
+        // MSAL v5 routes every popup and silent flow through a redirect bridge page.
+        // The page at /redirect calls broadcastResponseToMainFrame() and must be
+        // registered as the Single-page application redirect URI in Entra ID.
+        redirectUri: getRedirectUri(),
     },
     cache: {
         cacheLocation: "sessionStorage", // This configures where your cache will be stored
-        storeAuthStateInCookie: false, // Set this to "true" if you are having issues on IE11 or Edge
     },
 };
 

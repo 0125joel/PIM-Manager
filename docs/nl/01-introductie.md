@@ -48,14 +48,14 @@ Deze applicatie is ontworpen voor:
 - Authentication Context weergave voor rollen die specifieke toegang vereisen
 
 ### ⚙️ Configuratiepagina
-- **Wizard Modus**: Begeleide stapsgewijze configuratie — workload, scope, beleid, toewijzingen, beoordeling en toepassen
-- **Handmatige Modus**: Vrije 3-kolomsindeling met gestaagde wijzigingen — selecteer rollen/groepen, configureer en wacht op toepassing
-- **Bulk Modus**: CSV-gebaseerde batchconfiguratie — upload een CSV, vergelijk met live-instellingen en pas toe op schaal
+- **Edit**: master-detail lijst van rollen en groepen met instellingen, Who has it en Select several
+- **Guided**: een route in stappen voor een wijziging op veel doelen, eventueel vanuit het access model
+- **Import**: CSV- of JSON-bestanden vergeleken met de tenant, daarna één review en apply; de pagina **Access model** toont de PIM Monitor-catalogus
 - Pas consistente activatie-instellingen toe (MFA, goedkeuring, max. duur) voor meerdere rollen en groepen
 - Maak eligible/actieve toewijzingen aan en beheer ze met AU-scope ondersteuning
 
 > [!NOTE]
-> Schrijfmachtigingen voor Configure (`RoleManagementPolicy.ReadWrite.Directory` en gerelateerde scopes) worden aangevraagd via incrementele consent — alleen wanneer je de Configuratiepagina voor het eerst opent. Rapportagefuncties vereisen deze machtigingen niet.
+> Schrijfmachtigingen voor Configure (`RoleManagementPolicy.ReadWrite.Directory` en gerelateerde scopes) worden aangevraagd via incrementele consent, alleen wanneer je in Configure kiest voor Grant permission. Rapportagefuncties vereisen deze machtigingen niet.
 
 ---
 
@@ -85,8 +85,10 @@ De applicatie vereist een Microsoft Entra app-registratie met de volgende **gede
 | `RoleManagementAlert.Read.Directory` | Beveiligingswaarschuwingen paneel | Paneel verborgen bij 403 |
 | `PrivilegedAccess.Read.AzureADGroup` | PIM voor Groepen workload | Workload niet getoond in instellingen |
 | `RoleManagementPolicy.Read.AzureADGroup` | PIM Groepen policies | Groepsdata onvolledig zonder dit |
+| `PrivilegedAccess-CustomExt.Read.All` | Lijst van PIM custom extensions (Preview) | Keuzelijst en controle op verweesde koppelingen verborgen; welke extension een beleid koppelt blijft zichtbaar |
+| `Policy.Read.All` | Conditional Access-check van Configureren (op verzoek) | De check toont "Not checked"; de rest van de review loopt door |
 
-**Optionele schrijfmachtigingen** (via incrementele consent, alleen bij gebruik van Configureren):
+**Optionele schrijfmachtigingen** (via incrementele consent, alleen wanneer je in Configure kiest voor Grant permission):
 
 | Machtiging | Doel |
 |------------|------|
@@ -98,7 +100,7 @@ De applicatie vereist een Microsoft Entra app-registratie met de volgende **gede
 | `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Maak actieve toewijzingen voor PIM Groepen |
 
 > [!TIP]
-> De applicatie volgt het **least privilege principe**. Rapportagefuncties gebruiken alleen leesmachtigingen. Schrijfmachtigingen worden alleen aangevraagd wanneer je de Configuratiefunctie gebruikt — en alleen voor de workload die je wilt configureren.
+> De applicatie volgt het **least privilege principe**. Rapportagefuncties gebruiken alleen leesmachtigingen. Schrijfmachtigingen worden alleen aangevraagd wanneer je in Configure kiest voor Grant permission, en alleen voor de workload die je wilt configureren.
 
 ### Ondersteunde Browsers
 
@@ -115,18 +117,16 @@ Elke moderne browser (Chrome, Edge, Firefox, Safari) met JavaScript ingeschakeld
 │  Next.js React Applicatie                               │
 │  ├── Dashboard Pagina (Analyses & Inzichten)            │
 │  ├── Rapport Pagina (Gedetailleerde Configuratieweergave)│
-│  └── Configuratie Pagina (Wizard / Handmatig / Bulk)    │
+│  └── Configuratie Pagina (Edit/Guided/Import/Model)    │
 ├─────────────────────────────────────────────────────────┤
 │  State Management Laag                                  │
 │  ├── UnifiedPimContext (Workload Orkestratie)           │
 │  ├── DirectoryRoleContext (Directory Rollen)            │
-│  ├── ViewModeContext (UI Voorkeuren)                    │
-│  └── Delta Sync Service (Slimme Verversing)             │
+│  └── ViewModeContext (UI Voorkeuren)                    │
 ├─────────────────────────────────────────────────────────┤
 │  Data Services                                          │
 │  ├── directoryRoleService (Rollen & Policies)           │
 │  ├── pimGroupService (PIM Groepen)                      │
-│  ├── deltaService (Incrementele Updates)                │
 │  └── SessionStorage (60-minuten cache)                  │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
@@ -150,10 +150,10 @@ Alle data wordt **client-side** opgehaald in de browser van de gebruiker. De app
 
 ### Prestaties & Geavanceerde Functies
 
-**Slimme Verversing (Delta Sync):**
-- Haalt alleen wijzigingen op sinds de laatste synchronisatie, waar ondersteund
-- Vermindert datatransfer met 70-80% ten opzichte van volledige verversing
-- Automatische terugval naar volledige fetch als delta-token vervalt
+**Slimme Verversing:**
+- Directory Roles: leest de toewijzingen opnieuw zonder de pagina te blokkeren, daarna elke policy op de achtergrond
+- PIM for Groups: leest per onboarded groep de schedule-instances en policies opnieuw en behoudt de groepsdetails
+- Graph heeft geen delta voor PIM-toewijzingen of policies, dus een in Entra gewijzigde instelling is na één Refresh zichtbaar omdat beide opnieuw worden gelezen
 
 **SessionStorage Caching:**
 - Data blijft behouden bij paginanavigatie

@@ -1,379 +1,132 @@
 # Rapportpagina
 
-Dit document legt de functies en functionaliteit van de Rapportpagina uit, de hoofdweergave voor het analyseren van je PIM-configuratie.
+De Rapportpagina laat elke rol en groep zien zoals ze nu zijn: wie wat heeft, hoe het beveiligd is en wat ontbreekt. De pagina is alleen-lezen. Wijzigen doe je in [Configureren](./09-configuratie-pagina.md).
 
 ---
 
-## Overzicht
+## Indeling
 
-De Rapportpagina biedt een uitgebreide weergave van alle Microsoft Entra ID rollen en hun PIM-configuraties.
+Eén pagina met links een lijst en rechts het detail van het gekozen item. Onder 1024 px breed is het detail een eigen weergave met een Terug-knop, en de lijst komt terug waar je gebleven was.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Rapportpagina                        │
-├─────────────────────────────────────────────────────────┤
-│ [Filters]  [Zoeken]  [Export (PDF/CSV) ▼]  [Vernieuwen] │
-├─────────────────────────────────────────────────────────┤
-│ Toont 45 van 130 rollen                                 │
-│            Rolconfiguratie ophalen op achtergrond (15/130)│
-├─────────────────────────────────────────────────────────┤
-│ ┌───────────────────────────────────────────────────┐   │
-│ │ Global Administrator                   [Uitklappen]│   │
-│ │ 👤 2 eligible │ ⚡ 1 actief │ 🔒 1 permanent       │   │
-│ │ Tags: [Geprivilegieerd] [Ingebouwd] [PIM Config]  │   │
-│ └───────────────────────────────────────────────────┘
-│ ┌───────────────────────────────────────────────────┐
-│ │ User Administrator                     [Uitklappen]│
-│ │ 👤 5 eligible │ ⚡ 0 actief │ 🔒 3 permanent       │
-│ └───────────────────────────────────────────────────┘
-│ ...                                                     │
-└─────────────────────────────────────────────────────────┘
+Report                                  [Refresh] [Export]
+[Roles 146 | Groups 12] [Search a role, a group or a person] [Filters]
+chips: Privileged only x   Has assignments x   Clear all      7 of 146 roles
++----------------------+--------------------------------------------+
+| Role        Sort v   | Global Administrator [Privileged] [Copy link]
+| Global Administrator | Assignments   Eligible (3)  Active (2)
+| Security Administr.  | Role configuration  Activation | Assignment | Notification
+| ...                  | tegels
++----------------------+--------------------------------------------+
 ```
 
----
-
-## FunctIES
-
-### 🔍 Zoeken
-
-Typ in het zoekveld om rollen te filteren op naam.
-
-- Zoekt in rol weergavenamen
-- Niet hoofdlettergevoelig
-- Realtime filteren
-- **Drill-down Ondersteuning:** Ondersteunt directe navigatie vanuit Dashboard met voor-geselecteerde filters
+Het adres van de pagina bevat de staat, dus een link opent dezelfde weergave: `view` (roles of groups), `q` (zoekopdracht), `f` (het filter, hetzelfde als op het Dashboard), `role` en `group` (het gekozen item). "Copy link" kopieert het adres. Links uit eerdere versies van het Rapport werken nog en worden omgezet.
 
 ---
 
-### 👁️ Workload Toggles
+## Rollen
 
-Boven aan de pagina kun je de zichtbaarheid van verschillende PIM-workloads in- en uitschakelen:
+De lijst toont de naam, een tag Privileged of Custom, "{n} eligible, {n} active" en alleen twee waarschuwingen: "No MFA on activation" en "Permanent active". Sorteer op meeste toewijzingen, naam of meest permanent.
 
-- **Directory Rollen:** Toon/Verberg Entra ID rollen.
-- **PIM Groepen:** Toon/Verberg PIM-enabled groepen.
+Het detail heeft twee delen.
+
+**Assignments.** Eligible en Active, één rij per principal met tags:
+
+| Tag | Betekenis |
+|-----|-----------|
+| User, Guest, App, Group | Wat de principal is |
+| Direct, Via group | Of de toewijzing aan de principal zelf is gedaan of via een groep komt |
+| Tenant-wide, een administratieve eenheid, een app | Het bereik van de toewijzing |
+| Expires {datum}, No end date | Het einde van het schema |
+| Permanent, Always on | Vaste toegang die nooit afloopt |
+| Activated, Assigned | Hoe een actieve toewijzing is ontstaan |
+| Emergency access | Een account dat je in Settings hebt gemarkeerd |
+
+Beweeg over een tag of geef hem focus (op een telefoon: tik erop) voor de uitleg. Een groep die de rol heeft is één rij met de leden achter "Show {n} members"; leden worden gelezen zodra je ze opent.
+
+**Role configuration.** Drie tabs met één tegel per instelling:
+
+- Activation: maximale duur, wat vereist is (Entra MFA of een authenticatiecontext), motivatie en ticket, goedkeuring en goedkeurders, en de twee tegels Custom extension (Preview).
+- Assignment: hoe lang eligible en actieve toewijzingen mogen duren en wat vereist is bij een actieve toewijzing.
+- Notification: wie bericht krijgt bij eligible toewijzingen, actieve toewijzingen en activaties.
+
+Een tab met een probleem heeft een oranje stip: een bevoorrechte rol zonder MFA of authenticatiecontext, een beleid dat permanente actieve toewijzingen toestaat, of een activatie die niemand meldt.
+
+---
+
+## Groepen
+
+De lijst heeft twee delen: **Outside PIM** (rol-toewijsbare groepen die rollen hebben maar niet onder PIM vallen, eerst getoond) en **Under PIM**.
+
+Een groep buiten PIM toont de rollen die ze heeft en haar leden; zij hebben die rollen altijd en er wordt niets geactiveerd. "Bring under PIM" opent het Entra-beheercentrum.
+
+Een groep onder PIM toont haar leden en eigenaren (eligible en actief), de rollen die ze heeft en de configuratie met een keuze **Member** of **Owner**: elk heeft een eigen beleid. Een activatie via een groep staat onder die groep.
+
+---
+
+## Zoeken en filters
+
+Zoeken vindt een rol, een groep of een persoon (op naam, UPN of mail). De knop Filters opent een paneel met dezelfde filters die de kaarten van het Dashboard instellen:
+
+- Rollen: bevoorrecht, roltype, toewijzingen, wie ze heeft (gebruiker, gast, app, groep), bereik, direct of via een groep, MFA, goedkeuring, maximale duur, custom extension.
+- Groepen: rol-toewijsbaar, onder of buiten PIM, toegangstype (member of owner) en de toewijzingsfilters.
+
+Het paneel is standaard dicht en onthoudt of je het opende. Actieve filters staan als chips; een filter van de andere weergave blijft bewaard en krijgt "(groups only)" of "(roles only)". Escape sluit het paneel. Staat een toewijzingsfilter aan, dan zijn de rijen die passen gemarkeerd in het detail.
+
+---
+
+## Laden en mislukken
+
+- Skeletons tijdens de eerste load; beleid komt op de achtergrond binnen, een tegel toont een placeholder tot zijn beleid er is en de beleidsfilters staan intussen uit.
+- Een rol waarvan de instellingen niet gelezen konden worden zegt "Not loaded", en één kader somt ze op met Try again voor alleen die rollen.
+- Kon niets gelezen worden, dan zegt het kader waarom (de status die Graph gaf) en biedt Try again.
+- Past niets, dan zegt de lijst waarop je filterde en biedt Clear filters.
+- PIM for Groups heeft een eigen machtiging; zolang die niet is gegeven zegt de weergave Groups dat en biedt ze aan hem te geven.
+
+---
+
+## Export
+
+De knop Export opent één dialoog. Kies waarvoor het bestand dient:
+
+| Doel | Formaat | Wat je krijgt |
+|------|---------|---------------|
+| **Overview** | CSV | Eén rij per toewijzing (rollen en groepen), één rij per rol met zijn instellingen, één rij per groep en Member of Owner. De eerste rijen noemen de tenant, wanneer de data is gelezen, het filter en wie exporteerde. "Replace names" maakt van mensen Person 1, 2, ... en laat de object-id's van mensen, de exporteur en de zoekwoorden weg. |
+| **For Configure Import** | CSV | Het importformaat van Configure Import: roolbeleid, groepsbeleid, roltoewijzingen en groepstoewijzingen, met id's, Scope ID en End Date. Geactiveerde toewijzingen en leden via een groep worden weggelaten (de dialoog telt ze en zegt waarom). |
+| **Backup** | JSON | Alles in één bestand: elk beleid met alle regels en de instellingen daaruit, elke toewijzing, de authenticatiecontexten en de custom extensions, met schemaversie, tenant, wanneer de data is gelezen en de appversie. |
+
+Inhoud en bereik zijn selectievakjes: welke bestanden, directory roles, PIM for Groups en "Apply the current filter" (rollen en groepen allebei; een backup is altijd compleet). Onder "You get" staat elke bestandsnaam met zijn aantal rijen en de knop zegt hoeveel bestanden hij downloadt. Ze downloaden na elkaar. Je laatste keuze wordt onthouden.
+
+De bestandsnamen zijn `pim-overview-assignments-{datum}.csv`, `pim-overview-role-settings-{datum}.csv`, `pim-overview-group-settings-{datum}.csv`, `pim-bulk-role-policies-{datum}.csv`, `pim-bulk-group-policies-{datum}.csv`, `pim-bulk-role-assignments-{datum}.csv`, `pim-bulk-group-assignments-{datum}.csv` en `pim-backup-{datum}.json`.
+
+Elke cel is volgens RFC 4180 beschermd en een cel die begint met `=`, `+`, `-` of `@` krijgt een apostrof ervoor, zodat een spreadsheet tekst toont en geen formule. Het PDF-rapport blijft op het Dashboard.
 
 > [!NOTE]
-> Deze toggles zijn slim:
-> 1. Ze onthouden je voorkeur (als je groepen verbergt, blijven ze verborgen).
-> 2. Ze ondersteunen **Tijdelijke Filtering**: Als je navigeert vanaf het Dashboard via "Bekijk Volledig Rapport", wordt de weergave automatisch gefilterd om alleen die workload te tonen *zonder* je permanente instellingen te wijzigen.
+> Export en import delen één kolomdefinitie per bestandstype (`src/utils/exportSchema.ts`). De tests schrijven elk bestand, lezen het terug en vergelijken het met de bron, en controleren dat Configure Import (`detectCsvKind` in `src/utils/importDetect.ts`) elk bulkbestand nog herkent.
 
 ---
 
-### 🏷️ Filters
+## Toewijzingstypen
 
-Filter rollen en groepen op verschillende criteria:
-
-**Directory Roles Filters:**
-
-| Filter | Opties | Doel |
-|--------|--------|------|
-| **Roltype** | Ingebouwd, Custom | Scheid Microsoft rollen van je custom rollen |
-| **Toewijzingstype** | Heeft Eligible, Heeft Actief, Heeft Permanent, Heeft Toewijzingen (Any) | Vind rollen met specifieke toewijzingstypes |
-| **Lidtype** | Heeft Gebruikers, Heeft Groepen | Vind rollen toegewezen aan gebruikers vs groepen |
-| **Max Duur** | <1u, 2-4u, 5-8u, 9-12u, >12u | Filter op maximale activatieduur (granulaire buckets) |
-| **Geprivilegieerd** | Alleen Geprivilegieerd, Niet-Geprivilegieerd | Focus op hoog-risico rollen |
-| **PIM Status** | Geconfigureerd, Niet Geconfigureerd | Vind rollen zonder PIM-beleid |
-| **MFA Vereist** | Ja, Nee | Vind rollen die Azure MFA of Conditional Access vereisen |
-| **Goedkeuring Vereist** | Ja, Nee | Vind rollen met goedkeuringsworkflows |
-| **Rechtvaardiging Vereist** | Ja, Nee | Vind rollen die activatierechtvaardiging vereisen |
-| **Gebruiker** | Zoek op naam/email | Vind rollen toegewezen aan een specifieke gebruiker of groep |
-| **Scope** | Tenant-breed, App, Admin Unit, RMAU | Filter op toewijzingsscope |
-
-**PIM Groups Filters:**
-
-| Filter | Opties | Doel |
-|--------|--------|------|
-| **Groepstype** | Security, M365, Mail-enabled Security | Filter op Azure AD groepstype |
-| **Toegangstype** | Member, Owner | Filter op rol in groep (Member vs Owner toewijzingen) |
-| **PIM Status** | Managed, Unmanaged | Vind groepen met/zonder PIM-beleid |
-| **Toewijzingstype** | Heeft Eligible, Heeft Actief, Heeft Permanent | Zelfde als rollen maar voor groepstoewijzingen |
-
-> [!TIP]
-> Combineer filters om krachtige queries te maken. Bijvoorbeeld: "Geprivilegieerd + Heeft Permanent" vindt hoog-risico rollen met permanente toewijzingen. Of "Unmanaged + Groepstype: Security" vindt beveiligingslacunes.
-
-#### Scope Filter
-
-De scope filter helpt je rollen te vinden op basis van waar ze worden toegepast:
-
-| Scope Type | Beschrijving |
-|------------|--------------|
-| **Tenant-breed** | Rol is van toepassing op de hele directory (meest voorkomend) |
-| **App-scoped** | Rol is beperkt tot een specifieke applicatie |
-| **Admin Unit** | Rol is beperkt tot een Administrative Unit |
-| **RMAU-scoped** | Rol is beperkt tot een Restricted Management Administrative Unit |
-
----
-
-### 📊 Rolkaarten
-
-Elke rol wordt weergegeven als een uitklapbare kaart.
-
-#### Ingeklapte Weergave
-
-Toont samenvattende informatie:
-- Rolnaam
-- Toewijzingsaantallen (eligible, actief, permanent)
-- Tags die status aangeven
-
-#### Uitgeklapte Weergave
-
-Toont gedetailleerde informatie:
-- **Toewijzingen Sectie**: Lijst van alle toegewezen gebruikers/groepen met scope badges
-- **PIM Configuratie Sectie**: Toont beleidsinstellingen inclusief Authentication Context
-- **Goedkeurders**: Als goedkeuring vereist is, toont wie kan goedkeuren
-
----
-
-### 🏷️ Tags
-
-Visuele indicatoren op elke rolkaart:
-
-| Tag | Kleur | Betekenis |
-|-----|-------|-----------|
-| `Geprivilegieerd` | Rood | Microsoft classificeert deze rol als geprivilegieerd |
-| `Ingebouwd` | Blauw | Door Microsoft geleverde rol |
-| `Custom` | Paars | Je organisatie heeft deze rol gemaakt |
-| `PIM Geconfigureerd` | Groen | Rol heeft PIM-beleid geconfigureerd |
-| `Geen PIM` | Grijs | Geen PIM-beleid gevonden |
-
----
-
-### 📥 Exporteer Opties
-
-Je kunt data exporteren in meerdere formaten via het dropdown menu.
-
-> [!NOTE]
-> **PDF Export** is beschikbaar vanaf de Dashboard pagina. De Rapport pagina biedt CSV en JSON exports voor gedetailleerde data-analyse.
-
-#### 📊 Exporteren naar CSV
-
-Exporteer ruwe data voor analyse in Excel of andere tools.
-
-**Vier Export Types:**
-
-| Optie | Beschrijving | Gebruiksscenario |
-|-------|--------------|------------------|
-| **Role Summary** | Één rij per rol met beleidsconfiguratie | Overzicht van Directory Roles instellingen |
-| **Assignment Details** | Één rij per toewijzing | Gedetailleerde audit van wie toegang heeft tot rollen |
-| **Group Summary** | Één rij per groep met Member/Owner beleidsregels | Overzicht van PIM Groups configuratie |
-| **Group Assignments** | Één rij per groepstoewijzing | Audit van groepslidmaatschappen |
-
-**CSV Velden Bevatten:**
-- Rol/Groep naam, type en scope
-- Toewijzingstypes (Eligible, Active, Permanent) met aantallen
-- Beleidsinstellingen (MFA, Approval, Max Duration)
-- Principal details (User/Group, UPN, Email)
-- Schema informatie (Start, End, Expiration)
-
-#### 📄 Exporteren naar JSON
-
-Exporteer gecombineerde data in JSON formaat voor programmatische verwerking.
-
-**Kenmerken:**
-- **Gecombineerde data:** Rollen + Groepen in één bestand
-- **Volledige details:** Alle eigenschappen en geneste objecten behouden
-- **Machine-leesbaar:** Eenvoudig te parsen voor scripts en automatisering
-
-**JSON Structuur:**
-```json
-{
-  "roles": [...],
-  "groups": [...],
-  "metadata": {
-    "exportDate": "2026-01-24T12:00:00Z",
-    "tenantId": "...",
-    "userPrincipalName": "..."
-  }
-}
-```
-
-> [!NOTE]
-> Exports respecteren je huidige actieve filters. Als je filtert op "Global Administrator", bevat de export alleen data voor die rol.
-
----
-
-### 🔄 Vernieuwen
-
-Klik "Vernieuwen" om:
-1. Gecachte data te wissen
-2. Verse data op te halen van Microsoft Graph
-3. Achtergrond policy laden te herstarten
-
----
-
-## Toewijzingstypes Uitgelegd
-
-### Eligible Toewijzingen
-
-Gebruikers/groepen die de rol **kunnen activeren** via PIM.
-
-```
-Alice ──[Eligible]──> Global Admin
-         │
-         └── Moet activeren via PIM voor gebruik
-```
-
-### Actieve Toewijzingen
-
-Momenteel **geactiveerde** PIM-toewijzingen.
-
-```
-Bob ──[Actief]──> Global Admin (Verloopt in 4 uur)
-       │
-       └── Geactiveerd en momenteel in gebruik
-```
-
-### Permanente Toewijzingen
-
-Directe roltoewijzingen die **PIM omzeilen**.
-
-```
-Carol ──[Permanent]──> Global Admin
-         │
-         └── Heeft deze rol altijd (geen activatie nodig)
-```
+- **Eligible**: kan de rol activeren via PIM.
+- **Active**: heeft de rol nu. Activated betekent dat iemand een eligible toewijzing activeerde en dat het vanzelf eindigt; Assigned betekent dat een beheerder het gaf, met of zonder einde.
+- **Permanent**: een actieve toewijzing zonder einde. Ze omzeilt activatie, MFA en goedkeuring.
 
 > [!WARNING]
-> Permanente toewijzingen moeten worden geminimaliseerd. Ze omzeilen PIM-beschermingen zoals MFA, goedkeuring en tijdslimieten.
-
----
-
-## PIM Configuratie Details
-
-Wanneer een rol is uitgeklapt, zie je de PIM-instellingen:
-
-### Activatie Tab
-
-| Instelling | Beschrijving |
-|------------|--------------|
-| Max Duur | Maximale tijd dat een gebruiker kan activeren (bijv. 8 uur) |
-| Vereis MFA | Moet MFA voltooien om te activeren |
-| Vereis Rechtvaardiging | Moet reden opgeven voor activatie |
-| Vereis Goedkeuring | Moet worden goedgekeurd door goedkeurders |
-| Goedkeurders | Wie activatieverzoeken kan goedkeuren |
-
-### Toewijzing Tab
-
-| Instelling | Beschrijving |
-|------------|--------------|
-| Permanent Eligible Toegestaan | Mogen eligible toewijzingen onbeperkt geldig zijn? |
-| Max Eligible Duur | Maximale duur voor eligible toewijzingen |
-| Permanent Actief Toegestaan | Mogen actieve toewijzingen onbeperkt geldig zijn? |
-| Max Actieve Duur | Maximale duur voor actieve toewijzingen |
-
-### Notificatie Tab
-
-**Voor Directory Roles:**
-
-| Instelling | Beschrijving |
-|------------|--------------|
-| Admin Notificaties | Admins worden geïnformeerd over eligible toewijzingen, actieve toewijzingen |
-| Eindgebruiker Notificaties | Gebruikers worden geïnformeerd wanneer rollen worden geactiveerd |
-| Goedkeurder Notificaties | Goedkeurders worden geïnformeerd over activatieverzoeken |
-
-Elk notificatietype kan hebben:
-- Standaard ontvangers (admins, aanvragers, goedkeurders)
-- Aanvullende ontvangers (specifieke gebruikers/groepen)
-- Alleen kritieke notificaties vlag
-
----
-
-## PIM Groups Configuratie
-
-PIM Groups hebben unieke kenmerken vergeleken met Directory Roles:
-
-### Member vs Owner Policies
-
-Elke PIM Group heeft **twee afzonderlijke beleidsregels**:
-- **Member Policy**: Regelt groepslidmaatschap toewijzingen
-- **Owner Policy**: Regelt groepseigenaar toewijzingen
-
-Beide beleidsregels hebben dezelfde drie tabs (Activatie, Toewijzing, Notificatie) maar met onafhankelijke instellingen.
-
-### Managed vs Unmanaged Groups
-
-| Status | Beschrijving |
-|--------|--------------|
-| **Managed** | Groep heeft PIM-beleid geconfigureerd (Member/Owner) |
-| **Unmanaged** | Groep is `isAssignableToRole: true` maar heeft geen PIM-beleid |
-
-**Waarom onbeheerde groepen belangrijk zijn:**
-- Groepen met `isAssignableToRole: true` kunnen geprivilegieerde rollen krijgen
-- Zonder PIM-beleid ontbreken just-in-time toegangscontroles
-- Potentieel veiligheidsrisico voor privilege escalatie
-
-> [!WARNING]
-> Onbeheerde role-assignable groepen moeten worden beoordeeld. Overweeg PIM in te schakelen of de `isAssignableToRole` vlag te verwijderen als niet nodig.
-
----
-
-## Laadstatussen
-
-### Initiële Lading
-
-```
-[==================== ] 80%
-Toewijzingen ophalen...
-```
-
-Toont voortgang door Fase 1 (definities + toewijzingen).
-
-### Achtergrond Policy Laden
-
-```
-Rolconfiguratie ophalen op achtergrond... (45/130)
-```
-
-Toont voortgang door Fase 2 (policy laden).
-
-### Rol-Specifiek Laden
-
-Wanneer je op een rol klikt voordat de policy is geladen:
-
-```
-Configuratie laden...
-```
-
-Geeft aan dat prioriteit ophalen bezig is.
-
-### Geen Configuratie Gevonden
-
-```
-Geen Configuratie Gevonden
-```
-
-Rol bestaat maar heeft geen PIM-beleid geconfigureerd.
-
-> [!TIP]
-> Rollen zonder PIM-beleid moeten worden beoordeeld. Overweeg PIM te configureren voor gevoelige rollen.
+> Permanente toewijzingen horen zeldzaam te zijn. Een bevoorrechte rol met een permanente actieve toewijzing is een van de rijen onder "Easy to miss" op het Dashboard.
 
 ---
 
 ## Probleemoplossing
 
-### Rollen verschijnen niet
-
-**Oorzaak**: Filters zijn te restrictief
-
-**Oplossing**: Wis filters of controleer filtercombinaties
-
-### "Configuratie laden..." blijft hangen
-
-**Oorzaak**: API-fout of throttling
-
-**Oplossing**:
-1. Controleer browserconsole op fouten
-2. Wacht een paar minuten en vernieuw
-
-### Export is leeg
-
-**Oorzaak**: Alle rollen zijn uitgefilterd
-
-**Oplossing**: Wis filters of pas zoekopdracht aan
+- **Een rol zegt "Not loaded".** Graph gaf het beleid niet terug (throttling of een machtiging). Gebruik Try again in het kader boven de lijst.
+- **De weergave Groups vraagt om een machtiging.** Geef PIM for Groups in Settings of met de knop in de weergave.
+- **De lijst is leeg.** Een filter of zoekopdracht staat aan; gebruik Clear filters.
+- **Een groep toont geen leden.** Leden worden gelezen zodra je de groep opent; weigert Graph dat, dan zegt de rij het en biedt Try again.
 
 ---
 
-## Volgende Stappen
+## Volgende stappen
 
-- [Configuratie Pagina (Gepland)](./08-configuratie-pagina.md) - Bekijk geplande functionaliteit
-- [Dataflow](./03-dataflow.md) - Begrijp hoe data laadt
+- [Configuratiepagina](./09-configuratie-pagina.md)
+- [Dataflow](./03-dataflow.md)

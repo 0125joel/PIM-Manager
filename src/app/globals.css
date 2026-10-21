@@ -3,38 +3,143 @@
 /* Tell Tailwind v4 to use class-based dark mode */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * NextGen design tokens (docs/Assets/next-gen/dashboard/implementation-spec.md section 1.1), palette B:
+ * warm neutrals on the three brand colours (IntoTheCloud blue, the logo purple for changed, the PIM Monitor orange for attention).
+ * Light values on :root, dark values on .dark. theme-init.js and ThemeProvider
+ * always set the .light or .dark class on <html>, so no media query is needed.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --page: #f7f7f5;
+  --surface: #ffffff;
+  --band: #f0f0ec;
+  --ink: #1c1c1a;
+  --body: #4a4a46;
+  --muted: #6a6a64;
+  --line: #e3e3de;
+  --track: #e8e8e3;
+  --accent: #0a6fa8;
+  --accent-ink: #ffffff;
+  --accent-tint: #e6f0f6;
+  --bar-light: #8fcbea;
+  --neutral-fill: #8a8780;
+  --warn-fill: #d97706;
+  --warn-text: #b45309;
+  --warn-tint: #fdf3e3;
+  --danger-text: #b42318;
+  --danger-tint: #fdecea;
+  --success-text: #177330;
+  --success-tint: #e6f4ea;
+  --change: #7a4ce0;
+  --change-tint: #f2edfc;
+  --mode-guided: #6a5a9c;
+  --mode-guided-tint: #efedf5;
+  --mode-edit: #0a6fa8;
+  --mode-edit-tint: #e6f0f6;
+  --mode-import: #8a5a1c;
+  --mode-import-tint: #f5efe6;
+  --scrim: rgba(28, 28, 26, 0.32);
+  --focus: #0a6fa8;
+
+  --pim-icon-accent: var(--accent);
+  --pim-icon-warn: var(--warn-fill);
+}
+
+.dark {
+  --page: #161615;
+  --surface: #1d1d1c;
+  --band: #242422;
+  --ink: #ecebe8;
+  --body: #b7b5ae;
+  --muted: #8f8d86;
+  --line: #31302d;
+  --track: #31302d;
+  --accent: #48c5fa;
+  --accent-ink: #0b1a2b;
+  --accent-tint: #1b2c35;
+  --bar-light: #1e6a90;
+  --neutral-fill: #77756e;
+  --warn-fill: #f59e0b;
+  --warn-text: #f5b04c;
+  --warn-tint: #33260f;
+  --danger-text: #f97066;
+  --danger-tint: #361a17;
+  --success-text: #4ac26b;
+  --success-tint: #12261a;
+  --change: #b69cff;
+  --change-tint: #2a2340;
+  --mode-guided: #b3a8d8;
+  --mode-guided-tint: #26233a;
+  --mode-edit: #48c5fa;
+  --mode-edit-tint: #1b2c35;
+  --mode-import: #d9ae74;
+  --mode-import-tint: #2e2619;
+  --scrim: rgba(0, 0, 0, 0.56);
+  --focus: #48c5fa;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-band: var(--band);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-track: var(--track);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-bar-light: var(--bar-light);
+  --color-neutral-fill: var(--neutral-fill);
+  --color-warn-fill: var(--warn-fill);
+  --color-warn-text: var(--warn-text);
+  --color-warn-tint: var(--warn-tint);
+  --color-danger-text: var(--danger-text);
+  --color-danger-tint: var(--danger-tint);
+  --color-success-text: var(--success-text);
+  --color-success-tint: var(--success-tint);
+  --color-change: var(--change);
+  --color-change-tint: var(--change-tint);
+  --color-mode-guided: var(--mode-guided);
+  --color-mode-guided-tint: var(--mode-guided-tint);
+  --color-mode-edit: var(--mode-edit);
+  --color-mode-edit-tint: var(--mode-edit-tint);
+  --color-mode-import: var(--mode-import);
+  --color-mode-import-tint: var(--mode-import-tint);
+  --color-scrim: var(--scrim);
+  --color-focus: var(--focus);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* The only three shadows of the design (spec 1.3): shadow-thumb, shadow-menu, shadow-dialog */
+@theme {
+  --shadow-thumb: 0 1px 2px rgba(28, 28, 26, 0.12);
+  --shadow-menu: 0 12px 32px rgba(28, 28, 26, 0.16);
+  --shadow-dialog: 0 24px 48px rgba(28, 28, 26, 0.24);
 }
 
-/* Class-based dark mode (for manual toggle) */
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-}
-
-.light {
-  --background: #ffffff;
-  --foreground: #171717;
+html {
+  scroll-padding: 4rem 0 6rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+/* Tailwind v4 no longer gives buttons a pointer cursor; everything that acts on a click shows it (signifier) */
+button:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for] {
+  cursor: pointer;
+}
+
+/* Visible keyboard focus on every interactive element (spec 1.3) */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

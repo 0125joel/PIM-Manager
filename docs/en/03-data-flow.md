@@ -159,7 +159,7 @@ After discovery, details are fetched in parallel (similar to roles):
 
 ```mermaid
 graph LR
-    A[List PIM Groups] --> B{Worker Pool (8x)}
+    A[List PIM for Groups] --> B{Worker Pool (8x)}
     B --> C[Fetch Details]
     B --> D[Fetch Policies]
     B --> E[Fetch Members]
@@ -307,25 +307,26 @@ The "Refresh" button on any page:
 
 - Calls `refreshAllWorkloads()` from `UnifiedPimContext`
 - This function **delegates** to registered refresh handlers for each workload
-- Each workload (DirectoryRoles, PIM Groups, etc.) registers its refresh function via `registerWorkloadRefresh`
-- Uses **Smart Refresh** (Delta Queries) if available (see directly below)
+- Each workload (DirectoryRoles, PIM for Groups, etc.) registers its refresh function via `registerWorkloadRefresh`
+- Uses **Smart Refresh** (see directly below)
 
 > [!TIP]
 > This modular design means any new page can simply call `refreshAllWorkloads()` and all workloads will refresh correctly, including Smart Refresh logic for Directory Roles.
 
-### Smart Refresh (Delta Updates)
+### Smart Refresh
 
-When you click "Refresh" and a previous sync has occurred:
+Graph has no delta query and no change notifications for PIM assignments or policies (`/directoryRoles/delta` only reports activated role objects, `/groups/delta` only filters on `id`, and a policy's `lastModifiedDateTime` can be null and cannot be filtered on). So when you click "Refresh" after an earlier load, the app reads both again:
 
-1. App checks for a **Delta Link** (token stored from previous sync)
-2. Requests only **changes** since the last sync (via `/directoryRoles/delta`)
-3. If changes exist:
-   - Identifies affected roles
-   - Updates only those specific roles in local state
-   - Re-fetches policies for _only_ the changed roles
-4. If the Delta token is expired (410 Gone), automatically falls back to full refresh
+1. **Directory Roles** (`refreshRoleAssignments`): re-reads role definitions and all assignment schedules (the fast phase, a handful of paged calls) without blocking the page. The loaded policies stay on screen meanwhile.
+2. Then every role policy is read again in the background: one paged call for the whole tenant, roles missing from it per role (12 workers, 200 ms). Each role shows its new policy as it arrives.
+3. **PIM for Groups** (`refreshPimGroupAssignments`): reads the PIM inventory again and then, per onboarded group, the eligibility and assignment schedule instances and the Member and Owner policies (3 workers, 500 ms), keeping the group details already loaded. Groups new to PIM get the complete per-group fetch, groups that left PIM stay listed as unmanaged, deleted groups disappear. Cost: one inventory read plus three calls per onboarded group, independent of the tenant's total group count.
+4. Approver names are kept when a policy names the same approvers as before (`utils/policyApprovers.ts`); only changed approvers are looked up again.
 
-**Benefit:** Refresh takes < 1 second instead of 10+ seconds.
+**Benefit:** a setting or assignment changed in the Entra admin center shows after one Refresh, without a blocking reload.
+
+**Forced refresh:** `refreshWorkload(workload, true)` skips the smart path, clears the cache and reloads everything with a blocking first phase. The app uses it after applying changes in Configure and from the "data incomplete" banner.
+
+**Initial page load:** pages call `fetchData()` on mount, which honours the TTL and the sessionStorage cache. `refreshData()` is reserved for explicit refreshes.
 
 ### Request Cancellation (AbortController)
 
@@ -333,7 +334,7 @@ To prevent race conditions and unnecessary network traffic:
 
 1. **Rapid Clicking:** Clicking "Refresh" multiple times cancels the previous incomplete request before starting a new one.
 2. **Page Navigation:** Leaving a page automatically cancels any ongoing background fetches.
-3. **Consistency:** This applies to both Directory Roles and PIM Groups workloads.
+3. **Consistency:** This applies to both Directory Roles and PIM for Groups workloads.
 
 > [!NOTE]
 > You may see "Aborted" or "Cancelled" messages in the console logs. This is expected behavior and indicates the system is correctly cleaning up stale requests.

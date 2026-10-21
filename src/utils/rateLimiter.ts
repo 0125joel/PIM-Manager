@@ -5,7 +5,7 @@
 
 import { Logger } from './logger';
 
-const DEFAULT_RU_BUDGET = 500; // RU per 10s window — conservative for small tenants
+const DEFAULT_RU_BUDGET = 500; // RU per 10s window, conservative for small tenants
 const WINDOW_MS = 10_000; // 10 second window per Microsoft Graph throttle limits
 
 interface RUEntry {
@@ -21,6 +21,8 @@ export class RateLimiter {
     private entries: RUEntry[] = [];
     private maxRu: number;
     private windowMs: number;
+    /** After a 429 every caller waits, not only the one that was throttled */
+    private blockedUntil = 0;
 
     constructor(maxRu: number = DEFAULT_RU_BUDGET, windowMs: number = WINDOW_MS) {
         this.maxRu = maxRu;
@@ -36,8 +38,13 @@ export class RateLimiter {
             // Check abort
             if (signal?.aborted) throw new Error('Aborted');
 
-            // Remove expired entries
             const now = Date.now();
+            if (now < this.blockedUntil) {
+                await this.sleep(Math.min(this.blockedUntil - now, 250), signal);
+                continue;
+            }
+
+            // Remove expired entries
             this.entries = this.entries.filter(e => now - e.timestamp < this.windowMs);
 
             // Calculate current consumption
@@ -49,7 +56,7 @@ export class RateLimiter {
                 return;
             }
 
-            // Budget exhausted — wait for oldest entry to expire, then retry
+            // Budget exhausted: wait for the oldest entry to expire, then retry
             const oldestTimestamp = this.entries[0]?.timestamp;
             if (!oldestTimestamp) break; // Safety, shouldn't happen
 
@@ -59,14 +66,32 @@ export class RateLimiter {
             Logger.debug('RateLimiter', `Budget exhausted (${currentRu}/${this.maxRu} RU), waiting ${waitMs}ms for window refresh`);
 
             // Wait a bit before retrying, or until expiry
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(resolve, Math.min(waitMs, 100));
-                signal?.addEventListener('abort', () => {
-                    clearTimeout(timeout);
-                    reject(new Error('Aborted'));
-                });
-            });
+            await this.sleep(Math.min(waitMs, 100), signal);
         }
+    }
+
+    /**
+     * Graph answered 429: nobody sends a request for `ms` (the Retry-After of the answer). Without this, the other
+     * workers keep sending while one waits, and the throttling gets worse instead of clearing.
+     */
+    backOff(ms: number): void {
+        this.blockedUntil = Math.max(this.blockedUntil, Date.now() + ms);
+    }
+
+    private sleep(ms: number, signal?: AbortSignal): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            const onAbort = () => {
+                clearTimeout(timeout);
+                reject(new Error('Aborted'));
+            };
+            const timeout = setTimeout(() => {
+                signal?.removeEventListener('abort', onAbort);
+                resolve();
+            }, ms);
+            // { once: true } plus explicit removal on resolve prevents listener build-up
+            // when acquire() loops many times on a busy limiter
+            signal?.addEventListener('abort', onAbort, { once: true });
+        });
     }
 
     /**

@@ -1,398 +1,132 @@
 # Report Page
 
-This document explains the features and functionality of the Report page, the main view for analyzing your PIM configuration.
+The Report page shows every role and group as it is now: who holds what, how it is protected, and what is missing. It is read only. Changes are made in [Configure](./09-configure-page.md).
 
 ---
 
-## Overview
+## Layout
 
-The Report Page provides a comprehensive view of all Microsoft Entra ID roles, PIM Groups, and their PIM configurations. It supports multiple workloads:
-
-- **Directory Roles**: All Entra ID roles (built-in and custom)
-- **PIM Groups (Managed)**: Groups with PIM policies configured
-- **Unmanaged Groups**: Role-assignable groups without PIM protection (security gap indicator)
+One page with a list on the left and the detail of the selected item on the right. Below 1024 px wide the detail is a view of its own with a Back button, and the list comes back where you left it.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Report Page                          │
-├─────────────────────────────────────────────────────────┤
-│ [Filters]  [Search]  [Export (CSV/JSON) ▼]  [Refresh]   │
-├─────────────────────────────────────────────────────────┤
-│ Showing 45 of 130 roles                                 │
-│                    Fetching role configuration (15/130) │
-├─────────────────────────────────────────────────────────┤
-│ ┌───────────────────────────────────────────────────┐   │
-│ │ Global Administrator                     [Expand] │   │
-│ │ 👤 2 eligible │ ⚡ 1 active │ 🔒 1 permanent      │   │
-│ │ Tags: [Privileged] [Built-in] [PIM Configured]   │   │
-│ └───────────────────────────────────────────────────┘
-│ ┌───────────────────────────────────────────────────┐
-│ │ User Administrator                       [Expand] │
-│ │ 👤 5 eligible │ ⚡ 0 active │ 🔒 3 permanent      │
-│ └───────────────────────────────────────────────────┘
-│ ...                                                     │
-└─────────────────────────────────────────────────────────┘
+Report                                  [Refresh] [Export]
+[Roles 146 | Groups 12] [Search a role, a group or a person] [Filters]
+chips: Privileged only x   Has assignments x   Clear all      7 of 146 roles
++----------------------+--------------------------------------------+
+| Role        Sort v   | Global Administrator [Privileged] [Copy link]
+| Global Administrator | Assignments   Eligible (3)  Active (2)
+| Security Administr.  | Role configuration  Activation | Assignment | Notification
+| ...                  | tiles
++----------------------+--------------------------------------------+
 ```
 
----
-
-## Features
-
-### 🔍 Search
-
-Type in the search box to filter roles by name.
-
-- Searches role display names
-- Case-insensitive
-- Real-time filtering
-- **Drill-down Support:** Supports direct navigation from Dashboard with pre-selected filters
+The address of the page carries the state, so a link opens the same view: `view` (roles or groups), `q` (search), `f` (the filter, the same one the Dashboard uses), `role` and `group` (the selected item). "Copy link" copies it. Links from earlier versions of the Report still open and are converted.
 
 ---
 
-### 👁️ Workload Toggles
+## Roles
 
-At the top of the page, you can toggle the visibility of different PIM workloads:
+The list shows the name, a Privileged or Custom tag, "{n} eligible, {n} active", and only two warnings: "No MFA on activation" and "Permanent active". Sort by most assignments, name or most permanent.
 
-- **Directory Roles:** Show/Hide Entra ID roles.
-- **PIM Groups:** Show/Hide PIM-enabled groups.
+The detail has two parts.
+
+**Assignments.** Eligible and Active, one row per principal with tags:
+
+| Tag | Meaning |
+|-----|---------|
+| User, Guest, App, Group | What the principal is |
+| Direct, Via group | Whether the assignment is made to the principal or comes through a group |
+| Tenant-wide, an administrative unit, an app | The scope of the assignment |
+| Expires {date}, No end date | The end of the schedule |
+| Permanent, Always on | Standing access that never expires |
+| Activated, Assigned | How an active assignment came about |
+| Emergency access | An account you marked in Settings |
+
+Hover or focus a tag (tap it on a phone) for what it means. A group that holds the role is one row with its members behind "Show {n} members"; members are read when you open them.
+
+**Role configuration.** Three tabs with one tile per setting:
+
+- Activation: maximum duration, what to require (Entra MFA or an authentication context), justification and ticket, approval and approvers, and the two Custom extension tiles (Preview).
+- Assignment: how long eligible and active assignments may last, and what to require on an active assignment.
+- Notification: who is told about eligible assignments, active assignments and activations.
+
+A tab with a problem has an amber dot: a privileged role without MFA or authentication context, a policy that allows permanent active assignments, or an activation that notifies nobody.
+
+---
+
+## Groups
+
+The list has two sections: **Outside PIM** (role-assignable groups that hold roles but are not under PIM, shown first) and **Under PIM**.
+
+A group outside PIM shows the roles it holds and its members; they hold those roles all the time and nothing is activated. "Bring under PIM" opens the Entra admin center.
+
+A group under PIM shows its members and owners (eligible and active), the roles it holds, and the configuration with a **Member** or **Owner** choice: each has its own policy. An activation through a group shows under that group.
+
+---
+
+## Search and filters
+
+Search finds a role, a group or a person (by name, UPN or mail). The Filters button opens a panel with the same filters the Dashboard cards set:
+
+- Roles: privileged, role type, assignments, who holds them (user, guest, app, group), scope, direct or through a group, MFA, approval, maximum duration, custom extension.
+- Groups: role-assignable, under or outside PIM, access type (member or owner), and the assignment filters.
+
+The panel is closed by default and remembers if you opened it. Active filters show as chips; a filter that belongs to the other view is kept and marked "(groups only)" or "(roles only)". Escape closes the panel. When a filter or an assignment filter is on, the rows that match are marked in the detail.
+
+---
+
+## Loading and failing
+
+- Skeletons while the first load runs; policies arrive in the background, a tile shows a placeholder until its policy is there, and the policy filters are off meanwhile.
+- A role whose settings could not be read says "Not loaded", and one box lists them with Try again for those roles only.
+- When nothing could be read, the box says why (the status Graph answered) and offers Try again.
+- When nothing matches, the list says what you filtered on and offers Clear filters.
+- PIM for Groups needs its own permission; until it is granted the Groups view says so and offers to grant it.
+
+---
+
+## Export
+
+The Export button opens one dialog. Choose what the file is for:
+
+| Purpose | Format | What you get |
+|---------|--------|--------------|
+| **Overview** | CSV | One row per assignment (role and group), one row per role with its settings, one row per group and Member or Owner. The first rows state the tenant, when the data was read, the filter and who exported. "Replace names" turns people into Person 1, 2, ... and leaves out the object IDs of people, the exporter and the search words. |
+| **For Configure Import** | CSV | The import format of Configure Import: role policies, group policies, role assignments and group assignments, with IDs, Scope ID and End Date. Activated assignments and members through a group are left out (the dialog counts them and says why). |
+| **Backup** | JSON | Everything in one file: every policy with all its rules and the settings read from them, every assignment, the authentication contexts and the custom extensions, with the schema version, tenant, when the data was read and the app version. |
+
+Contents and scope are checkboxes: which files, directory roles, PIM for Groups, and "Apply the current filter" (roles and groups alike; a backup is always complete). Under "You get" you see each file name with its row count, and the button says how many files it downloads. They download one after another. Your last choice is remembered.
+
+The file names are `pim-overview-assignments-{date}.csv`, `pim-overview-role-settings-{date}.csv`, `pim-overview-group-settings-{date}.csv`, `pim-bulk-role-policies-{date}.csv`, `pim-bulk-group-policies-{date}.csv`, `pim-bulk-role-assignments-{date}.csv`, `pim-bulk-group-assignments-{date}.csv` and `pim-backup-{date}.json`.
+
+Every cell is escaped as RFC 4180 and a cell that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet shows text, not a formula. The PDF report stays on the Dashboard.
 
 > [!NOTE]
-> These toggles are smart:
-> 1. They persist your preference (if you hide Groups, they stay hidden).
-> 2. They support **Transient Filtering**: If you navigate from the Dashboard via "View Full Report", the view will automatically filter to show only that workload *without* changing your permanent saved settings.
+> The export and the import share one column definition per file type (`src/utils/exportSchema.ts`). The tests write every file, read it back and compare it with the source, and check that Configure Import (`detectCsvKind` in `src/utils/importDetect.ts`) still recognises each bulk file.
 
 ---
 
-### 🏷️ Filters
+## Assignment types
 
-Filter roles and groups by various criteria:
-
-**Directory Roles Filters:**
-
-| Filter | Options | Purpose |
-|--------|---------|---------|
-| **Role Type** | Built-in, Custom | Separate Microsoft roles from your custom roles |
-| **Assignment Type** | Has Eligible, Has Active, Has Permanent, Has Assignments (Any) | Find roles with specific assignment types |
-| **Member Type** | Has Users, Has Groups | Find roles assigned to users vs groups |
-| **Max Duration** | <1h, 2-4h, 5-8h, 9-12h, >12h | Filter by max activation duration (granular buckets) |
-| **Privileged** | Privileged Only, Non-Privileged | Focus on high-risk roles |
-| **PIM Status** | Configured, Not Configured | Find roles without PIM policies |
-| **MFA Required** | Yes, No | Find roles requiring Azure MFA or Conditional Access |
-| **Approval Required** | Yes, No | Find roles with approval workflows |
-| **Justification Required** | Yes, No | Find roles requiring activation justification |
-| **User** | Search by name/email | Find roles assigned to a specific user or group |
-| **Scope** | Tenant-wide, App, Admin Unit, RMAU | Filter by assignment scope |
-
-**PIM Groups Filters:**
-
-| Filter | Options | Purpose |
-|--------|---------|---------|
-| **Group Type** | Security, M365, Mail-enabled Security | Filter by Azure AD group type |
-| **Access Type** | Member, Owner | Filter by role in group (Member vs Owner assignments) |
-| **PIM Status** | Managed, Unmanaged | Find groups with/without PIM policies |
-| **Assignment Type** | Has Eligible, Has Active, Has Permanent | Same as roles but for group assignments |
-
-> [!TIP]
-> Combine filters to create powerful queries. For example: "Privileged + Has Permanent" finds high-risk roles with permanent assignments. Or "Unmanaged + Group Type: Security" finds security gaps.
-
-#### Scope Filter
-
-The scope filter helps you find roles based on where they are applied:
-
-| Scope Type | Description |
-|------------|-------------|
-| **Tenant-wide** | Role applies to the entire directory (most common) |
-| **App-scoped** | Role is limited to a specific application |
-| **Admin Unit** | Role is scoped to an Administrative Unit |
-| **RMAU-scoped** | Role is scoped to a Restricted Management Administrative Unit |
-
----
-
-### 📊 Role Cards
-
-Each role is displayed as an expandable card.
-
-#### Collapsed View
-
-Shows summary information:
-- Role name
-- Assignment counts (eligible, active, permanent)
-- Tags indicating status
-
-#### Expanded View
-
-Shows detailed information:
-- **Assignments Section**: Lists all assigned users/groups with scope badges
-- **PIM Configuration Section**: Shows policy settings including Authentication Context
-- **Approvers**: If approval is required, shows who can approve
-
----
-
-### 🏷️ Tags
-
-Visual indicators on each role card:
-
-| Tag | Color | Meaning |
-|-----|-------|---------|
-| `Privileged` | Red | Microsoft classifies this role as privileged |
-| `Built-in` | Blue | Microsoft-provided role |
-| `Custom` | Purple | Your organization created this role |
-| `PIM Configured` | Green | Role has PIM policy configured |
-| `No PIM` | Gray | No PIM policy found |
-
----
-
-### 📥 Export Options
-
-You can export data in multiple formats using the dropdown menu.
-
-> [!NOTE]
-> **PDF Export** is available from the Dashboard page. The Report page provides CSV and JSON exports for detailed data analysis.
-
-#### 📊 Export to CSV
-
-Export raw data for analysis in Excel or other tools.
-
-**Four Export Types:**
-
-| Option | Description | Use Case |
-|--------|-------------|----------|
-| **Role Summary** | One row per role with policy configuration | Overview of Directory Roles settings |
-| **Assignment Details** | One row per assignment | Detailed audit of who has access to roles |
-| **Group Summary** | One row per group with Member/Owner policies | Overview of PIM Groups configuration |
-| **Group Assignments** | One row per group assignment | Audit of group memberships |
-
-**CSV Fields Include:**
-- Role/Group name, type, and scope
-- Assignment types (Eligible, Active, Permanent) with counts
-- Policy settings (MFA, Approval, Max Duration)
-- Principal details (User/Group, UPN, Email)
-- Schedule information (Start, End, Expiration)
-
-#### 📄 Export to JSON
-
-Export combined data in JSON format for programmatic processing.
-
-**Features:**
-- **Combined data:** Roles + Groups in single file
-- **Full detail:** All properties and nested objects preserved
-- **Machine-readable:** Easy parsing for scripts and automation
-
-**JSON Structure:**
-```json
-{
-  "roles": [...],
-  "groups": [...],
-  "metadata": {
-    "exportDate": "2026-01-24T12:00:00Z",
-    "tenantId": "...",
-    "userPrincipalName": "..."
-  }
-}
-```
-
-> [!NOTE]
-> Exports respect your current active filters. If you filter for "Global Administrator", the export will only contain data for that role.
-
----
-
-### 🔄 Refresh
-
-Click "Refresh" to:
-1. Clear cached data
-2. Fetch fresh data from Microsoft Graph
-3. Restart background policy loading
-
----
-
-## Assignment Types Explained
-
-### Eligible Assignments
-
-Users/groups who **can activate** the role via PIM.
-
-```
-Alice ──[Eligible]──> Global Admin
-         │
-         └── Must activate via PIM to use
-```
-
-### Active Assignments
-
-Currently **activated** PIM assignments.
-
-```
-Bob ──[Active]──> Global Admin (Expires in 4 hours)
-       │
-       └── Activated and currently in use
-```
-
-### Permanent Assignments
-
-Direct role assignments that **bypass PIM**.
-
-```
-Carol ──[Permanent]──> Global Admin
-         │
-         └── Always has this role (no activation needed)
-```
+- **Eligible**: can activate the role through PIM.
+- **Active**: has the role now. Activated means someone activated an eligibility and it ends by itself; Assigned means an administrator gave it, with or without an end.
+- **Permanent**: an active assignment without an end. It bypasses activation, MFA and approval.
 
 > [!WARNING]
-> Permanent assignments should be minimized. They bypass PIM protections like MFA, approval, and time limits.
-
----
-
-## PIM Configuration Details
-
-When a role is expanded, you can see its PIM settings:
-
-### Activation Tab
-
-| Setting | Description |
-|---------|-------------|
-| Max Duration | Maximum time a user can activate (e.g., 8 hours) |
-| Require MFA | Must complete MFA to activate |
-| Require Justification | Must provide reason for activation |
-| Require Approval | Must be approved by designated approvers |
-| Approvers | Who can approve activation requests |
-
-### Assignment Tab
-
-| Setting | Description |
-|---------|-------------|
-| Permanent Eligible Allowed | Can eligible assignments have no expiry? |
-| Max Eligible Duration | Maximum duration for eligible assignments |
-| Permanent Active Allowed | Can active assignments have no expiry? |
-| Max Active Duration | Maximum duration for active assignments |
-
-### Notification Tab
-
-**For Directory Roles:**
-
-| Setting | Description |
-|---------|-------------|
-| Admin Notifications | Admins notified of eligible assignments, active assignments |
-| End User Notifications | Users notified when roles are activated |
-| Approver Notifications | Approvers notified of activation requests |
-
-Each notification type can have:
-- Default recipients (admins, requestors, approvers)
-- Additional recipients (specific users/groups)
-- Critical notifications only flag
-
----
-
-## PIM Groups Configuration
-
-PIM Groups have unique characteristics compared to Directory Roles:
-
-### Member vs Owner Policies
-
-Each PIM Group has **two separate policies**:
-- **Member Policy**: Controls group membership assignments
-- **Owner Policy**: Controls group ownership assignments
-
-Both policies have the same three tabs (Activation, Assignment, Notification) but with independent settings.
-
-### Managed vs Unmanaged Groups
-
-**Managed Groups:**
-- Have PIM policies configured
-- Show with purple styling
-- Display "PIM Configured" badge
-- Full policy details available in expanded view
-
-**Unmanaged Groups:**
-- Role-assignable but no PIM policies
-- Show with red warning styling
-- Display "Unmanaged Group" badge
-- Security risk indicator (permanent assignments bypass PIM)
-- Direct link to Entra admin center for review
-
-> [!WARNING]
-> **Security Gap**: Unmanaged groups can assign privileged roles without PIM controls (no MFA, approval, or time limits). Review and onboard these groups to PIM.
-
-### Group Card Components
-
-**Collapsed View:**
-- Group name + type badge (Security, M365, Mail-enabled)
-- Assignment counts: X Eligible Members, Y Active Members, Z Owners
-- "PIM Configured" or "Unmanaged" badge
-- Role-assignable indicator
-
-**Expanded View:**
-- **Group Assignments** section: Lists all members and owners with assignment types
-- **PIM Configuration** section: Two tabs (Member Policy, Owner Policy), each with Activation/Assignment/Notification settings
-
----
-
-## Loading States
-
-### Initial Load
-
-```
-[==================== ] 80%
-Fetching assignments...
-```
-
-Shows progress through Phase 1 (definitions + assignments).
-
-### Background Policy Load
-
-```
-Fetching role configuration in background... (45/130)
-```
-
-Shows progress through Phase 2 (policy loading).
-
-### Role-Specific Loading
-
-When clicking a role before its policy is loaded:
-
-```
-Loading Configuration...
-```
-
-Indicates priority fetch is in progress.
-
-### No Configuration Found
-
-```
-No Configuration Found
-```
-
-Role exists but has no PIM policy configured.
-
-> [!TIP]
-> Roles without PIM policies should be reviewed. Consider configuring PIM for sensitive roles.
+> Permanent assignments should be rare. A privileged role with a permanent active assignment is one of the "Easy to miss" rows on the Dashboard.
 
 ---
 
 ## Troubleshooting
 
-### Roles not appearing
-
-**Cause**: Filters are too restrictive
-
-**Solution**: Clear filters or check filter combinations
-
-### "Loading Configuration..." stays forever
-
-**Cause**: API error or throttling
-
-**Solution**:
-1. Check browser console for errors
-2. Wait a few minutes and refresh
-
-### Export is empty
-
-**Cause**: All roles are filtered out
-
-**Solution**: Clear filters or adjust search
+- **A role says "Not loaded".** Graph did not return its policy (throttling or a permission). Use Try again in the box above the list.
+- **The Groups view asks for permission.** Grant PIM for Groups in Settings or with the button in the view.
+- **The list is empty.** A filter or search is active; use Clear filters.
+- **A group has no members listed.** Members of a group are read when you open the group; if Graph denies it, the row says so and offers Try again.
 
 ---
 
-## Next Steps
+## Next steps
 
-- [Configure Page (Planned)](./08-configure-page.md) - View planned functionality
-- [Data Flow](./03-data-flow.md) - Understand how data loads
+- [Configure page](./09-configure-page.md)
+- [Data flow](./03-data-flow.md)

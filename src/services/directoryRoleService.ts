@@ -1,24 +1,15 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { GRAPH_LOCALE, PIM_URLS } from "@/config/constants";
-import {
-    RoleDefinition,
-    PimScheduleInstance,
-    PimPolicyAssignment,
-    PimPolicy,
-    PimPolicyRule,
-    Approver,
-    PrimaryApprover,
-    RoleDetailData,
-    GraphListResponse,
-    Principal,
-    ScopeInfo
-} from "@/types/directoryRole.types";
+import { RoleDefinition, RoleAssignment, PimEligibilitySchedule, PimAssignmentSchedule, PimScheduleInstance, PimPolicyAssignment, PimPolicyRule, Approver, PrimaryApprover, RoleDetailData, GraphListResponse, Principal, ScopeInfo } from "@/types/directoryRole.types";
 import { detectScopeType, enrichScopeInfo } from "@/utils/scopeUtils";
 import { runWorkerPool } from "@/utils/workerPool";
 import { withRetry } from "@/utils/retryUtils";
 import { graphRateLimiter } from "@/utils/rateLimiter";
 import { Logger } from "../utils/logger";
-import { getRolePolicy } from "@/services/pimConfigurationService";
+import { getErrorMessage } from "@/utils/errorUtils";
+import { isForbiddenRead } from "@/utils/policyReadAccess";
+import { getViaGroupScheduleIds, markSchedulesViaGroup } from "@/utils/viaGroup";
+import { USER_ID_CHUNK_SIZE, applyUserTypes, buildUserIdFilter, chunkArray, collectKnownUserTypes, collectUserCandidateIds } from "@/utils/userTypeUtils";
 
 
 /**
@@ -78,7 +69,7 @@ async function fetchAllPages<T>(
         allItems.push(...(response.value || []));
         nextLink = response["@odata.nextLink"] || null;
 
-        // Fetch remaining pages — cap at MAX_PAGES to guard against malformed nextLink cycles
+        // Fetch remaining pages, cap at MAX_PAGES to guard against malformed nextLink cycles
         const MAX_PAGES = 200; // 200 × 100 items = 20 000 max; well above any real tenant
         let pageCount = 0;
         while (nextLink && pageCount < MAX_PAGES) {
@@ -90,7 +81,7 @@ async function fetchAllPages<T>(
             nextLink = nextResponse["@odata.nextLink"] || null;
         }
         if (pageCount >= MAX_PAGES) {
-            Logger.warn("directoryRole", `fetchAllPages reached MAX_PAGES (${MAX_PAGES}) for ${endpoint} — result may be incomplete`);
+            Logger.warn("directoryRole", `fetchAllPages reached MAX_PAGES (${MAX_PAGES}) for ${endpoint}, result may be incomplete`);
         }
 
         return allItems;
@@ -110,9 +101,9 @@ export type ProgressCallback = (current: number, total: number, status: string) 
 /**
  * Callback for when a single policy is loaded (for deferred/priority loading)
  * Receives PimPolicyAssignment (with nested .policy property) or null
- * error is set when the fetch failed
+ * error is set when the fetch failed; forbidden is set when Graph answered 403 (not readable with the current access, FIX-12)
  */
-export type PolicyLoadedCallback = (roleId: string, policy: PimPolicyAssignment | null, error?: string) => void;
+export type PolicyLoadedCallback = (roleId: string, policy: PimPolicyAssignment | null, error?: string, forbidden?: boolean) => void;
 
 // SessionStorage keys for policy caching (60min TTL matching architecture standard)
 const POLICY_CACHE_STORAGE_KEY = "directory_role_policy_cache";
@@ -193,17 +184,19 @@ export function clearPolicyCache(): void {
 
 /**
  * Fetch a single role's policy on-demand (priority fetch)
- * Used when user clicks on a role before background loading completes
+ * Used when user clicks on a role before background loading completes.
+ * Resolves with the policy, or null when Graph verified there is none. A failure is thrown, never returned as null:
+ * a null would be stored as "no policy" (lessons-learned). A 403 is thrown too; the caller marks the role not readable.
  */
 export async function fetchSinglePolicy(
     client: Client,
     roleId: string
-): Promise<any | null | "CACHED"> {
+): Promise<PimPolicyAssignment | null> {
     // Check cache first - return actual cached data
     if (policyCache.has(roleId)) {
-        const cachedPolicy = policyCache.get(roleId);
+        const cachedPolicy = policyCache.get(roleId) ?? null;
         Logger.debug("PriorityFetch", `Policy for ${roleId} loaded from cache`);
-        return cachedPolicy; // Return actual data, not "CACHED" string
+        return cachedPolicy;
     }
 
     try {
@@ -227,12 +220,10 @@ export async function fetchSinglePolicy(
 
         return policy;
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        Logger.error("PriorityFetch", `Failed for role ${roleId}:`, errorMessage);
-        // Cache null to prevent infinite retry loops
-        policyCache.set(roleId, null);
-        savePolicyCacheToStorage();
-        return null;
+        // A failure is not cached: the next request asks Graph again
+        if (isForbiddenRead(error)) Logger.info("PriorityFetch", `Policy of role ${roleId} is not readable with the current access`);
+        else Logger.error("PriorityFetch", `Failed for role ${roleId}:`, getErrorMessage(error));
+        throw error;
     }
 }
 
@@ -334,6 +325,7 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
             const response: GraphListResponse<RoleDefinition> = await withRetry(
                 () => client
                     .api(PIM_URLS.roleDefinitions)
+                    // Beta: isPrivileged exists on unifiedRoleDefinition in beta only (lessons-learned.md); v1.0 does not return it
                     .version("beta")
                     .header("Accept-Language", GRAPH_LOCALE)
                     .select("id,displayName,description,isBuiltIn,isPrivileged,isEnabled,templateId,resourceScopes,rolePermissions,version")
@@ -345,11 +337,11 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
         } catch (err) {
             Logger.warn("directoryRole", "Failed to fetch isPrivileged property, retrying without it.", err);
 
-            // Fallback: Fetch without isPrivileged
+            // Fallback: v1.0 without isPrivileged (not in the v1.0 schema); also works when beta itself is unavailable
             const response: GraphListResponse<RoleDefinition> = await withRetry(
                 () => client
                     .api(PIM_URLS.roleDefinitions)
-                    .version("beta")
+                    .version("v1.0")
                     .header("Accept-Language", GRAPH_LOCALE)
                     .select("id,displayName,description,isBuiltIn,isEnabled,templateId,resourceScopes,rolePermissions,version")
                     .get(),
@@ -361,6 +353,66 @@ export async function getRoleDefinitions(client: Client): Promise<RoleDefinition
     } catch (error) {
         Logger.error("directoryRole", "Failed to fetch role definitions", error);
         throw error;
+    }
+}
+
+/** Fewer roles than this are read one by one: the single call is only worth it for a whole tenant */
+const BULK_POLICY_MIN_ROLES = 10;
+
+/**
+ * What the one-call read of every role's policy answered:
+ * - read: the policies by role id (partial when a later page failed; the rest is read per role)
+ * - forbidden: Graph answered 403. The per-role read asks the same question, so it would answer the same: no fallback (FIX-12)
+ * - failed: any other failure (429, 5xx, network), the caller reads the roles one by one as before
+ */
+export type BulkPolicyRead =
+    | { kind: "read"; policies: Map<string, PimPolicyAssignment> }
+    | { kind: "forbidden" }
+    | { kind: "failed" };
+
+/**
+ * Every role's policy with its rules in one call (NG-P1: 145 roles in 1.9 s, against about 59 s for one call per role).
+ * Follows `@odata.nextLink`.
+ */
+export async function fetchAllRolePolicies(
+    client: Client,
+    signal?: AbortSignal
+): Promise<BulkPolicyRead> {
+    const found = new Map<string, PimPolicyAssignment>();
+    const MAX_PAGES = 50;
+    try {
+        let response = await withRetry(
+            () => client
+                .api(PIM_URLS.roleManagementPolicyAssignments)
+                .version("v1.0")
+                .filter("scopeId eq '/' and scopeType eq 'Directory'")
+                .expand("policy($expand=rules)")
+                .header("Accept-Language", GRAPH_LOCALE)
+                .get(),
+            3, 1000, "fetchAllRolePolicies"
+        );
+        let pages = 1;
+        for (;;) {
+            for (const item of (response.value ?? []) as PimPolicyAssignment[]) {
+                if (item?.roleDefinitionId && item.policy) found.set(item.roleDefinitionId, item);
+            }
+            const next: string | undefined = response["@odata.nextLink"];
+            if (!next || pages >= MAX_PAGES || signal?.aborted) break;
+            pages++;
+            response = await withRetry(() => client.api(next).get(), 3, 1000, "fetchAllRolePolicies:next");
+        }
+        return { kind: "read", policies: found };
+    } catch (error: unknown) {
+        if (found.size > 0) {
+            Logger.warn("PolicyFetch", "Reading the rest of the policies in one call failed, the rest is read per role", error);
+            return { kind: "read", policies: found };
+        }
+        if (isForbiddenRead(error)) {
+            Logger.info("PolicyFetch", "Graph refuses the role policies to this user (403): not read per role");
+            return { kind: "forbidden" };
+        }
+        Logger.warn("PolicyFetch", "Reading all policies in one call failed, reading them per role", error);
+        return { kind: "failed" };
     }
 }
 
@@ -378,13 +430,13 @@ export async function concurrentFetchPolicies(
     onProgress?: (current: number, total: number) => void,
     onPolicyLoaded?: PolicyLoadedCallback,
     signal?: AbortSignal
-): Promise<Map<string, any>> {
-    const policyMap = new Map<string, any>();
+): Promise<Map<string, PimPolicyAssignment | null>> {
+    const policyMap = new Map<string, PimPolicyAssignment | null>();
 
     // Filter out already-cached roleIds and populate map with cached data
     const unfetchedRoleIds = roleIds.filter(id => {
         if (policyCache.has(id)) {
-            const cachedPolicy = policyCache.get(id);
+            const cachedPolicy = policyCache.get(id) ?? null;
             policyMap.set(id, cachedPolicy);
             return false; // Exclude from unfetched list
         }
@@ -404,55 +456,110 @@ export async function concurrentFetchPolicies(
     const tPoolStart = performance.now();
     const callLatencies: number[] = [];
 
-    // Use universal worker pool
-    const { results } = await runWorkerPool<string, any>({
-        items: unfetchedRoleIds,
-        workerCount: concurrency,
-        delayMs: delayMs,
-        signal,
-        processor: async (roleId, workerId) => {
-            const tCall = performance.now();
-            try {
-                // v1.0 is available for roleManagementPolicyAssignments
-                const response = await withRetry(
-                    () => client
-                        .api(PIM_URLS.roleManagementPolicyAssignments)
-                        .version("v1.0")
-                        .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
-                        .expand('policy($expand=rules)')
-                        .header('Accept-Language', GRAPH_LOCALE)
-                        .get(),
-                    3, 1000, 'concurrentFetchPolicies'
-                );
-
-                callLatencies.push(performance.now() - tCall);
-
-                if (response.value?.length > 0) {
-                    const policy = response.value[0];
-                    policyCache.set(roleId, policy); // Cache the policy data
-                    policyMap.set(roleId, policy);
-
-                    // Notify caller that policy is loaded (for progressive UI updates)
-                    onPolicyLoaded?.(roleId, policy);
-                    return policy;
-                }
-
-                policyCache.set(roleId, null); // Cache null to prevent retry loops
-                return null;
-            } catch (error: unknown) {
-                callLatencies.push(performance.now() - tCall);
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                policyCache.set(roleId, null); // Cache null even on error to prevent retry loops
-                onPolicyLoaded?.(roleId, null, errorMsg); // Report error via callback
-                throw error; // Re-throw so worker pool counts it as failed
+    // One call for the whole tenant; only roles missing from the answer (or all of them when it failed) are read per role
+    if (unfetchedRoleIds.length >= BULK_POLICY_MIN_ROLES && !signal?.aborted) {
+        const tBulk = performance.now();
+        const bulk = await fetchAllRolePolicies(client, signal);
+        if (bulk.kind === "forbidden") {
+            // The user may not read any role's policy: every unfetched role is marked, none is cached, none is read again here
+            for (const roleId of unfetchedRoleIds) {
+                policyMap.set(roleId, null);
+                onPolicyLoaded?.(roleId, null, undefined, true);
             }
+            onProgress?.(roleIds.length, roleIds.length);
+            Logger.info("PerfTiming", `[5] policies: not readable with the current access (403), ${unfetchedRoleIds.length} roles marked, ${Math.round(performance.now() - tBulk)}ms`);
+            return policyMap;
+        }
+        if (bulk.kind === "read") {
+            const missing: string[] = [];
+            for (const roleId of unfetchedRoleIds) {
+                const policy = bulk.policies.get(roleId);
+                if (policy) {
+                    policyCache.set(roleId, policy);
+                    policyMap.set(roleId, policy);
+                    onPolicyLoaded?.(roleId, policy);
+                } else {
+                    missing.push(roleId);
+                }
+            }
+            Logger.info("PerfTiming", `[5] policies in one call: ${Math.round(performance.now() - tBulk)}ms | ${bulk.policies.size} returned, ${unfetchedRoleIds.length - missing.length}/${unfetchedRoleIds.length} roles matched, ${missing.length} read per role`);
+            unfetchedRoleIds.splice(0, unfetchedRoleIds.length, ...missing);
+            onProgress?.(roleIds.length - missing.length, roleIds.length);
+        }
+    }
+    if (unfetchedRoleIds.length === 0) {
+        savePolicyCacheToStorage();
+        onProgress?.(roleIds.length, roleIds.length);
+        return policyMap;
+    }
+
+    // One role: a successful answer (a policy, or a verified "none") is cached, a failure never is, so the next load asks again.
+    // A 403 is an answer about the access: the role is marked and returns without an error, so the pool never retries it.
+    const fetchPolicyOnce = async (roleId: string): Promise<PimPolicyAssignment | null> => {
+        const tCall = performance.now();
+        try {
+            // v1.0 is available for roleManagementPolicyAssignments
+            const response = await withRetry(
+                () => client
+                    .api(PIM_URLS.roleManagementPolicyAssignments)
+                    .version("v1.0")
+                    .filter(`scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '${roleId}'`)
+                    .expand('policy($expand=rules)')
+                    .header('Accept-Language', GRAPH_LOCALE)
+                    .get(),
+                3, 1000, 'concurrentFetchPolicies'
+            );
+            callLatencies.push(performance.now() - tCall);
+
+            if (response.value?.length > 0) {
+                const policy = response.value[0];
+                policyCache.set(roleId, policy);
+                policyMap.set(roleId, policy);
+                // Notify caller that policy is loaded (for progressive UI updates)
+                onPolicyLoaded?.(roleId, policy);
+                return policy;
+            }
+
+            policyCache.set(roleId, null); // Graph answered: this role has no policy assignment
+            return null;
+        } catch (error: unknown) {
+            callLatencies.push(performance.now() - tCall);
+            if (!isForbiddenRead(error)) throw error;
+            onPolicyLoaded?.(roleId, null, undefined, true);
+            return null;
+        }
+    };
+
+    const failedRoleIds: string[] = [];
+    const runPass = (items: string[], workers: number, pause: number) => runWorkerPool<string, PimPolicyAssignment | null>({
+        items,
+        workerCount: workers,
+        delayMs: pause,
+        signal,
+        // Derived from Learn (a request costs 1, `$expand` adds 1); Graph publishes no cost for roleManagementPolicyAssignments, so 2 is not measured
+        costPerItem: 2,
+        processor: fetchPolicyOnce,
+        onItemError: (roleId, message) => {
+            failedRoleIds.push(roleId);
+            onPolicyLoaded?.(roleId, null, message); // Report the failure; a later pass can still fix it
         },
-        onProgress: (current, total) => {
+        onProgress: (current) => {
             // Adjust progress to include cached items
-            onProgress?.(cachedCount + current, roleIds.length);
+            if (items === unfetchedRoleIds) onProgress?.(roleIds.length - unfetchedRoleIds.length + current, roleIds.length);
         },
         rateLimiter: graphRateLimiter
     });
+
+    await runPass(unfetchedRoleIds, concurrency, delayMs);
+
+    // Second chance: what failed after every retry is asked again, slowly, once the tenant has had a pause
+    if (failedRoleIds.length > 0 && !signal?.aborted) {
+        const retryIds = failedRoleIds.splice(0);
+        Logger.warn("PolicyFetch", `${retryIds.length} policies failed, trying them again at a slower pace`);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (!signal?.aborted) await runPass(retryIds, 3, 500);
+        if (failedRoleIds.length > 0) Logger.error("PolicyFetch", `${failedRoleIds.length} policies could not be loaded`);
+    }
 
     // Persist cache to SessionStorage after batch completion
     savePolicyCacheToStorage();
@@ -693,15 +800,6 @@ async function resolveApprover(client: Client, approver: PrimaryApprover): Promi
     return null;
 }
 
-/** Approval rule with typed setting for type narrowing */
-interface ApprovalRuleWithSetting extends PimPolicyRule {
-    setting?: {
-        approvalStages?: Array<{
-            primaryApprovers?: PrimaryApprover[];
-        }>;
-    };
-}
-
 /**
  * Lazy load approvers for a specific role
  */
@@ -711,7 +809,7 @@ export async function loadApproversForRole(
 ): Promise<Approver[]> {
     if (!policyRules) return [];
 
-    const approvalRules = policyRules.filter((rule): rule is ApprovalRuleWithSetting =>
+    const approvalRules = policyRules.filter((rule) =>
         rule["@odata.type"]?.includes("ApprovalRule")
     );
 
@@ -747,14 +845,28 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
     onProgress?: (current: number, total: number, status: string) => void,
     signal?: AbortSignal
 ): Promise<RoleDetailData[]> {
+    Logger.info("DirectoryRoleService", "Fetching all roles (Optimized/Deferred Policies)...");
+    clearPolicyCache();
+    return fetchRoleDefinitionsAndAssignments(client, onProgress, signal);
+}
+
+/**
+ * Fast phase only: role definitions + all assignment schedules, scope-enriched,
+ * with `policy: null` on every role. Does NOT touch the policy cache, so a smart
+ * refresh can re-read assignments while keeping already-loaded policies.
+ */
+export async function fetchRoleDefinitionsAndAssignments(
+    client: Client,
+    onProgress?: (current: number, total: number, status: string) => void,
+    signal?: AbortSignal,
+    /** userType of principals read on an earlier load; only ids missing here are looked up again */
+    knownUserTypes?: Map<string, string>
+): Promise<RoleDetailData[]> {
     const tStart = performance.now();
     const phase = (label: string, since: number) =>
         Logger.info("PerfTiming", `${label}: ${Math.round(performance.now() - since)}ms (total ${Math.round(performance.now() - tStart)}ms)`);
 
     try {
-        Logger.info("DirectoryRoleService", "Fetching all roles (Optimized/Deferred Policies)...");
-        clearPolicyCache();
-
         // Step 1: Fetch role definitions
         onProgress?.(10, 100, "Fetching role definitions...");
 
@@ -769,38 +881,69 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
         if (signal?.aborted) throw new Error("Aborted");
 
         // Step 2: Parallel fetch for Assignment Data
-        // Promise.all over a fixed set of differently-typed calls — not a runWorkerPool candidate.
+        // Promise.all over a fixed set of differently-typed calls, not a runWorkerPool candidate.
         // The rate limiter in rateLimiter.ts handles throttling at the Graph call level.
         const tBulk = performance.now();
-        const [assignments, eligibilities, assignmentSchedules] = await Promise.all([
-            fetchAllPages<any>(client, PIM_URLS.roleAssignments, {
+        const [assignments, eligibilities, assignmentSchedules, scheduleInstances] = await Promise.all([
+            fetchAllPages<RoleAssignment>(client, PIM_URLS.roleAssignments, {
                 version: "v1.0",
                 expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId"
             }),
-            fetchAllPages<any>(client, PIM_URLS.roleEligibilitySchedules, {
-                version: "beta",
+            fetchAllPages<PimEligibilitySchedule>(client, PIM_URLS.roleEligibilitySchedules, {
+                version: "v1.0",
                 expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId,scheduleInfo,status"
             }),
-            fetchAllPages<any>(client, PIM_URLS.roleAssignmentSchedules, {
-                version: "beta",
+            // principal is expanded like the eligibilities (documented on unifiedRoleAssignmentSchedule), so an app or a
+            // group that only holds an active assignment is known by its @odata.type, and its name is there too
+            fetchAllPages<PimAssignmentSchedule>(client, PIM_URLS.roleAssignmentSchedules, {
+                version: "v1.0",
+                expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId,scheduleInfo,assignmentType"
+            }),
+            // memberType Group on an instance means the activation came through a group (Report spec 5.6); a failed read
+            // leaves the page list short, which fetchAllPages logs, and no activation is marked
+            fetchAllPages<PimScheduleInstance>(client, PIM_URLS.roleAssignmentScheduleInstances, {
+                version: "v1.0",
+                select: "id,principalId,roleDefinitionId,memberType,assignmentType,roleAssignmentScheduleId"
             })
         ]);
         phase(`[2] bulk schedules (assignments=${assignments.length}, eligibilities=${eligibilities.length}, schedules=${assignmentSchedules.length})`, tBulk);
 
         if (signal?.aborted) throw new Error("Aborted");
 
-        // Step 3: Enrich with Scope Info — shared cache across the three lists
+        // Step 3: Enrich with Scope Info, shared cache across the three lists
         onProgress?.(50, 100, "Enriching scope information (Optimized)...");
 
         const tScope = performance.now();
         const sharedScopeCache = new Map<string, ScopeInfo>();
         const enrichedAssignments = await enrichAssignmentsWithScope(client, assignments, sharedScopeCache);
         const enrichedEligibilities = await enrichAssignmentsWithScope(client, eligibilities, sharedScopeCache);
-        const enrichedSchedules = await enrichAssignmentsWithScope(client, assignmentSchedules, sharedScopeCache);
+        const enrichedSchedules = markSchedulesViaGroup(await enrichAssignmentsWithScope(client, assignmentSchedules, sharedScopeCache), getViaGroupScheduleIds(scheduleInstances));
         phase(`[3] scope enrichment (${sharedScopeCache.size} unique scopes)`, tScope);
+
+        if (signal?.aborted) throw new Error("Aborted");
+
+        // Step 3b: userType (Member or Guest) of every user that holds a role, for the guest counts.
+        // The type is stored on the assignments, so it is cached with the role data. Failures are non-fatal.
+        onProgress?.(60, 100, "Reading user types...");
+        const tUsers = performance.now();
+        let userTypes = new Map<string, string>();
+        try {
+            const candidates = collectUserCandidateIds([enrichedAssignments, enrichedEligibilities, enrichedSchedules]);
+            const known = knownUserTypes ?? new Map<string, string>();
+            const unknownIds = candidates.filter(id => !known.has(id));
+            const fetched = await fetchUserTypes(client, unknownIds, signal, (current, total) => {
+                onProgress?.(60 + Math.round((current / Math.max(total, 1)) * 8), 100, `Reading user types (${current}/${total})...`);
+            });
+            userTypes = new Map(candidates.filter(id => known.has(id)).map(id => [id, known.get(id) as string]));
+            fetched.forEach((type, id) => userTypes.set(id, type));
+        } catch (error: unknown) {
+            if (signal?.aborted) throw error;
+            Logger.warn("directoryRole", "Reading user types failed, guest counts stay unknown:", error);
+        }
+        phase(`[3b] user types (${userTypes.size} users)`, tUsers);
 
         if (signal?.aborted) throw new Error("Aborted");
 
@@ -812,9 +955,9 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
             return {
                 definition: def,
                 assignments: {
-                    permanent: enrichedAssignments.filter(a => a.roleDefinitionId === def.id),
-                    eligible: enrichedEligibilities.filter(e => e.roleDefinitionId === def.id),
-                    active: enrichedSchedules.filter(s => s.roleDefinitionId === def.id)
+                    permanent: applyUserTypes(enrichedAssignments.filter(a => a.roleDefinitionId === def.id), userTypes),
+                    eligible: applyUserTypes(enrichedEligibilities.filter(e => e.roleDefinitionId === def.id), userTypes),
+                    active: applyUserTypes(enrichedSchedules.filter(s => s.roleDefinitionId === def.id), userTypes)
                 },
                 policy: null
             };
@@ -837,147 +980,73 @@ export async function getAllRolesOptimizedWithDeferredPolicies(
 }
 
 /**
- * Smart Sync: Sync roles using Delta changes
- * Merges changes into existing data to avoid full re-fetch
+ * Reads `userType` (Member or Guest) for the given principal ids with
+ * GET /v1.0/users?$filter=id in (...)&$select=id,userType, at most 15 ids per request (the default limit of `in`).
+ * Runs through the worker pool with the default 8 workers and 300 ms delay. `User.Read.All` is in the login scopes.
+ * A failed request is logged and leaves its users out; the caller treats a missing type as unknown.
  */
-export async function syncRolesWithDelta(
+export async function fetchUserTypes(
+    client: Client,
+    userIds: string[],
+    signal?: AbortSignal,
+    onProgress?: (current: number, total: number) => void
+): Promise<Map<string, string>> {
+    const userTypes = new Map<string, string>();
+    if (userIds.length === 0) return userTypes;
+
+    await runWorkerPool<string[], { id: string; userType?: string }[]>({
+        items: chunkArray(userIds, USER_ID_CHUNK_SIZE),
+        workerCount: 8,
+        delayMs: 300,
+        signal,
+        rateLimiter: graphRateLimiter,
+        onProgress,
+        processor: async (ids) => {
+            const response = await withRetry(
+                () => client.api("/users").version("v1.0").filter(buildUserIdFilter(ids)).select("id,userType").get(),
+                3, 1000, "fetchUserTypes"
+            );
+            return (response.value ?? []) as { id: string; userType?: string }[];
+        },
+        onItemComplete: (_ids, users) => {
+            for (const user of users) {
+                if (user.userType) userTypes.set(user.id, user.userType);
+            }
+        },
+        onItemError: (ids, error) => {
+            Logger.warn("directoryRole", `Could not read userType for ${ids.length} user(s): ${error}`);
+        }
+    });
+
+    return userTypes;
+}
+
+/**
+ * Smart refresh of Directory Roles: re-read the fast phase (definitions and every
+ * assignment schedule, a handful of paged calls) and carry the loaded policies over
+ * from `currentData`, so the Report keeps showing them while the caller reads every
+ * policy again in the background. Graph has no delta for PIM assignments or policies
+ * (`/directoryRoles/delta` reports activated role objects only), so a setting changed
+ * in Entra only shows once it is read again.
+ *
+ * The policy cache is emptied, so the background read asks Graph and not the cache.
+ */
+export async function refreshRoleAssignments(
     client: Client,
     currentData: RoleDetailData[],
-    changes: import("@/services/deltaService").DirectoryRoleDeltaChange[],
     onProgress?: ProgressCallback,
-    onPolicyLoaded?: PolicyLoadedCallback,
-    onPoliciesComplete?: () => void
+    signal?: AbortSignal
 ): Promise<RoleDetailData[]> {
-    Logger.debug("SmartSync", `Syncing ${changes.length} changes into ${currentData.length} existing roles`);
+    Logger.debug("SmartSync", `Refreshing assignments for ${currentData.length} roles`);
 
-    // 1. Identify modified IDs
-    const modifiedIds = new Set<string>();
-    const deletedIds = new Set<string>();
+    const previousById = new Map(currentData.map(r => [r.definition.id, r]));
+    const freshRoles = await fetchRoleDefinitionsAndAssignments(client, onProgress, signal, collectKnownUserTypes(currentData));
 
-    for (const change of changes) {
-        if (change.isDeleted) {
-            deletedIds.add(change.id);
-        } else {
-            modifiedIds.add(change.id);
-        }
-    }
-
-    // 2. Remove deleted roles
-    let updatedData = currentData.filter(r => !deletedIds.has(r.definition.id));
-
-    // 3. Update modified/new roles
-    if (modifiedIds.size > 0) {
-        onProgress?.(0, modifiedIds.size, `Refreshing ${modifiedIds.size} changed roles...`);
-
-        // We need to fetch the FULL definition for these changed roles
-        // Ideally we would just use the delta data, but delta often returns partial data
-        // For robustness, we re-fetch the specific definitions or just rely on what we have if the delta was rich
-        // But since directoryRoles delta is often minimal, we might need a specific get.
-        // HOWEVER, fetching 100 individual roles is slower than 1 list list.
-        // If changed > 50, maybe just full sync?
-        // Let's assume for now we just want to ensure they exist.
-
-        // Actually, for "Assignments" and "Policies", we still need to fetch those.
-        // The Delta only tells us the Role Definition changed (or was added).
-        // It DOES NOT tell us if an Assignment was added (that's a different delta we can't fully use yet).
-
-        // SO: If we see a Role Change, we assume we need to re-fetch that role's data.
-
-        // Hybrid Strategy:
-        // 1. Keep existing unchanged roles.
-        // 2. For modified IDs, we might need to re-fetch their policies.
-        // 3. If it's a NEW role, we need to fetch it entirely.
-
-        // Simplification for V1:
-        // If we have any additions/updates, we might need to re-fetch just those.
-        // But `deferred` loading does bulk fetch.
-        // Let's try to just return the merged list if we can.
-
-        // For now, let's just update the list with the IDs provided.
-        // If it's an update, we keep the old data but mark it for policy refresh.
-    }
-
-    return updatedData;
+    clearPolicyCache();
+    return freshRoles.map(role => {
+        const previous = previousById.get(role.definition.id);
+        return previous && previous.policy !== undefined
+            ? { ...role, policy: previous.policy, configError: previous.configError }
+            : role;
+    });
 }
-
-// ── AssignmentOverview ────────────────────────────────────────────────────────
-
-export interface AssignmentOverviewEntry {
-    id: string;
-    roleDefinitionId: string;
-    principalId: string;
-    principalType: "User" | "Group";
-    principalDisplayName: string;
-    assignmentType: "Eligible" | "Active";
-    startDateTime?: string;
-    endDateTime?: string;
-    memberType: "Direct" | "Group";
-}
-
-export interface AssignmentOverviewData {
-    assignments: AssignmentOverviewEntry[];
-    totalRoleCount: number;
-}
-
-/**
- * Fetches eligible schedules, active assignment schedules, and role definitions
- * in parallel for the AssignmentOverview component.
- * All three calls are wrapped with withRetry for transient error resilience.
- */
-export async function fetchAssignmentOverviewData(client: Client): Promise<AssignmentOverviewData> {
-    const [eligibleRes, activeRes, rolesRes] = await Promise.all([
-        withRetry(
-            () => client.api("/roleManagement/directory/roleEligibilitySchedules").expand("principal,roleDefinition").get(),
-            3, 1000, "fetchAssignmentOverviewData eligibleSchedules"
-        ),
-        withRetry(
-            () => client.api("/roleManagement/directory/roleAssignmentSchedules").expand("principal,roleDefinition").get(),
-            3, 1000, "fetchAssignmentOverviewData activeSchedules"
-        ),
-        withRetry(
-            () => client.api("/roleManagement/directory/roleDefinitions").get(),
-            3, 1000, "fetchAssignmentOverviewData roleDefinitions"
-        ),
-    ]);
-
-    const parseAssignments = (items: any[], type: "Eligible" | "Active"): AssignmentOverviewEntry[] =>
-        items.map((item: any) => ({
-            id: item.id,
-            roleDefinitionId: item.roleDefinitionId,
-            principalId: item.principalId,
-            principalType: (item.principal?.["@odata.type"]?.includes("group") ? "Group" : "User") as "User" | "Group",
-            principalDisplayName: item.principal?.displayName || "Unknown",
-            assignmentType: type,
-            startDateTime: item.startDateTime,
-            endDateTime: item.endDateTime,
-            memberType: (item.memberType || "Direct") as "Direct" | "Group",
-        }));
-
-    return {
-        assignments: [
-            ...parseAssignments(eligibleRes.value ?? [], "Eligible"),
-            ...parseAssignments(activeRes.value ?? [], "Active"),
-        ],
-        totalRoleCount: (rolesRes.value ?? []).length,
-    };
-}
-
-/**
- * Fetches members of a group for the AssignmentOverview expand feature.
- * Wrapped with withRetry for transient error resilience.
- */
-export interface GroupMember {
-    id: string;
-    displayName: string;
-    userPrincipalName?: string;
-    mail?: string;
-}
-
-export async function fetchGroupMembers(client: Client, groupId: string): Promise<GroupMember[]> {
-    const res = await withRetry(
-        () => client.api(`/groups/${groupId}/members`).get(),
-        3, 1000, `fetchGroupMembers ${groupId}`
-    );
-    return res.value ?? [];
-}
-

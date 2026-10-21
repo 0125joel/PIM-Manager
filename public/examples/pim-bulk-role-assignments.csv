@@ -1,0 +1,6 @@
+Role Name,Principal UPN,Assignment Type,Action,Scope ID,End Date,Justification
+Exchange Administrator,MeganB@contoso.com,eligible,add,/,2027-04-01T00:00:00Z,Mail migration
+Security Reader,AdeleV@contoso.com,eligible,add,/,2027-01-31T00:00:00Z,
+Helpdesk Administrator,GradyA@contoso.com,eligible,remove,/,,
+Global Reader,PradeepG@contoso.com,eligible,add,/,,
+Teams Administrator,nobody@contoso.com,eligible,add,/,2027-01-01T00:00:00Z,

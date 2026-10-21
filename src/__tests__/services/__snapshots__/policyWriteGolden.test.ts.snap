@@ -1,0 +1,2731 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`policy write golden: groups > MFA on active assignment on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_Admin_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > activation duration PT8H to PT4H 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_EndUser_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "PT4H",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > active end after 6 months to 15 days 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "P15D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 3, bug 4: requirement context to nothing 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 3: requirement context to MFA 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/AuthenticationContext_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: MFA on active assignment on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: activation duration PT8H to PT4H, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: active end after 6 months to 15 days, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: approval off, two-day timeout set before 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "NoApproval",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 2,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [],
+          },
+        ],
+        "isApprovalRequired": false,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: approval off, two-day timeout set before, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: approval on with a user and a group 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "SingleStage",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 1,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [
+              {
+                "@odata.type": "#microsoft.graph.singleUser",
+                "description": "Megan Bowen",
+                "userId": "1e1771df-7c2a-4d3b-9b8e-0a1b2c3d4e5f",
+              },
+              {
+                "@odata.type": "#microsoft.graph.groupMembers",
+                "description": "PIM Approvers",
+                "groupId": "8c4d2b1a-3e5f-4a6b-9c7d-1e2f3a4b5c6d",
+              },
+            ],
+          },
+        ],
+        "isApprovalRequired": true,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: approval on with a user and a group, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: approvers replaced, two-day timeout set before 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "SingleStage",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 2,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [
+              {
+                "@odata.type": "#microsoft.graph.singleUser",
+                "description": "Nestor Wilke",
+                "userId": "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
+              },
+            ],
+          },
+        ],
+        "isApprovalRequired": true,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: approvers replaced, two-day timeout set before, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: eligible end after 1 year to 3 months, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: extension after approval linked, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: extension after approval unlinked, before approval kept 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "",
+      "id": "CustomExtension_PostApproval_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/CustomExtension_PostApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: extension after approval unlinked, before approval kept, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: extension before approval linked, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: extension before approval unlinked, after approval kept 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "",
+      "id": "CustomExtension_PreApproval_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/CustomExtension_PreApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: extension before approval unlinked, after approval kept, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: justification on activation off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: justification on active assignment off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: no change, approval with two approvers and a two-day timeout 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: no change, base policy 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: no change, both assignment ends required 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: no change, context, extensions and recipients 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation admin: critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation admin: defaults off only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation admin: one recipient only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activation requestor: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activeAssignment admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activeAssignment approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification activeAssignment assignee: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification eligibleAssignment admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification eligibleAssignment approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification eligibleAssignment assignee: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: notification recipients cleared on every cell, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: permanent active off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: permanent active on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: permanent eligible off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: permanent eligible on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement MFA to context c2, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement MFA to nothing, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement context c1 to context c2 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c2",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: requirement context c1 to context c2, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement context to MFA, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement context to nothing, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement nothing to MFA, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: requirement nothing to context c1 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c1",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > bug 4: requirement nothing to context c1, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > bug 4: ticket information on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: groups > eligible end after 1 year to 3 months 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": true,
+      "maximumDuration": "P90D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > extension after approval linked 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [
+        "Reason",
+      ],
+      "customExtensionId": "ext-post",
+      "id": "CustomExtension_PostApproval_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/CustomExtension_PostApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > extension before approval linked 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "ext-pre",
+      "id": "CustomExtension_PreApproval_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/CustomExtension_PreApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > justification on activation off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > justification on active assignment off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [],
+      "id": "Enablement_Admin_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation admin: critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation admin: defaults off only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation admin: one recipient only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activation requestor: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activeAssignment admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activeAssignment approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification activeAssignment assignee: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification eligibleAssignment admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification eligibleAssignment approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification eligibleAssignment assignee: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > notification recipients cleared on every cell 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Admin_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Requestor_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Notification_Approver_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > permanent active off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "P180D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > permanent active on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": false,
+      "maximumDuration": "P180D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > permanent eligible off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": true,
+      "maximumDuration": "P365D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > permanent eligible on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": false,
+      "maximumDuration": "P365D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: groups > requirement MFA to context c2 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c2",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > requirement MFA to nothing 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > requirement nothing to MFA 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: groups > rule ids a full form writes 1`] = `
+[
+  "Approval_EndUser_Assignment",
+  "AuthenticationContext_EndUser_Assignment",
+  "CustomExtension_PostApproval_EndUser_Assignment",
+  "CustomExtension_PreApproval_EndUser_Assignment",
+  "Enablement_Admin_Assignment",
+  "Enablement_EndUser_Assignment",
+  "Expiration_Admin_Assignment",
+  "Expiration_Admin_Eligibility",
+  "Expiration_EndUser_Assignment",
+  "Notification_Admin_Admin_Assignment",
+  "Notification_Admin_Admin_Eligibility",
+  "Notification_Admin_EndUser_Assignment",
+  "Notification_Approver_Admin_Assignment",
+  "Notification_Approver_Admin_Eligibility",
+  "Notification_Approver_EndUser_Assignment",
+  "Notification_Requestor_Admin_Assignment",
+  "Notification_Requestor_Admin_Eligibility",
+  "Notification_Requestor_EndUser_Assignment",
+]
+`;
+
+exports[`policy write golden: groups > ticket information on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "Ticketing",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/Group_6f2c9a1e_member/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > MFA on active assignment on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_Admin_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > activation duration PT8H to PT4H 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_EndUser_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "PT4H",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > active end after 6 months to 15 days 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "P15D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 3: requirement context to MFA 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/AuthenticationContext_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 3: requirement context to nothing 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: MFA on active assignment on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: activation duration PT8H to PT4H, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: active end after 6 months to 15 days, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: approval off, two-day timeout set before 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "NoApproval",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 2,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [],
+          },
+        ],
+        "isApprovalRequired": false,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: approval off, two-day timeout set before, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: approval on with a user and a group 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "SingleStage",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 1,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [
+              {
+                "@odata.type": "#microsoft.graph.singleUser",
+                "description": "Megan Bowen",
+                "userId": "1e1771df-7c2a-4d3b-9b8e-0a1b2c3d4e5f",
+              },
+              {
+                "@odata.type": "#microsoft.graph.groupMembers",
+                "description": "PIM Approvers",
+                "groupId": "8c4d2b1a-3e5f-4a6b-9c7d-1e2f3a4b5c6d",
+              },
+            ],
+          },
+        ],
+        "isApprovalRequired": true,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: approval on with a user and a group, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: approvers replaced, two-day timeout set before 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyApprovalRule",
+      "id": "Approval_EndUser_Assignment",
+      "setting": {
+        "approvalMode": "SingleStage",
+        "approvalStages": [
+          {
+            "approvalStageTimeOutInDays": 2,
+            "escalationApprovers": [],
+            "escalationTimeInMinutes": 0,
+            "isApproverJustificationRequired": true,
+            "isEscalationEnabled": false,
+            "primaryApprovers": [
+              {
+                "@odata.type": "#microsoft.graph.singleUser",
+                "description": "Nestor Wilke",
+                "userId": "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
+              },
+            ],
+          },
+        ],
+        "isApprovalRequired": true,
+        "isApprovalRequiredForExtension": false,
+        "isRequestorJustificationRequired": true,
+      },
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Approval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: approvers replaced, two-day timeout set before, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: eligible end after 1 year to 3 months, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: extension after approval linked, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: extension after approval unlinked, before approval kept, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: extension before approval linked, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: extension before approval unlinked, after approval kept, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: justification on activation off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: justification on active assignment off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: no change, approval with two approvers and a two-day timeout 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: no change, base policy 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: no change, both assignment ends required 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: no change, context, extensions and recipients 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation admin: critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation admin: defaults off only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation admin: one recipient only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activation requestor: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activeAssignment admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activeAssignment approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification activeAssignment assignee: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification eligibleAssignment admin: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification eligibleAssignment approver: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification eligibleAssignment assignee: defaults off, one recipient, critical only, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: notification recipients cleared on every cell, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: permanent active off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: permanent active on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": false,
+      "maximumDuration": "P180D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: permanent active on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: permanent eligible off, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: permanent eligible on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": false,
+      "maximumDuration": "P365D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > bug 4: permanent eligible on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement MFA to context c2, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement MFA to nothing, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement context c1 to context c2, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement context to MFA, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement context to nothing, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement nothing to MFA, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: requirement nothing to context c1, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > bug 4: ticket information on, rules the change did not touch 1`] = `[]`;
+
+exports[`policy write golden: roles > eligible end after 1 year to 3 months 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": true,
+      "maximumDuration": "P90D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > extension after approval linked 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [
+        "Reason",
+      ],
+      "customExtensionId": "ext-post",
+      "id": "CustomExtension_PostApproval_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/CustomExtension_PostApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > extension after approval unlinked, before approval kept 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "",
+      "id": "CustomExtension_PostApproval_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/CustomExtension_PostApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > extension before approval linked 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "ext-pre",
+      "id": "CustomExtension_PreApproval_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/CustomExtension_PreApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > extension before approval unlinked, after approval kept 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyCustomExtensionRule",
+      "customAttributes": [],
+      "customExtensionId": "",
+      "id": "CustomExtension_PreApproval_EndUser_Assignment",
+      "isEnabled": false,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/CustomExtension_PreApproval_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > justification on activation off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > justification on active assignment off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [],
+      "id": "Enablement_Admin_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation admin: critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation admin: defaults off only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation admin: one recipient only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activation requestor: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activeAssignment admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activeAssignment approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification activeAssignment assignee: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Assignment",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification eligibleAssignment admin: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification eligibleAssignment approver: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification eligibleAssignment assignee: defaults off, one recipient, critical only 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": false,
+      "notificationLevel": "Critical",
+      "notificationRecipients": [
+        "audit@contoso.com",
+      ],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > notification recipients cleared on every cell 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Eligibility",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_Admin_Eligibility",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_Admin_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_Admin_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Admin_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Admin",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Admin_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Requestor_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Requestor",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Requestor_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyNotificationRule",
+      "id": "Notification_Approver_EndUser_Assignment",
+      "isDefaultRecipientsEnabled": true,
+      "notificationLevel": "All",
+      "notificationRecipients": [],
+      "notificationType": "Email",
+      "recipientType": "Approver",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Notification_Approver_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > permanent active off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Assignment",
+      "isExpirationRequired": true,
+      "maximumDuration": "P180D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > permanent eligible off 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyExpirationRule",
+      "id": "Expiration_Admin_Eligibility",
+      "isExpirationRequired": true,
+      "maximumDuration": "P365D",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "Admin",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Eligibility",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Expiration_Admin_Eligibility",
+  },
+]
+`;
+
+exports[`policy write golden: roles > requirement MFA to context c2 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c2",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > requirement MFA to nothing 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > requirement context c1 to context c2 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c2",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > requirement nothing to MFA 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "MultiFactorAuthentication",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > requirement nothing to context c1 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule",
+      "claimValue": "c1",
+      "id": "AuthenticationContext_EndUser_Assignment",
+      "isEnabled": true,
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/AuthenticationContext_EndUser_Assignment",
+  },
+]
+`;
+
+exports[`policy write golden: roles > rule ids a full form writes 1`] = `
+[
+  "Approval_EndUser_Assignment",
+  "AuthenticationContext_EndUser_Assignment",
+  "CustomExtension_PostApproval_EndUser_Assignment",
+  "CustomExtension_PreApproval_EndUser_Assignment",
+  "Enablement_Admin_Assignment",
+  "Enablement_EndUser_Assignment",
+  "Expiration_Admin_Assignment",
+  "Expiration_Admin_Eligibility",
+  "Expiration_EndUser_Assignment",
+  "Notification_Admin_Admin_Assignment",
+  "Notification_Admin_Admin_Eligibility",
+  "Notification_Admin_EndUser_Assignment",
+  "Notification_Approver_Admin_Assignment",
+  "Notification_Approver_Admin_Eligibility",
+  "Notification_Approver_EndUser_Assignment",
+  "Notification_Requestor_Admin_Assignment",
+  "Notification_Requestor_Admin_Eligibility",
+  "Notification_Requestor_EndUser_Assignment",
+]
+`;
+
+exports[`policy write golden: roles > ticket information on 1`] = `
+[
+  {
+    "body": {
+      "@odata.type": "#microsoft.graph.unifiedRoleManagementPolicyEnablementRule",
+      "enabledRules": [
+        "Justification",
+        "Ticketing",
+      ],
+      "id": "Enablement_EndUser_Assignment",
+      "target": {
+        "@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget",
+        "caller": "EndUser",
+        "enforcedSettings": [],
+        "inheritableSettings": [],
+        "level": "Assignment",
+        "operations": [
+          "All",
+        ],
+      },
+    },
+    "path": "/policies/roleManagementPolicies/DirectoryRole_tenant_29232cdf/rules/Enablement_EndUser_Assignment",
+  },
+]
+`;

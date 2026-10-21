@@ -39,7 +39,7 @@ This application is designed for:
 - **Pro Tips:** Dynamic suggestions for improving your security posture
 
 ### 📊 Report Page (Main Feature)
-- **Multi-Workload:** View both Directory Roles and PIM Groups in one unified interface
+- **Multi-Workload:** View both Directory Roles and PIM for Groups in one unified interface
 - View all Microsoft Entra ID roles with their PIM configurations
 - Filter by role type, assignment type, member type, scope, and user
 - Export to PDF (Executive Report) or CSV
@@ -48,14 +48,14 @@ This application is designed for:
 - Authentication Context display for roles requiring specific access
 
 ### ⚙️ Configure Page
-- **Wizard Mode**: Guided step-by-step configuration — workload, scope, policies, assignments, review, and apply
-- **Manual Mode**: Freeform 3-column layout with staged changes — select roles/groups, configure, and queue changes
-- **Bulk Mode**: CSV-based batch configuration — upload a CSV, compare against live settings, and apply at scale
+- **Edit**: master-detail list of roles and groups with Activation, Assignment and Notification settings, Who has it, and Select several
+- **Guided**: a route in steps for a change on many targets, optionally from the access model
+- **Import**: CSV or JSON files compared with the tenant, then one review and apply; the **Access model** page shows the PIM Monitor catalog
 - Apply consistent activation settings (MFA, approval, max duration) across multiple roles and groups
 - Create, manage, and remove eligible/active assignments with AU scope support
 
 > [!NOTE]
-> Write permissions for Configure (`RoleManagementPolicy.ReadWrite.Directory` and related scopes) are requested via incremental consent — only when you first enter Configure mode. Read-only reporting does not require these permissions.
+> Write permissions for Configure (`RoleManagementPolicy.ReadWrite.Directory` and related scopes) are requested via incremental consent, only when you choose Grant permission in Configure. Read-only reporting does not require these permissions.
 
 ---
 
@@ -84,21 +84,23 @@ The application requires a Microsoft Entra app registration with the following *
 |------------|-----------------|-------------------|
 | `RoleManagementAlert.Read.Directory` | Security Alerts panel | Panel hidden if permission denied (403) |
 | `PrivilegedAccess.Read.AzureADGroup` | PIM for Groups workload | Workload not shown in settings |
-| `RoleManagementPolicy.Read.AzureADGroup` | PIM Groups policies | Groups data incomplete without this |
+| `RoleManagementPolicy.Read.AzureADGroup` | PIM for Groups policies | Groups data incomplete without this |
+| `PrivilegedAccess-CustomExt.Read.All` | List of PIM custom extensions (Preview) | Picker and orphan check hidden; which extension a policy links still shows |
+| `Policy.Read.All` | Configure's Conditional Access check (asked on demand) | The check shows "Not checked"; the rest of the review runs |
 
-**Configure Write Permissions** (requested via incremental consent when entering Configure mode):
+**Configure Write Permissions** (requested via incremental consent when you choose Grant permission in Configure):
 
 | Permission | Feature Enabled |
 |------------|-----------------|
 | `RoleManagementPolicy.ReadWrite.Directory` | Update PIM policies for Directory Roles |
 | `RoleEligibilitySchedule.ReadWrite.Directory` | Create eligible assignments for Directory Roles |
 | `RoleAssignmentSchedule.ReadWrite.Directory` | Create active assignments for Directory Roles |
-| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Update PIM policies for PIM Groups |
-| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Create eligible assignments for PIM Groups |
-| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Create active assignments for PIM Groups |
+| `RoleManagementPolicy.ReadWrite.AzureADGroup` | Update PIM policies for PIM for Groups |
+| `PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup` | Create eligible assignments for PIM for Groups |
+| `PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup` | Create active assignments for PIM for Groups |
 
 > [!TIP]
-> The application follows the **least privilege principle**. Read-only permissions cover all reporting features. Write permissions are only requested when you explicitly enter the Configure feature — and only for the workload you choose to configure.
+> The application follows the **least privilege principle**. Read-only permissions cover all reporting features. Write permissions are only requested when you choose Grant permission in Configure, and only for the workload you choose to configure.
 
 
 
@@ -117,18 +119,16 @@ Any modern browser (Chrome, Edge, Firefox, Safari) with JavaScript enabled.
 │  Next.js React Application                              │
 │  ├── Dashboard Page (Analytics & Insights)              │
 │  ├── Report Page (Detailed Configuration View)          │
-│  └── Configure Page (Wizard / Manual / Bulk)            │
+│  └── Configure Page (Edit / Guided / Import / Model)    │
 ├─────────────────────────────────────────────────────────┤
 │  State Management Layer                                 │
 │  ├── UnifiedPimContext (Workload Orchestration)         │
 │  ├── DirectoryRoleContext (Directory Roles)             │
-│  ├── ViewModeContext (UI Preferences)                   │
-│  └── Delta Sync Service (Smart Refresh)                 │
+│  └── ViewModeContext (UI Preferences)                   │
 ├─────────────────────────────────────────────────────────┤
 │  Data Services                                          │
 │  ├── directoryRoleService (Roles & Policies)            │
-│  ├── pimGroupService (PIM Groups)                       │
-│  ├── deltaService (Incremental Updates)                 │
+│  ├── pimGroupService (PIM for Groups)                       │
 │  └── SessionStorage (60-minute cache)                   │
 ├─────────────────────────────────────────────────────────┤
 │  Microsoft Authentication Library (MSAL)                │
@@ -152,10 +152,10 @@ All data fetching happens **client-side** in the user's browser. The application
 
 ### Performance & Advanced Features
 
-**Smart Refresh (Delta Sync):**
-- Only fetches changes since last sync where supported
-- Reduces data transfer by 70-80% compared to full refresh
-- Automatic fallback to full fetch if delta token expires
+**Smart Refresh:**
+- Directory Roles: re-reads the assignments without blocking the page, then every policy in the background
+- PIM for Groups: re-reads the schedule instances and policies per onboarded group and keeps the group details
+- Graph has no delta for PIM assignments or policies, so a setting changed in Entra shows after one Refresh only because both are read again
 
 **SessionStorage Caching:**
 - Data persists across page navigation
@@ -163,12 +163,12 @@ All data fetching happens **client-side** in the user's browser. The application
 - Reduces unnecessary API calls
 
 **Workload Management:**
-- Enable/disable specific workloads (Directory Roles, PIM Groups)
+- Enable/disable specific workloads (Directory Roles, PIM for Groups)
 - Permission-based feature visibility
 - Per-workload sync status tracking
 
 **Graceful Degradation:**
-- Optional features (Security Alerts, PIM Groups) hide if permissions missing
+- Optional features (Security Alerts, PIM for Groups) hide if permissions missing
 - No breaking errors for missing optional permissions
 - Clear indicators when features are unavailable
 

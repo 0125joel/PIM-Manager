@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { ChevronRight, ChevronLeft, X, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { TourStep } from "@/config/onboarding";
+import { findTourTarget } from "@/utils/tourTarget";
 
 interface OnboardingTourProps {
     steps: TourStep[];
@@ -23,9 +24,20 @@ interface TooltipPos {
     left: number;
 }
 
+/**
+ * Measurement for one step. Keyed by step id so a stale rect from the previous
+ * step can never be shown while the next target is still being located.
+ */
+interface Measurement {
+    stepId: string;
+    rect: TargetRect;
+    pos: TooltipPos;
+}
+
 const PADDING = 8;
 const POLL_INTERVAL = 100;
 const POLL_TIMEOUT = 3000;
+const VIEWPORT_MARGIN = 16;
 
 function computeTooltipPosition(
     targetRect: TargetRect,
@@ -56,57 +68,96 @@ function computeTooltipPosition(
             break;
     }
 
-    const maxLeft = window.innerWidth - tooltipWidth - 16;
-    const maxTop = window.innerHeight - tooltipHeight - 16;
-    left = Math.max(16, Math.min(left, maxLeft));
-    top = Math.max(16, Math.min(top, maxTop));
+    // Flip vertically when the preferred side does not fit, so the tooltip never covers the spotlight
+    if (position === "bottom" && top + tooltipHeight > window.innerHeight - VIEWPORT_MARGIN) {
+        const flipped = targetRect.top - PADDING - gap - tooltipHeight;
+        if (flipped >= VIEWPORT_MARGIN) top = flipped;
+    } else if (position === "top" && top < VIEWPORT_MARGIN) {
+        const flipped = targetRect.top + targetRect.height + PADDING + gap;
+        if (flipped + tooltipHeight <= window.innerHeight - VIEWPORT_MARGIN) top = flipped;
+    }
+
+    // Clamp into the viewport. On viewports narrower than the tooltip the CSS width
+    // (min(360px, 100vw - 32px)) already keeps it inside, so max(...) never goes negative.
+    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - tooltipWidth - VIEWPORT_MARGIN);
+    const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - tooltipHeight - VIEWPORT_MARGIN);
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, maxLeft));
+    top = Math.max(VIEWPORT_MARGIN, Math.min(top, maxTop));
 
     return { top, left };
+}
+
+function isOutsideViewport(rect: DOMRect): boolean {
+    return rect.top < 0 || rect.bottom > window.innerHeight || rect.left < 0 || rect.right > window.innerWidth;
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+    return !!target.closest("button, a, input, textarea, select, [role='button']");
 }
 
 export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourProps) {
     const router = useRouter();
     const pathname = usePathname();
     const [currentStep, setCurrentStep] = useState(0);
-    const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
-    const [tooltipPos, setTooltipPos] = useState<TooltipPos>({ top: 0, left: 0 });
+    const [measurement, setMeasurement] = useState<Measurement | null>(null);
     const tooltipRef = useRef<HTMLDivElement>(null);
+    const headingRef = useRef<HTMLHeadingElement>(null);
     const observerRef = useRef<ResizeObserver | null>(null);
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Scroll the target into view once per step, never from the scroll listener itself
+    const scrolledStepRef = useRef<string | null>(null);
 
     const step = steps[currentStep];
     const totalSteps = steps.length;
     const isLastStep = currentStep === totalSteps - 1;
     const isFirstStep = currentStep === 0;
 
+    // Only trust a measurement that belongs to the current step
+    const targetRect = step && measurement?.stepId === step.id ? measurement.rect : null;
+    const tooltipPos = step && measurement?.stepId === step.id ? measurement.pos : null;
+    const hasTarget = targetRect !== null;
+
     // Measure and position
     const measureAndPosition = useCallback(() => {
         if (!step) return;
-        const el = document.querySelector(`[data-tour="${step.target}"]`);
+        const el = findTourTarget(step.target);
         if (!el) {
-            setTargetRect(null);
+            setMeasurement(null);
             return;
         }
 
-        const rect = el.getBoundingClientRect();
+        let rect = el.getBoundingClientRect();
+        // An element that is in the DOM but not rendered (display: none, for example the
+        // desktop sidebar on a phone) has a zero-size rect: treat it as not found so the
+        // tooltip centers instead of spotlighting the top-left corner
+        if (rect.width === 0 && rect.height === 0) {
+            setMeasurement(null);
+            return;
+        }
+        if (scrolledStepRef.current !== step.id && isOutsideViewport(rect)) {
+            scrolledStepRef.current = step.id;
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            rect = el.getBoundingClientRect();
+        }
+
         const newRect: TargetRect = {
             top: rect.top,
             left: rect.left,
             width: rect.width,
             height: rect.height,
         };
-        setTargetRect(newRect);
 
         const tooltip = tooltipRef.current;
-        if (tooltip) {
-            const tooltipRect = tooltip.getBoundingClientRect();
-            setTooltipPos(computeTooltipPosition(
-                newRect,
-                step.tooltipPosition ?? "bottom",
-                tooltipRect.width,
-                tooltipRect.height,
-            ));
-        }
+        const tooltipRect = tooltip?.getBoundingClientRect();
+        const pos = computeTooltipPosition(
+            newRect,
+            step.tooltipPosition ?? "bottom",
+            tooltipRect?.width ?? 360,
+            tooltipRect?.height ?? 240,
+        );
+        setMeasurement({ stepId: step.id, rect: newRect, pos });
     }, [step]);
 
     // Handle navigation and element polling
@@ -125,18 +176,20 @@ export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourPro
         }
 
         // Poll for element (needed after navigation or if element is loading)
-        const el = !needsNavigation ? document.querySelector(`[data-tour="${step.target}"]`) : null;
+        const el = !needsNavigation ? findTourTarget(step.target) : null;
         if (el) {
-            // Element already exists — measure immediately
+            // Element already exists: measure immediately
             requestAnimationFrame(() => {
                 measureAndPosition();
                 requestAnimationFrame(measureAndPosition);
             });
         } else {
-            // Wait for element to appear
+            // Wait for element to appear. While waiting, `targetRect` is null for this
+            // step (measurement is keyed by step id), so the tooltip is centered instead
+            // of pointing at the previous step's element.
             const startTime = Date.now();
             pollTimerRef.current = setInterval(() => {
-                const found = document.querySelector(`[data-tour="${step.target}"]`);
+                const found = findTourTarget(step.target);
                 if (found) {
                     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
                     pollTimerRef.current = null;
@@ -159,7 +212,8 @@ export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourPro
         };
     }, [step, pathname, router, measureAndPosition]);
 
-    // Reposition on resize/scroll
+    // Reposition on resize/scroll. Re-attach the ResizeObserver once the target
+    // exists (it may only appear after navigation or data load).
     useEffect(() => {
         if (!step) return;
 
@@ -167,7 +221,7 @@ export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourPro
         window.addEventListener("resize", handleReposition);
         window.addEventListener("scroll", handleReposition, true);
 
-        const el = document.querySelector(`[data-tour="${step.target}"]`);
+        const el = findTourTarget(step.target);
         if (el) {
             observerRef.current = new ResizeObserver(handleReposition);
             observerRef.current.observe(el);
@@ -178,14 +232,18 @@ export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourPro
             window.removeEventListener("scroll", handleReposition, true);
             observerRef.current?.disconnect();
         };
-    }, [step, measureAndPosition]);
+    }, [step, measureAndPosition, hasTarget]);
 
-    // Keyboard navigation
+    // Keyboard navigation. Enter is ignored when focus sits on an interactive element,
+    // otherwise the focused Next/Skip button fires its own click as well and a step is skipped.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
                 onClose();
-            } else if (e.key === "ArrowRight" || e.key === "Enter") {
+                return;
+            }
+            if (isInteractiveTarget(e.target)) return;
+            if (e.key === "ArrowRight" || e.key === "Enter") {
                 if (isLastStep) {
                     onComplete();
                 } else {
@@ -199,116 +257,81 @@ export function OnboardingTour({ steps, onClose, onComplete }: OnboardingTourPro
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isLastStep, onClose, onComplete]);
 
+    // Each step moves focus to its title, so a screen reader announces it and the keys keep working
+    useEffect(() => {
+        headingRef.current?.focus();
+    }, [currentStep]);
+
     if (!step) return null;
 
-    const Icon = step.icon;
-
     return (
-        <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Onboarding tour">
-            {/* Click catcher / backdrop */}
-            <div className="absolute inset-0" onClick={onClose} />
+        <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Tour">
+            {/* Click catcher / backdrop. Clicking it does not end the tour: only
+                "Skip tour", the close button and Escape do, so a stray click never marks
+                the tour as completed. */}
+            <div className="absolute inset-0" aria-hidden="true" />
 
-            {/* Spotlight cutout */}
+            {/* Spotlight cutout: the scrim token around a 2px accent outline, radius 4 like every control */}
             {targetRect ? (
                 <div
-                    className="fixed rounded-lg pointer-events-none"
+                    className="pointer-events-none fixed rounded outline-2 outline-accent"
                     style={{
                         top: targetRect.top - PADDING,
                         left: targetRect.left - PADDING,
                         width: targetRect.width + PADDING * 2,
                         height: targetRect.height + PADDING * 2,
-                        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
+                        boxShadow: "0 0 0 9999px var(--scrim)",
                         transition: "top 300ms ease, left 300ms ease, width 300ms ease, height 300ms ease",
                     }}
                 />
             ) : (
-                <div className="fixed inset-0 bg-black/50 pointer-events-none" />
+                <div className="pointer-events-none fixed inset-0 bg-scrim" />
             )}
 
-            {/* Tooltip */}
+            {/* Tooltip: a panel (border, accent edge on top), capped to the viewport on small screens, scrolls internally when tall */}
             <div
                 ref={tooltipRef}
-                className="fixed w-[360px] bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden"
+                className="fixed max-h-[calc(100vh-32px)] w-[min(360px,calc(100vw-32px))] overflow-y-auto rounded border border-line border-t-[3px] border-t-accent bg-surface shadow-menu"
                 style={{
-                    top: targetRect ? tooltipPos.top : "50%",
-                    left: targetRect ? tooltipPos.left : "50%",
-                    transform: targetRect ? "none" : "translate(-50%, -50%)",
+                    top: targetRect && tooltipPos ? tooltipPos.top : "50%",
+                    left: targetRect && tooltipPos ? tooltipPos.left : "50%",
+                    transform: targetRect && tooltipPos ? "none" : "translate(-50%, -50%)",
                     transition: "top 300ms ease, left 300ms ease",
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="px-5 pt-5 pb-3 flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                            <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
-                                {step.title}
-                            </h3>
-                            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                {step.description}
-                            </p>
-                        </div>
+                <div className="flex items-start justify-between gap-3 px-5 pt-4">
+                    <div className="min-w-0">
+                        <p aria-hidden="true" className="font-mono text-xs text-accent">tour {currentStep + 1} of {totalSteps}</p>
+                        <h3 ref={headingRef} tabIndex={-1} style={{ outline: "none" }} className="text-[15px] leading-6 font-semibold text-ink">{step.title}</h3>
+                        <p className="text-[13px] leading-[18px] text-muted">{step.description}</p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors p-1 -mr-1 -mt-1"
-                        aria-label="Close tour"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+                    <Button iconOnly icon="close" label="Close tour" size="sm" onClick={onClose} />
                 </div>
 
-                {/* Guidance items */}
-                <div className="px-5 pb-4 space-y-2">
+                <ul className="flex flex-col gap-2 px-5 pb-4 pt-3">
                     {step.guides.map((guide, i) => (
-                        <div key={i} className="flex items-start gap-2.5">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
-                            <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                                {guide.text}
-                            </span>
-                        </div>
+                        <li key={i} className="flex items-start gap-2.5 text-sm leading-5 text-body">
+                            <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-[1px] bg-accent" />
+                            {guide.text}
+                        </li>
                     ))}
-                </div>
+                </ul>
 
-                {/* Footer */}
-                <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-800/50">
-                    <button
-                        onClick={onClose}
-                        className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                    >
-                        Skip tour
-                    </button>
-
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                        {currentStep + 1} of {totalSteps}
-                    </span>
-
+                <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
+                    <button type="button" onClick={onClose} className="text-[13px] text-muted underline hover:text-ink">Skip tour</button>
                     <div className="flex items-center gap-2">
-                        {!isFirstStep && (
-                            <button
-                                onClick={() => setCurrentStep(prev => prev - 1)}
-                                className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                            >
-                                <ChevronLeft className="h-3.5 w-3.5" />
-                                Back
-                            </button>
-                        )}
-                        <button
+                        {!isFirstStep && <Button size="sm" onClick={() => setCurrentStep((prev) => prev - 1)}>Back</Button>}
+                        <Button
+                            size="sm"
+                            variant="primary"
                             onClick={() => {
-                                if (isLastStep) {
-                                    onComplete();
-                                } else {
-                                    setCurrentStep(prev => prev + 1);
-                                }
+                                if (isLastStep) onComplete();
+                                else setCurrentStep((prev) => prev + 1);
                             }}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
                         >
-                            {isLastStep ? "Get Started" : "Next"}
-                            {!isLastStep && <ChevronRight className="h-3.5 w-3.5" />}
-                        </button>
+                            {isLastStep ? "Get started" : "Next"}
+                        </Button>
                     </div>
                 </div>
             </div>

@@ -39,7 +39,7 @@ export async function enrichScopeInfo(
     assignment: {
         directoryScopeId: string;
         appScopeId?: string;
-        directoryScope?: any;
+        directoryScope?: { id?: string; displayName?: string; "@odata.type"?: string } | null;
     }
 ): Promise<ScopeInfo> {
     const { directoryScopeId, appScopeId, directoryScope } = assignment;
@@ -91,8 +91,6 @@ export async function enrichScopeInfo(
     // Application-scoped - fetch application details
     if (baseType === "application") {
         try {
-            const appId = appScopeId?.replace("/", "") || "";
-
             // Try to parse as application or service principal
             if (directoryScopeId.startsWith("/applications/")) {
                 const objectId = directoryScopeId.replace("/applications/", "");
