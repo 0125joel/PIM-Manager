@@ -1,0 +1,19 @@
+# PIM Manager: search engines and AI answer or search bots are welcome on the public front page.
+# AI model training crawlers are not. The app pages (dashboard, report, configure, settings, help, demo) are kept
+# out of search results with an X-Robots-Tag header (public/_headers), not here, so crawlers can read that header.
+
+User-agent: *
+Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: CCBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Bytespider
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+Sitemap: https://pimmanager.com/sitemap.xml

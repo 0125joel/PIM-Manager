@@ -47,6 +47,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
         return <ThemeProvider>{children}</ThemeProvider>;
     }
 
+    // The front page is public and indexable: its static HTML carries the real content, not the startup spinner. It
+    // renders outside the providers only until hydration has picked the runtime (the next render)
+    if (runtime === "pending" && pathname === "/") {
+        return <ThemeProvider>{children}</ThemeProvider>;
+    }
+
     if (runtime === "pending") {
         return (
             <ThemeProvider>

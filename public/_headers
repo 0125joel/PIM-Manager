@@ -1,8 +1,57 @@
+# The front page is the only page meant for search results. The app pages hold a sign-in screen, no content;
+# the robots.txt does not block them, so crawlers can read this header. Each route has an exact rule and a
+# `/route/*` rule, the form the Cloudflare documentation shows (it does not document a splat right after letters)
+/dashboard
+  X-Robots-Tag: noindex, nofollow
+
+/dashboard/*
+  X-Robots-Tag: noindex, nofollow
+
+/report
+  X-Robots-Tag: noindex, nofollow
+
+/report/*
+  X-Robots-Tag: noindex, nofollow
+
+/configure
+  X-Robots-Tag: noindex, nofollow
+
+/configure/*
+  X-Robots-Tag: noindex, nofollow
+
+/settings
+  X-Robots-Tag: noindex, nofollow
+
+/settings/*
+  X-Robots-Tag: noindex, nofollow
+
+/help
+  X-Robots-Tag: noindex, nofollow
+
+/help/*
+  X-Robots-Tag: noindex, nofollow
+
+/demo
+  X-Robots-Tag: noindex, nofollow
+
+/demo/*
+  X-Robots-Tag: noindex, nofollow
+
+# The *.pages.dev and *.*.pages.dev (preview) addresses serve the same site as pimmanager.com: keep them out of
+# search results (the pattern Cloudflare documents for this)
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex
+
 /redirect
   Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
 
 /redirect.html
   Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
 
 /*
   X-Frame-Options: DENY
