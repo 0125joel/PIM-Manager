@@ -2,6 +2,12 @@
 
 ---
 
+## v3.0.1 - 2026-10-22
+
+A security update. Next.js goes from 16.4.0 to 16.4.2 for two advisories published today (GHSA-2464-fhr4-w9xw and GHSA-p3m5-59mp-jv5r). PIM Manager is a static site without the parts of Next.js these are about, so a hosted PIM Manager was not exposed. If you host PIM Manager yourself, update anyway: from today a build on 16.4.0 stops with a security error.
+
+---
+
 ## v3.0.0 - 2026-10-17
 
 PIM Manager 3.0 is here, and it looks nothing like 2.x.
