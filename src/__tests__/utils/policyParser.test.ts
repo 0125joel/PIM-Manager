@@ -46,14 +46,14 @@ describe("parseGraphPolicy custom extensions", () => {
     it("exposes a linked pre-approval slot with its name and attributes", () => {
         const rules = [
             ...baseRules,
-            { "@odata.type": CUSTOM_EXTENSION_RULE_TYPE, id: CUSTOM_EXTENSION_RULE_IDS.preApproval, isEnabled: true, customExtensionId: "a05c9349-5950-4884-bab4-7fb6aa3e4ff5", displayName: "Outside office hours", customAttributes: ["reservedNotUsed"], target: endUserTarget },
+            { "@odata.type": CUSTOM_EXTENSION_RULE_TYPE, id: CUSTOM_EXTENSION_RULE_IDS.preApproval, isEnabled: true, customExtensionId: "11111111-1111-1111-1111-111111111111", displayName: "Outside office hours", customAttributes: ["reservedNotUsed"], target: endUserTarget },
             { "@odata.type": CUSTOM_EXTENSION_RULE_TYPE, id: CUSTOM_EXTENSION_RULE_IDS.postApproval, isEnabled: false, customExtensionId: "", displayName: null, customAttributes: [], target: endUserTarget },
         ];
         const policy = parseGraphPolicy({ rules });
         expect(policy.customExtensions).toEqual({
             preApproval: {
                 isEnabled: true,
-                customExtensionId: "a05c9349-5950-4884-bab4-7fb6aa3e4ff5",
+                customExtensionId: "11111111-1111-1111-1111-111111111111",
                 displayName: "Outside office hours",
                 customAttributes: ["reservedNotUsed"],
             },

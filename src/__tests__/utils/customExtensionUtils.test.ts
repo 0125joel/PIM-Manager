@@ -17,7 +17,7 @@ import {
 } from "@/utils/customExtensionUtils";
 import { CUSTOM_EXTENSION_RULE_IDS, CUSTOM_EXTENSION_RULE_TYPE } from "@/config/constants";
 
-const EXTENSION_ID = "a05c9349-5950-4884-bab4-7fb6aa3e4ff5";
+const EXTENSION_ID = "11111111-1111-1111-1111-111111111111";
 
 const linkedPreApproval = {
     "@odata.type": CUSTOM_EXTENSION_RULE_TYPE,
