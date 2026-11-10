@@ -2,6 +2,15 @@
 
 ---
 
+## v3.1.1 - 2026-11-10
+
+A fix release. If you host PIM Manager yourself on Azure Static Web Apps, 3.1.0 could not be deployed: Azure refused part of the configuration. This version deploys.
+
+- Self-hosted copies on Azure Static Web Apps deploy again.
+- The hosted copy builds again from the public repository.
+
+---
+
 ## v3.1.0 - 2026-11-10
 
 PIM Manager 3.1 crosses over to Azure.

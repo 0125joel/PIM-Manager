@@ -192,6 +192,18 @@ describe("noindex headers", () => {
     return out;
   };
 
+  /** The route rule of a path carries the noindex header */
+  const swaNoindex = (path: string): boolean =>
+    swa.routes.find((r) => r.route === path)?.headers?.["X-Robots-Tag"] === "noindex, nofollow";
+  /** A wildcard route of the same prefix (`/azure/*` for `/azure/report`) carries the noindex header */
+  const coveredByWildcard = (route: string): boolean => {
+    const parts = route.split("/");
+    for (let n = parts.length - 1; n >= 2; n--) {
+      if (swaNoindex(`${parts.slice(0, n).join("/")}/*`)) return true;
+    }
+    return false;
+  };
+
   it("finds the app routes from the folders of src/app", () => {
     expect(APP_ROUTES).toEqual(expect.arrayContaining(["/dashboard", "/report", "/configure", "/settings", "/help", "/demo"]));
     expect(APP_ROUTES).not.toContain("/redirect");
@@ -216,11 +228,16 @@ describe("noindex headers", () => {
   });
 
   it("keeps every app route and its sub paths out of search results on a self-hosted copy (Azure Static Web Apps)", () => {
-    const swaRule = (path: string): string | undefined =>
-      swa.routes.find((r) => r.route === path)?.headers?.["X-Robots-Tag"];
     for (const route of APP_ROUTES) {
-      expect(swaRule(route), route).toBe("noindex, nofollow");
-      expect(swaRule(`${route}/*`), `${route}/*`).toBe("noindex, nofollow");
+      expect(swaNoindex(route) || coveredByWildcard(route), route).toBe(true);
+      expect(swaNoindex(`${route}/*`) || coveredByWildcard(`${route}/*`), `${route}/*`).toBe(true);
+    }
+  });
+
+  it("does not list an exact route that a wildcard above it already covers (Azure rejects the config)", () => {
+    for (const r of swa.routes) {
+      if (r.route.endsWith("/*")) continue;
+      expect(coveredByWildcard(r.route), r.route).toBe(false);
     }
   });
 

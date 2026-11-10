@@ -62,22 +62,6 @@
     {
       "route": "/azure/*",
       "headers": { "X-Robots-Tag": "noindex, nofollow" }
-    },
-    {
-      "route": "/azure/report",
-      "headers": { "X-Robots-Tag": "noindex, nofollow" }
-    },
-    {
-      "route": "/azure/report/*",
-      "headers": { "X-Robots-Tag": "noindex, nofollow" }
-    },
-    {
-      "route": "/azure/configure",
-      "headers": { "X-Robots-Tag": "noindex, nofollow" }
-    },
-    {
-      "route": "/azure/configure/*",
-      "headers": { "X-Robots-Tag": "noindex, nofollow" }
     }
   ],
   "navigationFallback": {

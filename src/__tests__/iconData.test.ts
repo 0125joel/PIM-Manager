@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ICON_DATA } from "@/components/icons/iconData";
 
+// docs/Assets is private and not in the public mirror: the check runs where the icon set exists
 const ICON_DIR = join(process.cwd(), "docs/Assets/icons");
-const files = readdirSync(ICON_DIR).filter((f) => f.endsWith(".svg")).map((f) => f.slice(0, -4));
+const hasIconSet = existsSync(ICON_DIR);
+const files = hasIconSet ? readdirSync(ICON_DIR).filter((f) => f.endsWith(".svg")).map((f) => f.slice(0, -4)) : [];
 
-describe("icon data", () => {
+describe.skipIf(!hasIconSet)("icon data", () => {
     it("has data for every SVG in the icon set and nothing else", () => {
         expect(Object.keys(ICON_DATA).sort()).toEqual([...files].sort());
         expect(files).toHaveLength(108);

@@ -16,6 +16,14 @@ export interface WhatsNewRelease {
 /** What the "What's new" view of the help panel shows, newest release first. Edit with the changelog. */
 export const WHATS_NEW_RELEASES: WhatsNewRelease[] = [
     {
+        version: "3.1.1",
+        date: "2026-11-10",
+        title: "Fixes for self-hosted deploys",
+        entries: [
+            { title: "Self-hosted deploys on Azure", text: "Azure accepts the configuration of PIM Manager again, so a self-hosted copy deploys. If you host it yourself, run the template again to get this build." },
+        ],
+    },
+    {
         version: "3.1.0",
         date: "2026-11-10",
         title: "Azure, tours and calmer pages",
