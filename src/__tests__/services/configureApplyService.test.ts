@@ -33,9 +33,10 @@ const nothingThere = async () => null;
 /** Drives the fake timers until the promise settles (withRetry and the pool wait with setTimeout) */
 async function settle<T>(promise: Promise<T>): Promise<T> {
     let done = false;
-    const result = promise.finally(() => { done = true; });
+    // Handle both outcomes on the promise itself: a rejection that waits for the loop would count as unhandled
+    promise.then(() => { done = true; }, () => { done = true; });
     while (!done) await vi.advanceTimersByTimeAsync(500);
-    return result;
+    return promise;
 }
 
 const route = (r: RecordedRequest) => `${r.method} ${r.path.replace(/^\/(v1\.0|beta)/, "")}`;
@@ -310,6 +311,39 @@ describe("the reads behind a second POST (N-010, W-07)", () => {
         expect(await read([request({ action: "adminRemove" })])).toBe(false);
         expect(await read([request({ createdDateTime: "2026-10-08T10:00:00Z" })])).toBe(false);
         expect(await read([request({ directoryScopeId: "/administrativeUnits/au1" })])).toBe(false);
+    });
+});
+
+describe("runApply: a rule changed since the review", () => {
+    const rules = roleRules({ justification: true });
+    const ruleAsRead = (ruleId: string) => rules.find((r) => r.id === ruleId);
+    const ticketChange = setting(ROLE, "requireTicketInfo", true);
+    const plannedTargets = { ...targets, [targetKey(ROLE)]: { ...targets[targetKey(ROLE)], rules } };
+    const plan = () => planApply({ changes: [ticketChange] }, plannedTargets);
+
+    it("stops the policy when a written field moved since the review: nothing is written", async () => {
+        const rec = createRecordingClient();
+        const moved = { ...ruleAsRead("Enablement_EndUser_Assignment")!, enabledRules: ["Justification", "MultiFactorAuthentication"] };
+        const readRule = async (_policyId: string, ruleId: string) => (ruleId === "Enablement_EndUser_Assignment" ? moved : ruleAsRead(ruleId));
+        const result = await settle(runApply(rec.client, plan(), { runId: nextRun(), saveSnapshot: noSnapshot, findSchedule: nothingThere, readRule }));
+        expect(rec.writes()).toEqual([]);
+        expect(result.results[changeId(ticketChange)]).toMatchObject({ status: "failed", message: expect.stringContaining("changed since your review") });
+    });
+
+    it("writes when the rule is as it was read", async () => {
+        const rec = createRecordingClient();
+        const readRule = async (_policyId: string, ruleId: string) => ruleAsRead(ruleId);
+        const result = await settle(runApply(rec.client, plan(), { runId: nextRun(), saveSnapshot: noSnapshot, findSchedule: nothingThere, readRule }));
+        expect(rec.writes().map(route)).toEqual([`PATCH /policies/roleManagementPolicies/${ROLE_POLICY_ID}/rules/Enablement_EndUser_Assignment`]);
+        expect(result.results[changeId(ticketChange)]).toEqual({ status: "done" });
+    });
+
+    it("writes nothing when the rule cannot be read again", async () => {
+        const rec = createRecordingClient();
+        const readRule = async () => { throw new Error("read refused"); };
+        const result = await settle(runApply(rec.client, plan(), { runId: nextRun(), saveSnapshot: noSnapshot, findSchedule: nothingThere, readRule }));
+        expect(rec.writes()).toEqual([]);
+        expect(result.results[changeId(ticketChange)]).toMatchObject({ status: "failed", message: expect.stringContaining("could not be read again") });
     });
 });
 

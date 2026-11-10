@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 import { HelpPanel, type HelpView } from "@/components/shell/HelpPanel";
-import { requestTourRestart } from "@/hooks/useOnboarding";
+import { requestTourChoice } from "@/hooks/useOnboarding";
 import { useTheme } from "@/components/ThemeProvider";
 import { useUnifiedActions } from "@/contexts/UnifiedPimContext";
 import { useLoadingSnapshot } from "@/hooks/useLoadingSnapshot";
@@ -14,7 +14,7 @@ import { useTenantName } from "@/hooks/useTenantName";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { useWhatsNew } from "@/hooks/useWhatsNew";
 import { REDIRECT_BRIDGE_PATH } from "@/config/authConfig";
-import { getInitials } from "@/utils/shellNavigation";
+import { environmentFromPath, getInitials } from "@/utils/shellNavigation";
 import { OPEN_HELP_EVENT, type OpenHelpDetail } from "@/utils/helpEvents";
 import { ShellFrame, type ShellMenu } from "./ShellFrame";
 import { DemoBanner } from "./DemoBanner";
@@ -94,7 +94,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 }}
                 banner={isDemo ? <DemoBanner /> : undefined}
                 isRefreshing={isGlobalLoading}
-                onRefresh={() => { announceShellRefresh(); void refreshAllWorkloads(false); }}
+                onRefresh={() => {
+                    announceShellRefresh();
+                    // On an Azure page the Azure provider answers the announcement; the Entra data stays as it is
+                    if (environmentFromPath(pathname) !== "azure") void refreshAllWorkloads(false);
+                }}
                 openMenu={openMenu}
                 onOpenMenuChange={setOpenMenu}
                 dock={showHelp ? (
@@ -118,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onStartTour={() => {
                             setHelpTerm(undefined);
                             setShowHelp(false);
-                            requestTourRestart();
+                            requestTourChoice();
                         }}
                         appVersion={whatsNew.version}
                     />

@@ -3,13 +3,17 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ICON_DATA } from "@/components/icons/iconData";
 
-const ICON_DIR = join(process.cwd(), "docs/Assets/next-gen/icons");
+const ICON_DIR = join(process.cwd(), "docs/Assets/icons");
 const files = readdirSync(ICON_DIR).filter((f) => f.endsWith(".svg")).map((f) => f.slice(0, -4));
 
 describe("icon data", () => {
     it("has data for every SVG in the icon set and nothing else", () => {
         expect(Object.keys(ICON_DATA).sort()).toEqual([...files].sort());
-        expect(files).toHaveLength(87);
+        expect(files).toHaveLength(108);
+    });
+
+    it("keeps the ellipse of the storage resource icon", () => {
+        expect(ICON_DATA["resource-storage"][0]).toEqual(["ellipse", { cx: "10", cy: "5", rx: "6", ry: "2.2" }]);
     });
 
     it("gives every icon at least one element", () => {

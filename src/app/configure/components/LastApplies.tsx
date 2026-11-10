@@ -19,7 +19,7 @@ const STATUS_LABEL = { done: "Applied", problems: "Applied with problems", unfin
 /** Last applies (spec 14.3): the history of this browser, with Undo */
 export function LastApplies({ lines, undoBlockedReason, onUndo, notice }: LastAppliesProps) {
     return (
-        <section aria-labelledby="last-applies-title" className="rounded border border-line bg-surface">
+        <section aria-labelledby="last-applies-title" data-tour="configure-last-applies" className="rounded border border-line bg-surface">
             <h2 id="last-applies-title" className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">Last applies</h2>
             {notice && <p role="alert" className="border-b border-line bg-warn-tint px-4 py-2 text-xs text-ink">{notice}</p>}
             {lines.length === 0 ? (

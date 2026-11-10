@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -88,6 +88,9 @@ export function ExportDialog({ isOpen, onClose, input, meta, counting: initialCo
     const [counting, setCounting] = useState(initialCounting);
     const [blocks, setBlocks] = useState(() => defaultBlocks("full"));
     const [isWorking, setIsWorking] = useState(false);
+    const controllerRef = useRef<AbortController | null>(null);
+    // Leaving the page stops the downloads still to come, so no file lands on another page
+    useEffect(() => () => controllerRef.current?.abort(), []);
     const [error, setError] = useState<string | null>(null);
     const radioName = useId();
 
@@ -107,6 +110,8 @@ export function ExportDialog({ isOpen, onClose, input, meta, counting: initialCo
     };
 
     const handleExport = async () => {
+        const controller = new AbortController();
+        controllerRef.current = controller;
         setIsWorking(true);
         setError(null);
         const exportedAt = new Date();
@@ -121,6 +126,7 @@ export function ExportDialog({ isOpen, onClose, input, meta, counting: initialCo
                 const [{ pdf }, { ReportDocument, registerReportFonts }] = await Promise.all([import("@react-pdf/renderer"), import("@/components/pdf/ReportDocument")]);
                 registerReportFonts(window.location.origin);
                 const blob = await pdf(<ReportDocument report={report} chartStyle={chartStyle} />).toBlob();
+                if (controller.signal.aborted) return;
                 download(blob, `${fileStem(meta.tenantName, exportedAt)}.pdf`);
             }
             onClose();

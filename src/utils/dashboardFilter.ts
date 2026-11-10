@@ -20,7 +20,7 @@ import { getLinkedCustomExtensions, parseCustomExtensionRules } from "@/utils/cu
 /**
  * The filter model shared by the dashboard and the report (spec 4.6): URL form `f=key:value,key:value`,
  * parsing, serialising, labels, and one apply function per kind of data so that a dashboard number and the
- * report list behind it always come from the same code. Decisions per key are in docs/Assets/next-gen/dashboard/plans/ng-30-plan.md.
+ * report list behind it always come from the same code.
  */
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

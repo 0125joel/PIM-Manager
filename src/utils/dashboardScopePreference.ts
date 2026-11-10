@@ -9,17 +9,17 @@ export function parseDashboardScope(value: string | null | undefined): Dashboard
     return value === "all" ? "all" : "privileged";
 }
 
-export function readDashboardScope(storage: StorageLike | null = typeof localStorage === "undefined" ? null : localStorage): DashboardScope {
+export function readDashboardScope(storage: StorageLike | null = typeof localStorage === "undefined" ? null : localStorage, key: string = DASHBOARD_SCOPE_STORAGE_KEY): DashboardScope {
     try {
-        return parseDashboardScope(storage?.getItem(DASHBOARD_SCOPE_STORAGE_KEY));
+        return parseDashboardScope(storage?.getItem(key));
     } catch {
         return "privileged";
     }
 }
 
-export function writeDashboardScope(scope: DashboardScope, storage: StorageLike | null = typeof localStorage === "undefined" ? null : localStorage): boolean {
+export function writeDashboardScope(scope: DashboardScope, storage: StorageLike | null = typeof localStorage === "undefined" ? null : localStorage, key: string = DASHBOARD_SCOPE_STORAGE_KEY): boolean {
     try {
-        storage?.setItem(DASHBOARD_SCOPE_STORAGE_KEY, scope);
+        storage?.setItem(key, scope);
         return storage !== null;
     } catch {
         return false;

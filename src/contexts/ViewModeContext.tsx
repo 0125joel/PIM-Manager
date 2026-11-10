@@ -14,31 +14,31 @@ interface ViewModeContextType {
 
 const ViewModeContext = createContext<ViewModeContextType | undefined>(undefined);
 
-const STORAGE_KEY = VIEW_MODE_STORAGE_KEY;
-
 interface ViewModeProviderProps {
     children: ReactNode;
+    /** localStorage key; the Azure dashboard keeps its own choice (dashboard redesign V10) */
+    storageKey?: string;
 }
 
-export function ViewModeProvider({ children }: ViewModeProviderProps) {
+export function ViewModeProvider({ children, storageKey = VIEW_MODE_STORAGE_KEY }: ViewModeProviderProps) {
     // Default to 'basic' mode
     const [viewMode, setViewModeState] = useState<ViewMode>("basic");
     const [isHydrated, setIsHydrated] = useState(false);
 
     // Load from localStorage on mount (after hydration, so the pre-rendered HTML matches)
     useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(storageKey);
         if (stored === "basic" || stored === "advanced") {
             // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-time read of localStorage
             setViewModeState(stored);
         }
         setIsHydrated(true);
-    }, []);
+    }, [storageKey]);
 
     // Persist to localStorage on change
     const setViewMode = (mode: ViewMode) => {
         setViewModeState(mode);
-        localStorage.setItem(STORAGE_KEY, mode);
+        localStorage.setItem(storageKey, mode);
     };
 
     // Convenience booleans

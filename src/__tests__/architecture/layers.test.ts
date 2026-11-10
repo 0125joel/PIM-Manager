@@ -2,7 +2,8 @@
  * Hard architecture rules from AGENTS.md, enforced in CI instead of only described.
  *
  * Layer rules (the same A1 to A4 the validate-architecture skill reports):
- *   A1 pages (src/app/**\/page.tsx) do not import services, except src/app/configure/**
+ *   A1 pages (src/app/**\/page.tsx) and their page-local components and hooks (src/app/**\/components/**,
+ *      src/app/**\/hooks/**) do not import services, except src/app/configure/**
  *   A2 shared components (src/components/**) do not import services
  *   A3 services do not import components, hooks or contexts
  *   A4 utils do not import components, hooks, services or contexts
@@ -44,6 +45,8 @@ function toPosix(path: string): string {
 function layerOf(srcRelative: string): Layer {
   if (srcRelative.startsWith("app/configure/")) return "configure";
   if (srcRelative.startsWith("app/") && /\/page\.tsx$/.test(srcRelative)) return "page";
+  // Page-local UI is UI too: it follows A1 like the page that owns it
+  if (srcRelative.startsWith("app/") && /\/(components|hooks)\//.test(srcRelative)) return "page";
   const top = srcRelative.split("/")[0];
   if (top === "components" || top === "services" || top === "utils" || top === "hooks" || top === "contexts") {
     return top;

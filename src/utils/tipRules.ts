@@ -10,14 +10,15 @@ export interface TenantTipInput {
     nobodyNotified: number | null;
 }
 
-export type TipAction = { kind: "filter"; label: string; filter: DashboardFilter } | { kind: "anchor"; label: string; href: string } | { kind: "link"; label: string; href: string };
+/** `F` is the filter a tip sets: the Entra dashboard filter by default, the Azure Report filter patch on the Azure dashboard */
+export type TipAction<F = DashboardFilter> = { kind: "filter"; label: string; filter: F } | { kind: "anchor"; label: string; href: string } | { kind: "link"; label: string; href: string };
 
-export interface Tip {
+export interface Tip<F = DashboardFilter> {
     id: string;
     source: "tenant" | "general";
     title: string;
     text: string;
-    action: TipAction;
+    action: TipAction<F>;
 }
 
 function plural(n: number, one: string, many: string): string {

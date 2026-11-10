@@ -115,6 +115,7 @@ export function createFakeGraph(tenant: DemoTenant, options: FakeGraphOptions = 
         if (sp.agent?.type === "agentIdentityBlueprintPrincipal") {
             return { "@odata.type": asBaseType ? "#microsoft.graph.servicePrincipal" : "#microsoft.graph.agentIdentityBlueprintPrincipal", ...base, servicePrincipalType: "Application" };
         }
+        if (sp.isManagedIdentity) return { "@odata.type": "#microsoft.graph.servicePrincipal", ...base, servicePrincipalType: "ManagedIdentity" };
         return { "@odata.type": "#microsoft.graph.servicePrincipal", ...base, servicePrincipalType: "Application" };
     };
     /** The expanded `principal` of a schedule: the default properties, no `userType` (Graph does not return it there) */

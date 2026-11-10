@@ -1,0 +1,218 @@
+{
+  "value": [
+    {
+      "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-tenantassesment/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000002",
+      "name": "00000000-0000-0000-0000-000000000002",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2026-02-13T09:42:30.0176247Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "id": "00000000-0000-0000-0000-000000000004",
+            "type": "ServicePrincipal"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-tenantassesment",
+            "type": "resourcegroup"
+          }
+        },
+        "memberType": "Direct",
+        "originRoleAssignmentId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourcegroups/rg-tenantassesment/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000002",
+        "principalId": "00000000-0000-0000-0000-000000000004",
+        "principalType": "ServicePrincipal",
+        "roleAssignmentScheduleId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-tenantassesment/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000002",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-tenantassesment",
+        "startDateTime": "2026-02-13T09:42:30.0176247Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    },
+    {
+      "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000005",
+      "name": "00000000-0000-0000-0000-000000000005",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2024-08-01T17:07:54.0577534Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "id": "00000000-0000-0000-0000-000000000006",
+            "type": "User",
+            "userPrincipalName": "user@contoso.com"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001",
+            "type": "subscription"
+          }
+        },
+        "memberType": "Direct",
+        "originRoleAssignmentId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000005",
+        "principalId": "00000000-0000-0000-0000-000000000006",
+        "principalType": "User",
+        "roleAssignmentScheduleId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000005",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+        "startDateTime": "2024-08-01T17:07:54.0577534Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    },
+    {
+      "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000007",
+      "name": "00000000-0000-0000-0000-000000000007",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2026-04-21T09:45:06.6520489Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "id": "00000000-0000-0000-0000-000000000008",
+            "type": "ServicePrincipal"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001",
+            "type": "subscription"
+          }
+        },
+        "memberType": "Direct",
+        "originRoleAssignmentId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000007",
+        "principalId": "00000000-0000-0000-0000-000000000008",
+        "principalType": "ServicePrincipal",
+        "roleAssignmentScheduleId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000007",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+        "startDateTime": "2026-04-21T09:45:06.6520489Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    },
+    {
+      "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000009",
+      "name": "00000000-0000-0000-0000-000000000009",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2026-10-18T07:50:12.2376268Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "email": "user@contoso.com",
+            "id": "00000000-0000-0000-0000-000000000010",
+            "type": "User",
+            "userPrincipalName": "user@contoso.com"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001",
+            "type": "subscription"
+          }
+        },
+        "memberType": "Direct",
+        "originRoleAssignmentId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000009",
+        "principalId": "00000000-0000-0000-0000-000000000010",
+        "principalType": "User",
+        "roleAssignmentScheduleId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000009",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+        "startDateTime": "2026-10-18T07:50:12.2376268Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    },
+    {
+      "id": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000011/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000012",
+      "name": "00000000-0000-0000-0000-000000000012",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2026-09-25T19:46:24.1040369Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "id": "00000000-0000-0000-0000-000000000013",
+            "type": "ServicePrincipal"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000011",
+            "type": "managementgroup"
+          }
+        },
+        "memberType": "Inherited",
+        "originRoleAssignmentId": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000011/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000012",
+        "principalId": "00000000-0000-0000-0000-000000000013",
+        "principalType": "ServicePrincipal",
+        "roleAssignmentScheduleId": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000011/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000012",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "scope": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000011",
+        "startDateTime": "2026-09-25T19:46:24.1040369Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    },
+    {
+      "id": "/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/00000000-0000-0000-0000-000000000014",
+      "name": "00000000-0000-0000-0000-000000000014",
+      "properties": {
+        "assignmentType": "Assigned",
+        "createdOn": "2022-11-08T19:30:42.225294Z",
+        "expandedProperties": {
+          "principal": {
+            "displayName": "Contoso user",
+            "id": "00000000-0000-0000-0000-000000000006",
+            "type": "User",
+            "userPrincipalName": "user@contoso.com"
+          },
+          "roleDefinition": {
+            "displayName": "Contoso user",
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/18d7d88d-d35e-4fb5-a5c3-7773c20a72d9",
+            "type": "BuiltInRole"
+          },
+          "scope": {
+            "displayName": "Contoso user",
+            "id": "/",
+            "type": "tenant"
+          }
+        },
+        "memberType": "Inherited",
+        "originRoleAssignmentId": "/providers/Microsoft.Authorization/roleAssignments/00000000-0000-0000-0000-000000000014",
+        "principalId": "00000000-0000-0000-0000-000000000006",
+        "principalType": "User",
+        "roleAssignmentScheduleId": "/providers/Microsoft.Authorization/roleAssignmentSchedules/00000000-0000-0000-0000-000000000014",
+        "roleDefinitionId": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/roleDefinitions/18d7d88d-d35e-4fb5-a5c3-7773c20a72d9",
+        "scope": "/",
+        "startDateTime": "2022-11-08T19:30:42.225294Z",
+        "status": "Provisioned"
+      },
+      "type": "Microsoft.Authorization/roleAssignmentScheduleInstances"
+    }
+  ]
+}

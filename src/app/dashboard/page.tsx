@@ -5,7 +5,6 @@ import { useMsal } from "@azure/msal-react";
 import { useRolesData, useRolesLoading, useRolesActions } from "@/hooks/usePimData";
 import { useSecurityAlerts } from "./hooks/useSecurityAlerts";
 import { LoadingStatus } from "@/components/LoadingStatus";
-import { DataWarningBanner } from "@/components/DataWarningBanner";
 import { ViewModeProvider, useViewMode } from "@/contexts/ViewModeContext";
 import { ExportDialog } from "@/components/ExportDialog";
 import { useTenantName } from "@/hooks/useTenantName";
@@ -21,7 +20,12 @@ import { DashboardHead } from "./components/basic/DashboardHead";
 import { useWriteAccess } from "@/hooks/useWriteAccess";
 import { changeInConfigureHref } from "@/utils/configureLinks";
 import { DashboardOverview } from "./components/basic/DashboardOverview";
+import { DashboardNotices } from "./components/DashboardNotices";
 import { useDashboardFilter } from "@/hooks/useDashboardFilter";
+import { useShowDetails } from "@/hooks/useShowDetails";
+import { useTourPage } from "@/hooks/useTourPage";
+import { DetailsToggle } from "@/components/ui/DetailsToggle";
+import { filterNeedsDetails } from "@/utils/detailsFilter";
 import { useEscapeClearsFilter } from "@/hooks/useEscapeClearsFilter";
 import { summarizeAlerts } from "@/utils/alertSummary";
 import { useIncrementalConsent } from "@/hooks/useIncrementalConsent";
@@ -31,7 +35,6 @@ import { useCustomExtensions } from "@/hooks/useCustomExtensions";
 import { ScopeControl } from "./components/advanced/ScopeControl";
 import { buildFilterNames, getFilterLabels, isEmptyDashboardFilter } from "@/utils/dashboardFilter";
 import { getEffectiveDashboardFilter } from "@/utils/dashboardStats";
-import { POLICY_NOT_READABLE } from "@/utils/policyReadAccess";
 import { withoutAgents } from "@/utils/agentCounting";
 
 
@@ -43,6 +46,8 @@ function DashboardContent() {
     const { accounts } = useMsal();
     const { viewMode, setViewMode, isBasic, isAdvanced } = useViewMode();
     const { filter: dashboardFilter, setFilter: setDashboardFilter, clearFilter: clearDashboardFilter, removeKey: removeDashboardFilterKey, isActive: isDashboardFilterActive } = useDashboardFilter();
+    // Calm details (spec 2.2 and 4): each view remembers its own choice; a filter only a hidden block sets shows the details
+    const details = useShowDetails(isAdvanced ? "entra-dashboard-advanced" : "entra-dashboard-basic");
     const emergencyAccountIds = useEmergencyAccountIds();
     const [scope, setScope] = useDashboardScope();
     // The side reads (custom extensions, alerts) wait until the roles are in or failed: together with the roles they
@@ -100,6 +105,7 @@ function DashboardContent() {
     );
 
     useEscapeClearsFilter(isDashboardFilterActive, clearDashboardFilter);
+    useTourPage(isAdvanced ? "entra-dashboard-advanced" : "entra-dashboard-basic", !loading && rolesData.length > 0, viewMode, setViewMode);
 
     // Get account info for display and PDF export (MSAL data only - no extra permissions needed)
     const account = accounts[0];
@@ -112,6 +118,13 @@ function DashboardContent() {
     const { syncHistory } = useUnifiedLoading();
     const effectiveFilter = useMemo(() => getEffectiveDashboardFilter(dashboardFilter), [dashboardFilter]);
     const filterSentence = isEmptyDashboardFilter(effectiveFilter) ? "" : getFilterLabels(effectiveFilter, buildFilterNames(rolesData)).map((l) => l.label).join(", ");
+    const isDetailsForced = isDashboardFilterActive && filterNeedsDetails(effectiveFilter, isAdvanced ? "advanced" : "basic");
+    const isDetailed = details.isDetailed || isDetailsForced;
+    const handleDetailsChange = (isChecked: boolean) => {
+        if (!isChecked && isDetailsForced) clearDashboardFilter();
+        details.setDetailed(isChecked);
+    };
+    const isAnyChipOff = !(isSecurityAlertsVisible && isDirectoryRolesVisible && isPimGroupsVisible && isUnmanagedGroupsVisible && isAgentsVisible);
 
     // Initial load effect: auto-fetch if no data. fetchData honours the 60 minute cache TTL
     // and the sessionStorage cache; refreshData is reserved for explicit refreshes.
@@ -124,7 +137,7 @@ function DashboardContent() {
 
     return (
         <div data-focus-fallback tabIndex={-1} className="mx-auto flex max-w-[1376px] flex-col gap-4 outline-none">
-            <div className="flex flex-col gap-4">
+            <div className="mb-2 flex flex-col gap-4 border-b border-line pb-5">
                 <DashboardHead
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
@@ -133,25 +146,20 @@ function DashboardContent() {
                     isExportDisabled={loading || policiesLoading || rolesData.length === 0}
                     onExport={() => setShowExport(true)}
                     scopeControl={isAdvanced ? <ScopeControl scope={scope} onChange={setScope} /> : undefined}
+                    detailsToggle={details.canToggle ? <DetailsToggle isChecked={isDetailed} onChange={handleDetailsChange} /> : undefined}
                 />
                 <LoadingStatus />
-                <WorkloadChips />
+                {(isDetailed || isAnyChipOff) && <WorkloadChips />}
             </div>
 
-            {/* Data incomplete warning banner */}
-            <DataWarningBanner
+            <DashboardNotices
                 failedCount={failedRoleIds.length}
-                totalCount={rolesData.length}
+                roleCount={rolesData.length}
+                groupCount={pimGroupsData.length}
+                notReadableRoleCount={notReadableRoleCount}
+                notReadableGroupCount={notReadableGroupCount}
                 onRefresh={() => refreshData(true)}
-                className=""
             />
-
-            {notReadableRoleCount + notReadableGroupCount > 0 && (
-                <p role="note" className="text-[13px] leading-5 text-body">
-                    {[notReadableRoleCount > 0 && `${notReadableRoleCount} of ${rolesData.length} roles`, notReadableGroupCount > 0 && `${notReadableGroupCount} of ${pimGroupsData.length} groups`].filter(Boolean).join(" and ")}
-                    {": "}{POLICY_NOT_READABLE}
-                </p>
-            )}
 
             {/* Directory roles failed to load: a block with the cause and Try again, never a toast (spec 4.7) */}
             {error && dismissedRolesError !== error && (
@@ -175,6 +183,7 @@ function DashboardContent() {
                 onRemoveFilterKey={removeDashboardFilterKey}
                 showBlocks={isBasic}
                 showAdvanced={isAdvanced}
+                isDetailed={isDetailed}
                 scope={isAdvanced ? scope : "privileged"}
                 tenantExtensionIds={tenantExtensionIds}
                 rolesError={error}

@@ -6,6 +6,78 @@
       "headers": {
         "Cache-Control": "no-store"
       }
+    },
+    {
+      "route": "/dashboard",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/dashboard/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/report",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/report/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/configure",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/configure/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/settings",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/settings/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/help",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/help/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/demo",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/demo/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure/report",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure/report/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure/configure",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
+    },
+    {
+      "route": "/azure/configure/*",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" }
     }
   ],
   "navigationFallback": {
@@ -23,13 +95,12 @@
     ]
   },
   "globalHeaders": {
-    "X-Robots-Tag": "noindex, nofollow",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__ 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data: https://graph.microsoft.com; font-src 'self' data:; connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com; frame-src 'self' https://login.microsoftonline.com; object-src 'none'; base-uri 'self';"
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__ 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data: https://graph.microsoft.com; font-src 'self' data:; connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com; frame-src 'self' https://login.microsoftonline.com; object-src 'none'; base-uri 'self';"
   },
   "mimeTypes": {
     ".json": "application/json",

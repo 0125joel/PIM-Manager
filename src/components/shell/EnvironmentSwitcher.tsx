@@ -1,36 +1,46 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { navigateGuarded } from "@/utils/leaveEvents";
+import { environmentFromPath, switchEnvironmentPath, type Environment } from "@/utils/shellNavigation";
 
-export type Environment = "entra" | "azure";
-
-/** Spec 17: Azure resources are not there yet; the reason is the same sentence in the tooltip and in the menu line */
-export const AZURE_LATER_REASON = "Azure resources come in a later version of PIM Manager.";
+export type { Environment };
 
 const OPTIONS = [
     { value: "entra" as const, label: "Entra ID" },
-    { value: "azure" as const, label: "Azure", isDisabled: true, disabledReason: AZURE_LATER_REASON },
+    { value: "azure" as const, label: "Azure" },
 ];
 
-const noChange = () => undefined;
+interface EnvironmentSwitcherProps {
+    variant: "bar" | "menu";
+    /** The shell's route; the environment is read from it (Azure spec 1) */
+    currentPath: string;
+    /** The account sheet closes before the navigation, so a leave dialog is not behind it */
+    onChoose?: () => void;
+}
 
 /**
- * The environment switcher "Entra ID | Azure" (spec 17, NG-61). It has no state yet: Entra ID is the only environment,
- * Azure is disabled with its reason. `bar` sits in the top bar from 640 up; `menu` is the row of the account sheet
- * below 640, inside role="menu", with the reason as a line (a tooltip does not work on touch).
+ * The environment switcher "Entra ID | Azure" (Configure spec 17, Azure spec 1). The value is the environment of the
+ * route; choosing the other one navigates to the same page there. The navigation asks the page first, so Configure
+ * with a basket asks before it is left (`useLeaveGuard`). `bar` sits in the top bar from 640 up; `menu` is the row of
+ * the account sheet below 640, inside role="menu".
  */
-export function EnvironmentSwitcher({ variant }: { variant: "bar" | "menu" }) {
+export function EnvironmentSwitcher({ variant, currentPath, onChoose }: EnvironmentSwitcherProps) {
+    const router = useRouter();
+    const value = environmentFromPath(currentPath);
+    const choose = (target: Environment) => {
+        if (target === value) return;
+        onChoose?.();
+        navigateGuarded(switchEnvironmentPath(currentPath, target), router.push);
+    };
+
     if (variant === "bar") {
         return (
-            <div className="w-[160px] shrink-0 md:w-[176px]">
-                <SegmentedControl variant="radiogroup" ariaLabel="Environment" options={OPTIONS} value="entra" onChange={noChange} />
+            <div data-visual-section="environment-switcher" className="w-[160px] shrink-0 md:w-[176px]">
+                <SegmentedControl variant="radiogroup" ariaLabel="Environment" options={OPTIONS} value={value} onChange={choose} />
             </div>
         );
     }
-    return (
-        <>
-            <SegmentedControl variant="menu" ariaLabel="Environment" options={OPTIONS} value="entra" onChange={noChange} showReasonTooltip={false} />
-            <p aria-hidden="true" className="px-2 pt-1.5 text-xs text-muted">{AZURE_LATER_REASON}</p>
-        </>
-    );
+    return <SegmentedControl variant="menu" ariaLabel="Environment" options={OPTIONS} value={value} onChange={choose} />;
 }

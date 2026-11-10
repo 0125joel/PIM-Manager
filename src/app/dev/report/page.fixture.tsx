@@ -6,8 +6,10 @@ import { notFound, useSearchParams } from "next/navigation";
 import { FIXTURES_ENABLED } from "@/config/fixtures";
 import { useTheme } from "@/components/ThemeProvider";
 import { ShellFrame, type ShellMenu } from "@/components/shell/ShellFrame";
+import { HelpPanel, type HelpView } from "@/components/shell/HelpPanel";
 import { RefreshButtonView } from "@/components/ui/RefreshButton";
 import { ReportBody } from "@/app/report/components/ReportBody";
+import { DetailsToggle } from "@/components/ui/DetailsToggle";
 import { changeInConfigureHref } from "@/utils/configureLinks";
 import { buildFixtureAccess } from "@/__tests__/fixtures/configureFixture";
 import { ReportExportDialog } from "@/app/report/components/ReportExportDialog";
@@ -22,7 +24,9 @@ import { REPORT_AUTH_CONTEXTS, buildReportMembership, REPORT_EMERGENCY_IDS, REPO
  * normal build: `next.config.ts` adds the extension only with NEXT_PUBLIC_FIXTURES=1 (`npm run visual` builds it that way).
  * The page state is the real URL state: `view`, `q`, `f`, `role`, `group`. Extra query parameters: `state` =
  * default | loading | noGroups (PIM for Groups not granted), `emergency=0` for no marked accounts, `menu` = top | bottom (the
- * account menu open).
+ * account menu open), `details` = on (default) | off (calm details: the "Show more details" checkbox, off hides the extra tags and signals),
+ * `filters=open` (the filter panel open, as the Azure Report's `state=filters-open`), `help` = help | whatsNew (the help panel open
+ * in the dock, What's new lists every release of `WHATS_NEW_RELEASES`).
  */
 /** The membership read of the fixture: the Contoso members after a short wait; `?state=membersError` fails it, `?state=membersLoading` never finishes */
 function useFixtureMembership(groupId: string | undefined): GroupMembershipState {
@@ -53,6 +57,11 @@ function ReportFixture() {
         const menu = params.get("menu");
         return menu === "top" || menu === "bottom" ? menu : null;
     });
+    // `?help=whatsNew` opens the help panel on What's new, `?help=help` on the help of the Report
+    const [helpView, setHelpView] = useState<HelpView | null>(() => {
+        const help = params.get("help");
+        return help === "help" || help === "whatsNew" ? help : null;
+    });
     const url = useReportUrlState();
     // `?export=1` opens the export dialog on load; the filter of the render ("Privileged only, Has assignments: 7 of 146 roles")
     const [exportScope, setExportScope] = useState<{ roles: ReturnType<typeof buildReportRoles>; groups: ReturnType<typeof buildReportGroups>; filterSentence: string; searchTerm: string } | null>(() =>
@@ -79,6 +88,7 @@ function ReportFixture() {
         return shown.map((g) => (g.group.id === "g-finance" ? { ...g, policies: undefined, settings: undefined, policiesForbidden: true } : g));
     }, [state, groupsSwitch]);
     const emergency = useMemo(() => new Set<string>(params.get("emergency") === "0" ? [] : REPORT_EMERGENCY_IDS), [params]);
+    const isDetailed = params.get("details") !== "off";
 
     if (!FIXTURES_ENABLED) {
         notFound();
@@ -120,6 +130,7 @@ function ReportFixture() {
             onRefresh={() => undefined}
             openMenu={openMenu}
             onOpenMenuChange={setOpenMenu}
+            dock={helpView ? <HelpPanel pathname="/report" view={helpView} onViewChange={setHelpView} onClose={() => setHelpView(null)} onOpenGuide={() => undefined} onStartTour={() => undefined} appVersion="v3.1.0" /> : undefined}
         >
             <ReportBody
                 // `change=1`: the admin of the Configure fixture (Privileged Role Administrator) sees "Change in Configure" (NG-74); the other states pass none
@@ -142,11 +153,13 @@ function ReportFixture() {
                 onRetryFailed={() => undefined}
                 groupsError={state === "groupsFailed" ? "Request failed with status 403" : null}
                 onRetryGroups={() => undefined}
-                syncedText="Synced 3 min ago."
+                syncedText="synced 3 min ago"
                 status={state === "policies" ? <LoadingSentence sentence={buildLoadingSentence({ rolesLoading: false, rolesProgress: 100, policiesLoading: true, policyProgress: { current: 61, total: 146 }, groupsLoading: false, groupsProgress: null }, "settings") ?? ""} /> : undefined}
                 refresh={<RefreshButtonView isDisabled={false} onRefresh={() => undefined} />}
                 onExport={(scope) => setExportScope({ ...scope })}
                 url={url}
+                details={{ isDetailed, toggle: <DetailsToggle isChecked={isDetailed} onChange={() => undefined} /> }}
+                initialIsFiltersOpen={params.get("filters") === "open" ? true : undefined}
             />
             <ReportExportDialog isOpen={exportScope !== null} onClose={() => setExportScope(null)} data={exportData} />
         </ShellFrame>

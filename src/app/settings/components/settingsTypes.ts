@@ -3,6 +3,9 @@ import type { FoundUser } from "@/hooks/useUserSearch";
 import type { EmergencyAccount } from "@/utils/emergencyAccounts";
 import type { ThemeChoice } from "@/components/shell/AccountMenu";
 import type { ViewModePreference } from "@/utils/viewModePreference";
+import type { AzureReportViewPreference } from "@/utils/azureReportViewPreference";
+import type { DetailsPreference } from "@/utils/detailsPreference";
+import type { TourSetting } from "@/utils/tourProgress";
 
 export interface StatusLine {
     kind: "success" | "error";
@@ -22,6 +25,12 @@ export interface DisplayProps {
     onThemeChange: (theme: ThemeChoice) => void;
     viewMode: ViewModePreference;
     onViewModeChange: (mode: ViewModePreference) => void;
+    azureReportView: AzureReportViewPreference;
+    onAzureReportViewChange: (view: AzureReportViewPreference) => void;
+    details: DetailsPreference;
+    onDetailsChange: (value: DetailsPreference) => void;
+    tours: TourSetting;
+    onToursChange: (value: TourSetting) => void;
 }
 
 export interface EmergencySearch {

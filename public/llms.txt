@@ -24,12 +24,12 @@ PIM Manager shows every directory role and PIM group with its assignments and po
 - PIM for Groups: available. Member and owner assignments on PIM-onboarded groups.
 - Role-assignable groups: available. Groups that can hold Entra roles but are not under PIM yet.
 - Security alerts: available. Microsoft's PIM alerts with the accounts involved.
-- Azure resource roles: in development, not available yet. Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources, through Azure Resource Manager (a separate API from Microsoft Graph).
+- Azure resource roles: available. Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources, through Azure Resource Manager (a separate API from Microsoft Graph). Read only in this version: an Azure Report and an Azure dashboard. Configure for Azure comes in a later version.
 
 ## Key facts
 
 - Client-side only: tenant data, tokens and Graph responses stay in the user's browser session.
-- Least privilege: sign-in asks for read permissions only; write permissions are requested per workload when the user chooses to grant them in Configure. An admin consents once per tenant.
+- Least privilege: sign-in asks for read permissions only; write permissions are requested per workload when the user chooses to grant them in Configure. An admin consents once per tenant. Azure asks for one extra read permission (Azure Resource Manager, `https://management.azure.com/user_impersonation`) when the user chooses Turn on Azure, not at sign-in.
 - Hosted at https://pimmanager.com, or self-hosted on Azure Static Web Apps (free tier) with the user's own app registration.
 - Live demo on a fictional tenant (Contoso), no sign-in and nothing sent to Microsoft: https://pimmanager.com/demo
 - Author: Joël Prins.

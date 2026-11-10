@@ -1,19 +1,24 @@
 "use client";
 
 import { Chip } from "@/components/ui/Chip";
-import type { DashboardFilterKey } from "@/types/dashboardFilter.types";
-import type { FilterLabel } from "@/utils/dashboardFilter";
 
-interface ReportFilterChipsProps {
-    chips: FilterLabel[];
-    onRemove: (key: DashboardFilterKey) => void;
+/** One chip: the filter key it removes and its text; a key of the other view carries a muted suffix */
+export interface FilterChip<K extends string> {
+    key: K;
+    label: string;
+    suffix?: string;
+}
+
+interface ReportFilterChipsProps<K extends string> {
+    chips: readonly FilterChip<K>[];
+    onRemove: (key: K) => void;
     onClearAll: () => void;
     /** "7 of 146 roles" */
     resultText: string | null;
 }
 
-/** The active filter as removable chips with names, "Clear all" and the count on the right (spec 2.2). A key of the other view carries its suffix in muted text. */
-export function ReportFilterChips({ chips, onRemove, onClearAll, resultText }: ReportFilterChipsProps) {
+/** The active filter as removable chips with names, "Clear all" and the count on the right (spec 2.2). A key of the other view carries its suffix in muted text. Generic over the key, so the Azure Report uses the same chips. */
+export function ReportFilterChips<K extends string>({ chips, onRemove, onClearAll, resultText }: ReportFilterChipsProps<K>) {
     if (chips.length === 0 && !resultText) return null;
     return (
         <div className="mt-3 flex flex-wrap items-center gap-2">

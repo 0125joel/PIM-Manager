@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { WorkloadState } from "@/types/workload.types";
 import type { RoleDetailData } from "@/types/directoryRole.types";
 import type { PimGroupData } from "@/types/pimGroup.types";
-import { buildContosoTenant, PEOPLE, GROUPS, ROLE } from "@/demo/contoso/tenant";
+import { buildContosoTenant, PEOPLE, GROUPS, ROLE, SERVICE_PRINCIPALS } from "@/demo/contoso/tenant";
 import { createFakeGraph, type GraphRequest } from "@/demo/graph/server";
 import { createDemoFetch } from "@/demo/runtime/fetch";
 import { createGraphClient } from "@/utils/graphClient";
@@ -142,6 +142,17 @@ describe("the app's loaders against the fake Graph", () => {
             .get();
         expect(result.value).toHaveLength(1);
         expect(result.value[0].displayName).toBe("Contoso Ops Agent Blueprint");
+    });
+
+    it("types a managed identity, an agent identity and an app as Graph does", async () => {
+        const ids = [SERVICE_PRINCIPALS.aksIdentity.id, SERVICE_PRINCIPALS.opsAgent.id, SERVICE_PRINCIPALS.deploy.id];
+        const result = await client().api("/servicePrincipals")
+            .filter(`id in ('${ids.join("','")}')`)
+            .select("id,servicePrincipalType")
+            .get();
+        const typeOf = (id: string) => result.value.find((sp: { id: string }) => sp.id === id)?.servicePrincipalType;
+        expect(result.value).toHaveLength(3);
+        expect(ids.map(typeOf)).toEqual(["ManagedIdentity", "ServiceIdentity", "Application"]);
     });
 
     it("reads an agent blueprint name and ignores a blueprint that is not in the tenant", async () => {

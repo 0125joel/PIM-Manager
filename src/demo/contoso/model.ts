@@ -21,6 +21,8 @@ export interface DemoServicePrincipal {
     displayName: string;
     /** Absent: an ordinary app. An Agent ID object: its Graph type and, for an agent identity, its blueprint appId */
     agent?: { type: "agentIdentity"; blueprintAppId: string } | { type: "agentIdentityBlueprintPrincipal" };
+    /** A managed identity: Graph `servicePrincipalType` `ManagedIdentity` */
+    isManagedIdentity?: true;
 }
 
 export interface DemoApplication {

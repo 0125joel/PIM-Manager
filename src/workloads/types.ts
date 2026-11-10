@@ -23,8 +23,11 @@ export interface WorkloadCache<T, X> {
     peekTimestamp(): string | null;
 }
 
-export interface WorkloadRunContext<T, X> {
-    client: Client;
+/**
+ * `C` is the client a workload reads with: the Graph `Client` by default, the ARM client for Azure (Azure spec 5).
+ */
+export interface WorkloadRunContext<T, X, C = Client> {
+    client: C;
     signal: AbortSignal;
     /** True after a write, from the wizard and for "Full refresh": reload everything */
     force: boolean;
@@ -62,37 +65,54 @@ export interface WorkloadStart {
     message: string;
 }
 
-export interface WorkloadAdapter<T, X = undefined> {
-    id: WorkloadType;
-    /** Scopes of the Graph token for this workload; undefined means the login scopes */
+/** The Entra workloads, and Azure, which has its own provider and is not one of the Entra workloads */
+export type EngineWorkloadId = WorkloadType | "azureResources";
+
+export interface WorkloadAdapter<T, X = undefined, C = Client> {
+    id: EngineWorkloadId;
+    /** Scopes of the Graph token for this workload; undefined means the login scopes. Not used with another client */
     scopes?: string[];
     initialExtras: X;
     cache: WorkloadCache<T, X>;
     /** What the run begins with, from what is loaded and whether the run is forced */
     begin(current: WorkloadContent<T, X>, force: boolean): WorkloadStart;
-    run(ctx: WorkloadRunContext<T, X>): Promise<WorkloadOutcome<T, X>>;
+    run(ctx: WorkloadRunContext<T, X, C>): Promise<WorkloadOutcome<T, X>>;
     /**
      * Quiet work after the cache was shown, for what a reload cut short (group approver names). It runs once per
      * hydrate, outside any phase, and may only patch; a rejection is logged and the cached data stays.
      */
-    afterHydrate?(content: WorkloadContent<T, X>, ctx: WorkloadFollowUpContext<T, X>): Promise<void>;
+    afterHydrate?(content: WorkloadContent<T, X>, ctx: WorkloadFollowUpContext<T, X, C>): Promise<void>;
+    /** The sentence `loading.error` gets when a run fails; undefined means the Graph wording of `describeLoadFailure` */
+    describeFailure?(error: unknown): string;
+    /**
+     * A later round over what a run left for later (Azure: Read the rest, `engine.resume`). It runs like a quiet refresh:
+     * the data stays on screen, `message` shows while it starts, and the data keeps its `lastFetched`, because what was
+     * read before is as old as it was.
+     */
+    resume?: {
+        message: string;
+        run(ctx: WorkloadRunContext<T, X, C>): Promise<WorkloadOutcome<T, X>>;
+    };
 }
 
-export interface WorkloadFollowUpContext<T, X> {
-    getClient(): Promise<Client>;
+export interface WorkloadFollowUpContext<T, X, C = Client> {
+    getClient(): Promise<C>;
     signal: AbortSignal;
     patch(updater: (content: WorkloadContent<T, X>) => WorkloadContent<T, X>): void;
 }
 
-/** What the engine needs from the place the state lives (the unified provider). */
-export interface WorkloadStore<T, X> {
-    get(): WorkloadState<T, X>;
-    apply(updater: (state: WorkloadState<T, X>) => WorkloadState<T, X>): void;
+/** The state the engine reads and writes: a workload's state without its Entra workload name */
+export type EngineState<T, X> = Omit<WorkloadState<T, X>, "workload">;
+
+/** What the engine needs from the place the state lives (the unified provider, the Azure provider). */
+export interface WorkloadStore<T, X, S extends EngineState<T, X> = WorkloadState<T, X>> {
+    get(): S;
+    apply(updater: (state: S) => S): void;
 }
 
-export interface WorkloadEngineDeps<T, X> {
-    store: WorkloadStore<T, X>;
-    getClient: (scopes?: string[]) => Promise<Client>;
+export interface WorkloadEngineDeps<T, X, C = Client, S extends EngineState<T, X> = WorkloadState<T, X>> {
+    store: WorkloadStore<T, X, S>;
+    getClient: (scopes?: string[]) => Promise<C>;
     /** The loaded data is now as fresh as `timestamp` (default: now) */
     onSynced: (timestamp?: Date) => void;
 }

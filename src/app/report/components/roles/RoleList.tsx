@@ -1,6 +1,7 @@
 "use client";
 
 import { Tag } from "@/components/ui/Tag";
+import { useIsDetailed } from "@/contexts/DetailsContext";
 import type { ReportSort, RoleListRow } from "@/utils/reportList";
 import { ListFrame, ListRowButton } from "../ListFrame";
 
@@ -14,6 +15,7 @@ interface RoleListProps {
 
 /** The roles of the Report (spec 2.4): name with Privileged or Custom, "{e} eligible, {a} active", and only the two red signals. */
 export function RoleList({ rows, currentId, onSelect, sort, onSortChange }: RoleListProps) {
+    const isDetailed = useIsDetailed();
     const stopId = rows.some((r) => r.id === currentId) ? currentId : rows[0]?.id;
     return (
         <ListFrame label="Role" sort={sort} onSortChange={onSortChange}>
@@ -27,8 +29,8 @@ export function RoleList({ rows, currentId, onSelect, sort, onSortChange }: Role
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-[18px] text-muted">
                         <span>{`${row.eligible} eligible, ${row.active} active`}</span>
                         {row.isPolicyFailed && <span>Not loaded</span>}
-                        {row.hasNoMfaSignal === true && <span className="text-danger-text">No MFA on activation</span>}
-                        {row.hasPermanentActive && <span className="text-danger-text">Permanent active</span>}
+                        {isDetailed && row.hasNoMfaSignal === true && <span className="text-danger-text">No MFA on activation</span>}
+                        {isDetailed && row.hasPermanentActive && <span className="text-danger-text">Permanent active</span>}
                     </span>
                 </ListRowButton>
             ))}

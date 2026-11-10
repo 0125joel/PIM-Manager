@@ -36,6 +36,8 @@ export interface AccountMenuContent {
 }
 
 interface AccountMenuProps extends AccountMenuContent {
+    /** The shell's route, for the environment switcher of the sheet */
+    currentPath: string;
     isOpen: boolean;
     onClose: () => void;
     anchorRef: RefObject<HTMLElement | null>;
@@ -48,7 +50,7 @@ const THEME_OPTIONS = [
 ];
 
 /** The account menu of spec 3.3: a 320 wide menu under the account button, a bottom sheet below 640. */
-export function AccountMenu({ isOpen, onClose, anchorRef, user, tenantName, tenantId, theme, onThemeChange, updateInfo, appVersion, hasUnseenWhatsNew, onOpenWhatsNew, onOpenHelp, onSignOut, signOutLabel = "Sign out" }: AccountMenuProps) {
+export function AccountMenu({ currentPath, isOpen, onClose, anchorRef, user, tenantName, tenantId, theme, onThemeChange, updateInfo, appVersion, hasUnseenWhatsNew, onOpenWhatsNew, onOpenHelp, onSignOut, signOutLabel = "Sign out" }: AccountMenuProps) {
     const pathname = usePathname();
     const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
     const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,9 +110,9 @@ export function AccountMenu({ isOpen, onClose, anchorRef, user, tenantName, tena
             </div>
 
             {/* Below 640 the top bar and its switcher are not there, so the sheet carries it (Configure spec 17) */}
-            <div className="px-1 pt-3 sm:hidden">
+            <div data-visual-section="environment-sheet" className="px-1 pt-3 sm:hidden">
                 <p className="px-2 pb-1.5 text-xs text-muted">Environment</p>
-                <EnvironmentSwitcher variant="menu" />
+                <EnvironmentSwitcher variant="menu" currentPath={currentPath} onChoose={select(() => undefined)} />
             </div>
 
             <div className="px-1 pb-1 pt-3">

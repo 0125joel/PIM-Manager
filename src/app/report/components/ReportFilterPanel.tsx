@@ -19,7 +19,8 @@ interface ReportFilterPanelProps {
     policiesLoading: boolean;
 }
 
-const SELECT_CLASS = "h-8 w-[150px] min-w-0 rounded border border-line bg-surface px-2 text-[13px] leading-[18px] text-ink disabled:cursor-not-allowed disabled:opacity-50 max-sm:h-11 max-sm:w-[160px]";
+/** The select of a filter control; the Azure filter panel uses it too, so both panels look the same */
+export const FILTER_SELECT_CLASS = "h-8 w-[150px] min-w-0 rounded border border-line bg-surface px-2 text-[13px] leading-[18px] text-ink disabled:cursor-not-allowed disabled:opacity-50 max-sm:h-11 max-sm:w-[160px]";
 
 /**
  * The three groups of controls per view (spec 6.2, `roles-filters-open.png`): each control is one select that writes one
@@ -44,7 +45,7 @@ export function ReportFilterPanel({ view, filter, onChange, roleOptions, extensi
         <div className="grid gap-x-12 gap-y-5 md:grid-cols-3">
             {groups.map(({ group, controls }) => (
                 <div key={group} role="group" aria-labelledby={`${baseId}-${group}`}>
-                    <h3 id={`${baseId}-${group}`} className="mb-3 text-[13px] leading-5 font-semibold text-ink">{group}</h3>
+                    <h2 id={`${baseId}-${group}`} className="mb-3 text-[13px] leading-5 font-semibold text-ink">{group}</h2>
                     {policiesLoading && controls.some((c) => c.needsPolicy) && <p className="-mt-1 mb-2 text-xs text-muted">Available when settings are loaded</p>}
                     <div className="flex flex-col gap-1.5">
                         {controls.map((control) => {
@@ -61,7 +62,7 @@ export function ReportFilterPanel({ view, filter, onChange, roleOptions, extensi
                                         title={isDisabled ? "Available when settings are loaded" : undefined}
                                         aria-describedby={isDisabled ? `${id}-hint` : undefined}
                                         onChange={(event) => onChange(writeControlValue(control, filter, event.target.value))}
-                                        className={`${SELECT_CLASS} ${value !== control.neutral ? "border-accent! bg-accent-tint!" : ""}`}
+                                        className={`${FILTER_SELECT_CLASS} ${value !== control.neutral ? "border-accent! bg-accent-tint!" : ""}`}
                                     >
                                         {optionsOf(control).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                                     </select>

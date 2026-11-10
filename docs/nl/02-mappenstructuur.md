@@ -12,6 +12,7 @@ PIM-manager/
 ├── public/                # Statische bestanden (iconen, afbeeldingen)
 ├── src/                   # Broncode (hoofdapplicatie)
 ├── package.json           # Dependencies en scripts
+├── azuredeploy.json       # ARM-template voor zelf hosten op Azure
 └── README.md              # Project overzicht
 ```
 
@@ -29,8 +30,10 @@ src/
 ├── services/              # Data-ophaal logica
 ├── types/                 # TypeScript type definities
 ├── utils/                 # Hulpfuncties
-├── config/                # Configuratie constanten
-└── hooks/                 # Custom React hooks
+├── config/                # Configuratie constanten en gebruikersteksten
+├── hooks/                 # Custom React hooks
+├── workloads/             # Workload-adapters en de laadengine
+└── demo/                  # Live demo op een verzonnen tenant (Contoso)
 ```
 
 ---
@@ -75,15 +78,17 @@ Globale state management met React Context API.
 
 | Bestand | Doel |
 |---------|------|
-| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM for Groups, etc.) met unified refresh logica |
-| `DirectoryRoleContext.tsx` | **Directory Roles State**: Beheert rol data, policies en toewijzingen. Exporteert `PimDataProvider` voor achterwaartse compatibiliteit. |
+| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM for Groups) met unified refresh logica |
+| `AzureContext.tsx` | **Azure State**: De Azure-toewijzingen en scopes, alleen geladen op de Azure-pagina's |
+| `ConfigureBasketContext.tsx` | **Configure Mandje**: De wijzigingen die je in Configureren verzamelt, per tenant in sessionStorage tot je ze toepast of weggooit |
+| `DemoModeContext.tsx` | **Demo**: Vertelt componenten dat ze in de live demo draaien, zodat acties die naar een tenant schrijven uit staan |
 | `ViewModeContext.tsx` | **UI Voorkeuren**: Beheert Basic/Advanced view mode toggle met localStorage persistentie |
 | `ToastContext.tsx` | **Notificaties**: Toast notificatiesysteem (succes/fout/info, automatisch sluiten na 3s) |
 
 **Belangrijke Context Relaties:**
 - `UnifiedPimContext` orkestreert meerdere workloads
-- `DirectoryRoleContext` levert directory rol-specifieke data
-- Dashboard en Report pagina's consumeren beide contexts
+- De hooks in `hooks/usePimData.ts` (`useRolesData`, `useRolesLoading`, `useRolesActions`) geven het Directory Roles-deel ervan
+- Dashboard en Report pagina's lezen de data via die hooks
 
 ---
 
@@ -201,7 +206,7 @@ flowchart TD
 
     subgraph "Contexts"
         D[UnifiedPimContext]
-        E[DirectoryRoleContext]
+        E[usePimData hooks]
         F[ViewModeContext]
     end
 

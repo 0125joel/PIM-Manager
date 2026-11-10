@@ -55,6 +55,16 @@ Dit document legt belangrijke technische concepten uit die in PIM Manager worden
 2. Zo niet → haal direct op (prioriteit)
 3. Markeer als opgehaald → achtergrond-loader slaat het later over
 
+```mermaid
+flowchart LR
+    A[Gebruiker klikt rol] --> B{Policy geladen?}
+    B -->|Ja| C[Direct tonen]
+    B -->|Nee| D[Priority fetch]
+    D --> E[Tonen zodra klaar]
+    D --> F[Markeer als opgehaald]
+    F --> G[Achtergrond slaat deze rol over]
+```
+
 > [!NOTE]
 > Priority fetch zorgt ervoor dat de rol waarin je geïnteresseerd bent eerst laadt, ongeacht de positie in de wachtrij.
 
@@ -64,17 +74,36 @@ Dit document legt belangrijke technische concepten uit die in PIM Manager worden
 
 **Wat het is**: Een React pattern voor het delen van state over meerdere componenten zonder "prop drilling".
 
-**In PIM Manager**: `PimDataContext` biedt gedeelde toegang tot:
-- Roldata
-- Laadstatussen
-- Ophaalfuncties
-- Ophaalfuncties
-- (Gepland) Schrijfoperaties
+**In PIM Manager**: `UnifiedPimContext` bevat de data van elke workload. Voor Directory Roles geven de hooks in `hooks/usePimData.ts` gedeelde toegang tot:
+- Roldata (`useRolesData`)
+- Laadstatussen (`useRolesLoading`)
+- Ophaalfuncties (`useRolesActions`)
+
+Schrijven gaat niet via de context: Configure roept de services aan vanuit zijn event handlers.
+
+**Zonder Context**:
+```
+App
+ └── Dashboard (geeft data door)
+      └── RoleList (geeft data door)
+           └── RoleCard (gebruikt eindelijk de data)
+```
+
+**Met Context**:
+```
+App
+ └── UnifiedPimProvider (levert data aan iedereen)
+      ├── Dashboard (gebruikt de context direct)
+      ├── Report (gebruikt de context direct)
+      └── Configure (gebruikt de context direct)
+```
 
 **Hoe te gebruiken**:
 ```typescript
 // In elk component
-const { rolesData, loading, fetchPolicyForRole } = usePimData();
+const { rolesData } = useRolesData();
+const { loading } = useRolesLoading();
+const { fetchPolicyForRole } = useRolesActions();
 ```
 
 ---
@@ -89,8 +118,23 @@ const { rolesData, loading, fetchPolicyForRole } = usePimData();
 |--------|---------------|
 | Opslaglocatie | Browser's session storage |
 | Levensduur | Tot browser tab sluit |
-| Versheidscheck | Data ouder dan 5 minuten wordt opnieuw opgehaald |
+| Versheidscheck | Data ouder dan 60 minuten wordt opnieuw opgehaald |
 | Grootte | ~5-10 MB voor typische tenant |
+
+### Cache Flow
+
+```mermaid
+flowchart TD
+    A[Pagina laden] --> B{Cache aanwezig?}
+    B -->|Nee| C[Ophalen via API]
+    B -->|Ja| D{Ouder dan 60 min?}
+    D -->|Nee| E[Gecachte data gebruiken]
+    D -->|Ja| F[Verse data ophalen]
+    C --> G[Opslaan in cache]
+    F --> G
+    G --> H[UI tonen]
+    E --> H
+```
 
 > [!WARNING]
 > Session storage wordt gewist wanneer je de browser tab sluit. Data blijft niet behouden tussen sessies.
@@ -101,14 +145,38 @@ const { rolesData, loading, fetchPolicyForRole } = usePimData();
 
 **Wat het is**: Meerdere parallelle processen die tegelijk data ophalen, met gecontroleerde rate limiting.
 
-**Waarom we het gebruiken**: Het sequentieel ophalen van 130 policies zou ~5 minuten duren. Met 3 workers duurt het ~2 minuten.
+**Waarom we het gebruiken**: 130 policies na elkaar ophalen duurt minuten. Een pool van workers haalt er meerdere tegelijk op, met een vertraging per worker zodat Graph niet throttlet.
+
+### Worker Pool Pattern
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Rollenwachtrij                       │
+│  [Rol 1][Rol 2][Rol 3][Rol 4][Rol 5][Rol 6]...          │
+└─────────────────────────────────────────────────────────┘
+         │         │         │
+         ▼         ▼         ▼
+    ┌─────────┬─────────┬─────────┐
+    │Worker 1 │Worker 2 │Worker 3 │
+    │ Rol 1   │ Rol 2   │ Rol 3   │
+    │ Rol 4   │ Rol 5   │ Rol 6   │
+    │  ...    │  ...    │  ...    │
+    └─────────┴─────────┴─────────┘
+         │         │         │
+         └────────┬┴─────────┘
+                  ▼
+           ┌──────────────┐
+           │ Policy Map   │
+           │ (Resultaten) │
+           └──────────────┘
+```
 
 ### Configuratie
 
 | Instelling | Waarde | Reden |
 |------------|--------|-------|
-| Workers | 8 (geoptimaliseerd) | Maximaal parallelle requests zonder throttling |
-| Vertraging | 300ms (geoptimaliseerd) | Per-worker cooldown tussen requests |
+| Workers | 8 standaard, 12 voor het ophalen van de policy per rol | Parallelle requests zonder throttling |
+| Vertraging | 300ms standaard, 200ms voor het ophalen van de policy per rol | Per-worker cooldown tussen requests |
 | Totale doorvoer | ~26 policies/seconde | 70-80% sneller dan originele implementatie |
 
 > [!CAUTION]
@@ -192,5 +260,5 @@ Deze context beheert de data van alle workloads en zorgt ervoor dat componenten 
 
 ## Volgende Stappen
 
-- [Rapportpagina](./06-rapportpagina.md) - Functie documentatie
+- [Rapportpagina](./08-rapport-pagina.md) - Functie documentatie
 - [Configuratiepagina](./09-configuratie-pagina.md) - Configuratie functies

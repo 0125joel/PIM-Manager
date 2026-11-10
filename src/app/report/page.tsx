@@ -2,6 +2,9 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRolesActions, useRolesData, useRolesLoading } from "@/hooks/usePimData";
+import { useShowDetails } from "@/hooks/useShowDetails";
+import { useTourPage } from "@/hooks/useTourPage";
+import { DetailsToggle } from "@/components/ui/DetailsToggle";
 import { useUnifiedActions, useUnifiedData, useUnifiedLoading } from "@/contexts/UnifiedPimContext";
 import { useEmergencyAccountIds } from "@/hooks/useEmergencyAccountIds";
 import { useNow } from "@/hooks/useNow";
@@ -38,6 +41,8 @@ function ReportPageContent() {
     const { requestConsent } = useIncrementalConsent();
     const emergencyAccountIds = useEmergencyAccountIds();
     const url = useReportUrlState();
+    const details = useShowDetails("entra-report");
+    useTourPage("entra-report", !loading && rolesData.length > 0);
     const customExtensions = useCustomExtensions();
     const blueprintNames = useAgentBlueprintNames(rolesData, workloads.pimGroups.data);
     const now = useNow();
@@ -61,8 +66,8 @@ function ReportPageContent() {
     const lastSync = syncHistory && syncHistory.length > 0 ? syncHistory[0] : null;
     const isAnyLoading = isWorkloadLoading("directoryRoles") || isWorkloadLoading("pimGroups");
     const synced = lastSync && !isAnyLoading ? formatSyncedAgo(lastSync.timestamp, now) : null;
-    // "synced 3 min ago" reads "Synced 3 min ago." in the sentence under the title
-    const syncedText = synced ? `${synced.charAt(0).toUpperCase()}${synced.slice(1)}.` : undefined;
+    // "synced 3 min ago" next to Refresh, as on the dashboard
+    const syncedText = synced ?? undefined;
 
     const extensionList = customExtensions.status === "granted" && !customExtensions.loading ? customExtensions.extensions : null;
     const exportData: ExportData | null = exportScope
@@ -133,6 +138,7 @@ function ReportPageContent() {
                 status={<LoadingStatus subject="settings" />}
                 onExport={(scope) => setExportScope({ ...scope, at: new Date() })}
                 url={url}
+                details={{ isDetailed: details.isDetailed, toggle: details.canToggle ? <DetailsToggle isChecked={details.isDetailed} onChange={details.setDetailed} /> : undefined }}
             />
             <ReportExportDialog isOpen={exportScope !== null} onClose={() => setExportScope(null)} data={exportData} />
         </>

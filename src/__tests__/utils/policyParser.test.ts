@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseGraphPolicy } from "@/utils/policyParser";
+import { buildRuleUpdates, type GraphRule } from "@/utils/policyRules";
+import { toGraphDuration } from "@/utils/durationUtils";
+import { roleRules } from "../fixtures/policyRules";
 import { CUSTOM_EXTENSION_RULE_IDS, CUSTOM_EXTENSION_RULE_TYPE } from "@/config/constants";
 
 const endUserTarget = { caller: "EndUser", operations: ["All"], level: "Assignment", inheritableSettings: [], enforcedSettings: [] };
@@ -114,5 +117,25 @@ describe("parseGraphPolicy on the rules of a PIM for Groups policy", () => {
 
     it("does not throw on a rule without recipients or a recipient type", () => {
         expect(() => parseGraphPolicy({ rules: [notification("Notification_Approver_EndUser_Assignment", { recipientType: undefined, notificationRecipients: undefined })] })).not.toThrow();
+    });
+});
+
+describe("parseGraphPolicy: the shown default of a missing active maximum", () => {
+    // A tenant rule without maximumDuration shows the fallback that buildRuleUpdates writes, not the new-assignment default
+    const rulesWithoutActiveMaximum = () => roleRules().map((rule) => {
+        if (rule.id !== "Expiration_Admin_Assignment") return rule;
+        const copy: Record<string, unknown> = { ...rule };
+        delete copy.maximumDuration;
+        return copy;
+    });
+
+    it("shows P6M when the active maximum is missing", () => {
+        expect(parseGraphPolicy({ rules: rulesWithoutActiveMaximum() }).activeExpiration).toBe("P6M");
+    });
+
+    it("writes the same P6M, as P180D, when the active maximum is missing", () => {
+        const [update] = buildRuleUpdates("directoryRoles", rulesWithoutActiveMaximum() as GraphRule[], [{ field: "allowPermanentActive", to: false }]);
+        expect(update.body.maximumDuration).toBe("P180D");
+        expect(update.body.maximumDuration).toBe(toGraphDuration("P6M"));
     });
 });

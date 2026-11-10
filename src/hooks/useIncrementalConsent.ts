@@ -130,10 +130,15 @@ export function useIncrementalConsent() {
         }
 
         try {
-            await instance.acquireTokenPopup({
+            const result = await instance.acquireTokenPopup({
                 scopes,
                 account: accounts[0]
             });
+            // Consent given by another account says nothing about this one
+            if (result.account?.homeAccountId !== accounts[0].homeAccountId) {
+                Logger.warn("useIncrementalConsent", "Consent popup was finished with another account; nothing stored");
+                return false;
+            }
             setWorkloadEnabled(workload, true);
             return true;
         } catch (popupError: unknown) {
@@ -164,10 +169,15 @@ export function useIncrementalConsent() {
         if (accounts.length === 0) return false;
 
         try {
-            await instance.acquireTokenPopup({
+            const result = await instance.acquireTokenPopup({
                 scopes,
                 account: accounts[0]
             });
+            // Consent given by another account says nothing about this one
+            if (result.account?.homeAccountId !== accounts[0].homeAccountId) {
+                Logger.warn("useIncrementalConsent", "Consent popup was finished with another account; nothing stored");
+                return false;
+            }
             setWriteConsentGranted(workload, true);
             return true;
         } catch (popupError: unknown) {

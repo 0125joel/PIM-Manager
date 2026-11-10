@@ -1,10 +1,11 @@
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { createTrailingThrottle, PROGRESS_FLUSH_MS } from "@/utils/throttle";
 import { createUpdateBatcher } from "@/utils/updateBatcher";
-import { describeLoadFailure, getErrorMessage, isAbortError } from "@/utils/errorUtils";
+import { describeLoadFailure, getErrorCode, getErrorMessage, getErrorStatusCode, isAbortError } from "@/utils/errorUtils";
 import { Logger } from "@/utils/logger";
-import type { WorkloadState } from "@/types/workload.types";
+import type { WorkloadLoadingState } from "@/types/workload.types";
 import type {
+    EngineState,
     WorkloadAdapter,
     WorkloadContent,
     WorkloadEngine,
@@ -23,6 +24,48 @@ export function isWorkloadFresh(lastFetched: string | undefined, now: number = D
     return !Number.isNaN(at) && now - at < WORKLOAD_TTL_MS;
 }
 
+/**
+ * The engine plus `abort`: stop what runs without touching the cache or the state. The Azure provider calls it when it
+ * really unmounts (`createUnmountAbort`).
+ */
+export type AbortableWorkloadEngine<T, X> = WorkloadEngine<T, X> & {
+    abort(): void;
+    /**
+     * The adapter's `resume` round (Azure: Read the rest), quiet, as one run like any other: a later `refresh` replaces
+     * it and `abort` or `clear` stops it. Does nothing while a run or its background phase goes, or without `resume`.
+     */
+    resume(): Promise<void>;
+};
+
+/**
+ * How long a provider waits after its cleanup before it aborts its engine. React strict mode unmounts and remounts at
+ * once, in the same commit, so any delay longer than zero tells the two apart; 100 ms leaves room without letting a
+ * run read on for long after the user left.
+ */
+export const UNMOUNT_ABORT_DELAY_MS = 100;
+
+/**
+ * Aborts on a real unmount only. `unmounted` (the effect cleanup) arms a timer, `mounted` (the effect) cancels it, so
+ * strict mode's simulated unmount followed by its remount keeps the run going, and leaving the page stops it.
+ */
+export function createUnmountAbort(abort: () => void, delayMs: number = UNMOUNT_ABORT_DELAY_MS): { mounted(): void; unmounted(): void } {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const cancel = () => {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+    };
+    return {
+        mounted: cancel,
+        unmounted() {
+            cancel();
+            timer = setTimeout(() => {
+                timer = null;
+                abort();
+            }, delayMs);
+        },
+    };
+}
+
 function isAborted(error: unknown, signal: AbortSignal): boolean {
     return signal.aborted || isAbortError(error) || getErrorMessage(error) === "Aborted";
 }
@@ -37,10 +80,10 @@ function isAborted(error: unknown, signal: AbortSignal): boolean {
  * - a failed run keeps the data that was loaded and says so, it never turns into "no data",
  * - the cache is written only when nothing is loading, so a half loaded workload is never cached.
  */
-export function createWorkloadEngine<T, X>(
-    adapter: WorkloadAdapter<T, X>,
-    deps: WorkloadEngineDeps<T, X>
-): WorkloadEngine<T, X> {
+export function createWorkloadEngine<T, X, C = Client, S extends EngineState<T, X> = EngineState<T, X>>(
+    adapter: WorkloadAdapter<T, X, C>,
+    deps: WorkloadEngineDeps<T, X, C, S>
+): AbortableWorkloadEngine<T, X> {
     const { store, getClient, onSynced } = deps;
     const label = adapter.id;
 
@@ -50,13 +93,13 @@ export function createWorkloadEngine<T, X>(
     let runId = 0;
     let inflight: Promise<void> | null = null;
 
-    const setLoading = (patch: Partial<WorkloadState<T, X>["loading"]>) => {
+    const setLoading = (patch: Partial<WorkloadLoadingState>) => {
         store.apply((s) => ({ ...s, loading: { ...s.loading, ...patch } }));
     };
 
-    const backgroundOf = (s: WorkloadState<T, X>) => s.loading.background ?? { running: false, progress: { current: 0, total: 0 } };
+    const backgroundOf = (s: S) => s.loading.background ?? { running: false, progress: { current: 0, total: 0 } };
 
-    const batcher = createUpdateBatcher<WorkloadState<T, X>>(
+    const batcher = createUpdateBatcher<S>(
         (combined) => store.apply(combined),
         BACKGROUND_BATCH_MS,
         (count) => Logger.info("Workload", `${label}: applied ${count} background updates in one state update`)
@@ -75,7 +118,7 @@ export function createWorkloadEngine<T, X>(
         }
     };
 
-    const run = (force: boolean): Promise<void> => {
+    const run = (force: boolean, isResume: boolean = false): Promise<void> => {
         controller?.abort();
         // A run reads everything the follow-up of the cache would have completed
         followUp?.abort();
@@ -86,7 +129,7 @@ export function createWorkloadEngine<T, X>(
         const id = ++runId;
         const isCurrent = () => id === runId && !signal.aborted;
 
-        const start = adapter.begin(current(), force);
+        const start = isResume && adapter.resume ? { blocking: false, message: adapter.resume.message } : adapter.begin(current(), force);
         let blocking = start.blocking;
 
         const blockingProgress = createTrailingThrottle<{ current: number; total: number; message: string }>(
@@ -119,10 +162,10 @@ export function createWorkloadEngine<T, X>(
 
         const doRun = async (): Promise<void> => {
             try {
-                const client: Client = await getClient(adapter.scopes);
+                const client: C = await getClient(adapter.scopes);
                 if (!isCurrent()) return;
 
-                const ctx: WorkloadRunContext<T, X> = {
+                const ctx: WorkloadRunContext<T, X, C> = {
                     client,
                     signal,
                     force,
@@ -148,11 +191,12 @@ export function createWorkloadEngine<T, X>(
                     },
                 };
 
-                const outcome = await adapter.run(ctx);
+                const outcome = isResume && adapter.resume ? await adapter.resume.run(ctx) : await adapter.run(ctx);
                 if (!isCurrent()) return;
                 blockingProgress.cancel();
 
-                const lastFetched = new Date().toISOString();
+                // A resume round adds to what was read before, which keeps its age
+                const lastFetched = (isResume ? store.get().lastFetched : undefined) ?? new Date().toISOString();
                 const hasBackground = outcome.background !== undefined;
                 store.apply((s) => ({
                     ...s,
@@ -168,8 +212,10 @@ export function createWorkloadEngine<T, X>(
                     },
                 }));
 
+                // A resume round is synced as of the data it added to
+                const synced = () => (isResume ? onSynced(new Date(lastFetched)) : onSynced());
                 if (!hasBackground) {
-                    onSynced();
+                    synced();
                     return;
                 }
 
@@ -186,7 +232,7 @@ export function createWorkloadEngine<T, X>(
                             ...s,
                             loading: { ...s.loading, phase: "complete", message: "Synced", background: { running: false, progress: backgroundOf(s).progress } },
                         }));
-                        onSynced();
+                        synced();
                     });
             } catch (error: unknown) {
                 blockingProgress.cancel();
@@ -195,7 +241,8 @@ export function createWorkloadEngine<T, X>(
                     Logger.info("Workload", `${label}: run cancelled`);
                     return;
                 }
-                Logger.error("Workload", `${label}: load failed`, error);
+                // Status and code only: a raw ARM or Graph message can name the user, an object id and the scope
+                Logger.error("Workload", `${label}: load failed: status ${getErrorStatusCode(error) ?? "unknown"}, code ${getErrorCode(error) ?? "unknown"}`);
                 batcher.flush();
                 store.apply((s) => ({
                     ...s,
@@ -203,7 +250,7 @@ export function createWorkloadEngine<T, X>(
                         ...s.loading,
                         phase: "error",
                         message: "Failed to load data",
-                        error: describeLoadFailure(error),
+                        error: adapter.describeFailure ? adapter.describeFailure(error) : describeLoadFailure(error),
                         background: { running: false, progress: backgroundOf(s).progress },
                     },
                 }));
@@ -215,6 +262,17 @@ export function createWorkloadEngine<T, X>(
         });
         inflight = promise;
         return promise;
+    };
+
+    /** Stop the run and the follow-up; a stopped run never writes state again (`isCurrent`), so it is never persisted */
+    const stop = () => {
+        controller?.abort();
+        controller = null;
+        followUp?.abort();
+        followUp = null;
+        runId++;
+        inflight = null;
+        batcher.cancel();
     };
 
     return {
@@ -238,6 +296,16 @@ export function createWorkloadEngine<T, X>(
 
         refresh(force: boolean) {
             return run(force);
+        },
+
+        resume() {
+            const s = store.get();
+            if (!adapter.resume) return Promise.resolve();
+            if (inflight || s.loading.phase === "fetching" || backgroundOf(s).running) {
+                Logger.debug("Workload", `${label}: a run is going, not starting a resume round`);
+                return Promise.resolve();
+            }
+            return run(false, true);
         },
 
         patch(updater, immediate = false) {
@@ -294,13 +362,7 @@ export function createWorkloadEngine<T, X>(
         },
 
         clear() {
-            controller?.abort();
-            controller = null;
-            followUp?.abort();
-            followUp = null;
-            runId++;
-            inflight = null;
-            batcher.cancel();
+            stop();
             adapter.cache.clear();
             store.apply((s) => ({
                 ...s,
@@ -311,8 +373,13 @@ export function createWorkloadEngine<T, X>(
             }));
         },
 
+        abort() {
+            stop();
+            Logger.info("Workload", `${label}: aborted, the provider unmounted`);
+        },
+
         dispose() {
-            // Only timers: a run that is going must survive React strict mode's simulated unmount
+            // Only timers: a run that is going must survive React strict mode's simulated unmount (see `abort`)
             batcher.cancel();
         },
     };

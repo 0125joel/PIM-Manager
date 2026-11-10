@@ -10,7 +10,7 @@ import {
     type AuthenticationResult,
     type IPublicClientApplication,
 } from "@azure/msal-browser";
-import { DEMO_ACCOUNT } from "@/demo/contoso/account";
+import { DEMO_ACCOUNT, DEMO_HOME_ACCOUNT_ID } from "@/demo/contoso/account";
 import { exitDemo } from "./session";
 
 /**
@@ -20,7 +20,7 @@ import { exitDemo } from "./session";
  */
 
 const account: AccountInfo = {
-    homeAccountId: `${DEMO_ACCOUNT.id}.${DEMO_ACCOUNT.tenantId}`,
+    homeAccountId: DEMO_HOME_ACCOUNT_ID,
     environment: "login.microsoftonline.com",
     tenantId: DEMO_ACCOUNT.tenantId,
     username: DEMO_ACCOUNT.userPrincipalName,

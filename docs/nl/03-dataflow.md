@@ -418,4 +418,4 @@ flowchart TB
 ## Volgende Stappen
 
 - [Graph API Calls](./04-graph-api-calls.md) - Gedetailleerde API referentie
-- [Belangrijke Concepten](./05-belangrijke-concepten.md) - Technische concepten uitgelegd
+- [Belangrijke Concepten](./06-belangrijke-concepten.md) - Technische concepten uitgelegd

@@ -1,5 +1,75 @@
 import { describe, it, expect } from "vitest";
-import { NAV_ITEMS, getInitials, isNavActive, parseOrganizationResponse, shortTenantId, tenantNameCacheKey } from "@/utils/shellNavigation";
+import { AZURE_NAV_ITEMS, NAV_ITEMS, environmentFromPath, getInitials, homePathFor, isNavActive, isNavItemActive, navItemsFor, parseOrganizationResponse, shortTenantId, switchEnvironmentPath, tenantNameCacheKey } from "@/utils/shellNavigation";
+
+describe("environmentFromPath", () => {
+    it("is azure for /azure and below", () => {
+        expect(environmentFromPath("/azure")).toBe("azure");
+        expect(environmentFromPath("/azure/")).toBe("azure");
+        expect(environmentFromPath("/azure/report")).toBe("azure");
+        expect(environmentFromPath("/azure/configure/")).toBe("azure");
+    });
+    it("is entra for every other route, a longer sibling and no pathname", () => {
+        expect(environmentFromPath("/dashboard")).toBe("entra");
+        expect(environmentFromPath("/settings")).toBe("entra");
+        expect(environmentFromPath("/azurex")).toBe("entra");
+        expect(environmentFromPath("/")).toBe("entra");
+        expect(environmentFromPath(null)).toBe("entra");
+    });
+});
+
+describe("switchEnvironmentPath", () => {
+    it("takes an Entra page to the same Azure page, anything else to the Azure dashboard", () => {
+        expect(switchEnvironmentPath("/dashboard", "azure")).toBe("/azure");
+        expect(switchEnvironmentPath("/report", "azure")).toBe("/azure/report");
+        expect(switchEnvironmentPath("/report/", "azure")).toBe("/azure/report");
+        expect(switchEnvironmentPath("/configure", "azure")).toBe("/azure/configure");
+        expect(switchEnvironmentPath("/settings", "azure")).toBe("/azure");
+        expect(switchEnvironmentPath("/help", "azure")).toBe("/azure");
+    });
+    it("takes an Azure page to the same Entra page, anything else to the dashboard", () => {
+        expect(switchEnvironmentPath("/azure", "entra")).toBe("/dashboard");
+        expect(switchEnvironmentPath("/azure/", "entra")).toBe("/dashboard");
+        expect(switchEnvironmentPath("/azure/report", "entra")).toBe("/report");
+        expect(switchEnvironmentPath("/azure/configure", "entra")).toBe("/configure");
+        expect(switchEnvironmentPath("/azure/unknown", "entra")).toBe("/dashboard");
+    });
+    it("returns a path without the query string", () => {
+        expect(switchEnvironmentPath("/report", "azure")).not.toContain("?");
+    });
+});
+
+describe("homePathFor", () => {
+    it("takes the wordmark to the dashboard of the current environment", () => {
+        expect(homePathFor("entra")).toBe("/dashboard");
+        expect(homePathFor("azure")).toBe("/azure");
+        expect(homePathFor(environmentFromPath("/azure/report"))).toBe("/azure");
+        expect(homePathFor(environmentFromPath("/settings"))).toBe("/dashboard");
+    });
+});
+
+describe("navigation lists", () => {
+    it("has the same three pages under /azure with the same tour ids", () => {
+        expect(AZURE_NAV_ITEMS.map((i) => i.path)).toEqual(["/azure", "/azure/report", "/azure/configure"]);
+        expect(AZURE_NAV_ITEMS.map((i) => i.name)).toEqual(NAV_ITEMS.map((i) => i.name));
+        expect(AZURE_NAV_ITEMS.map((i) => i.tourId)).toEqual(NAV_ITEMS.map((i) => i.tourId));
+        expect(navItemsFor("azure")).toBe(AZURE_NAV_ITEMS);
+        expect(navItemsFor("entra")).toBe(NAV_ITEMS);
+    });
+    it("marks the Azure dashboard active on /azure only, not on the pages below it", () => {
+        const [dashboard, report] = AZURE_NAV_ITEMS;
+        expect(isNavItemActive("/azure", dashboard)).toBe(true);
+        expect(isNavItemActive("/azure/", dashboard)).toBe(true);
+        expect(isNavItemActive("/azure/report", dashboard)).toBe(false);
+        expect(isNavItemActive("/azure/report", report)).toBe(true);
+        expect(isNavItemActive(null, dashboard)).toBe(false);
+    });
+    it("keeps the Entra matching of isNavActive for the Entra items", () => {
+        for (const item of NAV_ITEMS) {
+            expect(isNavItemActive(item.path, item)).toBe(true);
+            expect(isNavItemActive(`${item.path}/x`, item)).toBe(isNavActive(`${item.path}/x`, item.path));
+        }
+    });
+});
 
 describe("isNavActive", () => {
     it("matches the page, a trailing slash and sub-paths", () => {

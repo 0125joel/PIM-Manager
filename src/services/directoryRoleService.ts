@@ -86,8 +86,9 @@ async function fetchAllPages<T>(
 
         return allItems;
     } catch (error) {
+        // Never hand back the pages read so far as if they were everything: the caller decides what a failure means
         Logger.error("directoryRole", `Failed to fetch all pages for ${endpoint}:`, error);
-        return allItems; // Return what we have
+        throw error;
     }
 }
 
@@ -902,11 +903,15 @@ export async function fetchRoleDefinitionsAndAssignments(
                 expand: "principal",
                 select: "id,roleDefinitionId,principalId,directoryScopeId,scheduleInfo,assignmentType"
             }),
-            // memberType Group on an instance means the activation came through a group (Report spec 5.6); a failed read
-            // leaves the page list short, which fetchAllPages logs, and no activation is marked
+            // memberType Group on an instance means the activation came through a group (Report spec 5.6); this read only
+            // marks activations, so a failure is tolerated here, on purpose: no activation is marked and the load goes on
             fetchAllPages<PimScheduleInstance>(client, PIM_URLS.roleAssignmentScheduleInstances, {
                 version: "v1.0",
                 select: "id,principalId,roleDefinitionId,memberType,assignmentType,roleAssignmentScheduleId"
+            }).catch((error: unknown): PimScheduleInstance[] => {
+                if (signal?.aborted) throw error;
+                Logger.warn("directoryRole", "Reading schedule instances failed, activations through a group stay unmarked:", error);
+                return [];
             })
         ]);
         phase(`[2] bulk schedules (assignments=${assignments.length}, eligibilities=${eligibilities.length}, schedules=${assignmentSchedules.length})`, tBulk);

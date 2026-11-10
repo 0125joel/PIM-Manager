@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "@microsoft/microsoft-graph-client";
 import { RateLimiter } from "@/utils/rateLimiter";
-import { parseRetryAfterMs, ThrottleWatcher } from "@/utils/graphClient";
+import { createGraphClient, parseRetryAfterMs, retryOnlyReads, ThrottleWatcher } from "@/utils/graphClient";
 
 class SpyLimiter extends RateLimiter {
     pauses: number[] = [];
@@ -35,6 +35,37 @@ describe("ThrottleWatcher", () => {
         await run(new ThrottleWatcher(limiter), respond(200));
         await run(new ThrottleWatcher(limiter), respond(500));
         expect(limiter.pauses).toEqual([]);
+    });
+});
+
+describe("retryOnlyReads", () => {
+    it("retries GET requests", () => {
+        expect(retryOnlyReads(0, 1, new Request("https://graph.microsoft.com/v1.0/x"), {}, new Response())).toBe(true);
+        expect(retryOnlyReads(0, 1, "https://graph.microsoft.com/v1.0/x", undefined, new Response())).toBe(true);
+    });
+
+    it("never retries writes", () => {
+        expect(retryOnlyReads(0, 1, new Request("https://graph.microsoft.com/v1.0/x", { method: "POST" }), {}, new Response())).toBe(false);
+        expect(retryOnlyReads(0, 1, "https://graph.microsoft.com/v1.0/x", { method: "PATCH" }, new Response())).toBe(false);
+    });
+});
+
+describe("createGraphClient", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("sends a write once when the service answers 503", async () => {
+        const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { code: "ServiceUnavailable", message: "busy" } }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+        }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(
+            createGraphClient("dummy").api("/roleManagement/directory/roleEligibilityScheduleRequests").post({ action: "adminAssign" })
+        ).rejects.toBeDefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });
 

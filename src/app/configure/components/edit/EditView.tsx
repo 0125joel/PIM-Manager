@@ -339,7 +339,7 @@ export function EditView({ url, data }: EditViewProps) {
 
     return (
         <div className="grid items-start gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <section ref={listRef} aria-label={view === "roles" ? "Roles" : "Groups"} className={hasSelection ? "max-lg:hidden" : ""}>
+            <section ref={listRef} aria-label={view === "roles" ? "Roles" : "Groups"} data-tour="configure-edit-list" className={hasSelection ? "max-lg:hidden" : ""}>
                 <TargetList
                     view={view}
                     onViewChange={changeView}
@@ -359,7 +359,7 @@ export function EditView({ url, data }: EditViewProps) {
                     checkedIds={tickedSet}
                 />
             </section>
-            <section aria-label="Detail" className={`min-w-0 ${isSeveral || hasSelection ? "" : "max-lg:hidden"}`}>
+            <section aria-label="Detail" data-tour="configure-edit-detail" className={`min-w-0 ${isSeveral || hasSelection ? "" : "max-lg:hidden"}`}>
                 {isSeveral ? (
                     <article className="overflow-hidden rounded border border-line bg-surface">
                         <SeveralHead

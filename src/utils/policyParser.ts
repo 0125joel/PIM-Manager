@@ -328,7 +328,8 @@ export function parseAssignmentRules(rules: GraphPolicyRule[]): {
         allowPermanentEligible: !eligibleExpirationRule?.isExpirationRequired,
         eligibleExpiration: normalizeDuration(eligibleExpirationRule?.maximumDuration, DEFAULT_DURATIONS.eligibleExpiration),
         allowPermanentActive: !activeExpirationRule?.isExpirationRequired,
-        activeExpiration: normalizeDuration(activeExpirationRule?.maximumDuration, DEFAULT_DURATIONS.newAssignmentActive),
+        // A missing maximum shows the fallback buildExpiration writes (P6M, written as P180D), not the new-assignment default
+        activeExpiration: normalizeDuration(activeExpirationRule?.maximumDuration, DEFAULT_DURATIONS.activeExpiration),
         requireMfaOnActive: enabledRules.includes('MultiFactorAuthentication'),
         requireJustificationOnActive: enabledRules.includes('Justification')
     };

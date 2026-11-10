@@ -260,7 +260,12 @@ export function UnifiedPimProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             // Refresh token expired or consent changed: prompt instead of surfacing a dead-end error
             if (error instanceof InteractionRequiredAuthError) {
-                accessToken = (await instance.acquireTokenPopup(request)).accessToken;
+                const result = await instance.acquireTokenPopup(request);
+                // A popup can be finished with another account: never use that token for the account this page shows
+                if (accounts[0] && result.account?.homeAccountId !== accounts[0].homeAccountId) {
+                    throw new Error(`The sign-in window was finished as ${result.account?.username ?? "another account"}. PIM Manager is signed in as ${accounts[0].username}: sign in with that account.`);
+                }
+                accessToken = result.accessToken;
             } else {
                 throw error;
             }

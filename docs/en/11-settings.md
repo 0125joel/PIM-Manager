@@ -62,7 +62,7 @@ The chip bar on Dashboard provides quick toggles:
 
 ## Settings Modal Tabs
 
-The Settings page has these sections: Workloads and permissions, Display, Emergency access accounts and Advanced. (The former modal tabs were:)
+The Settings page has these sections: Workloads and permissions, Display, Emergency access accounts and Advanced. Display holds the theme, the view the dashboard and the Azure Report open in, and **Details**: with Fewer, each page and view remembers its own Show more details; with More, every page shows everything. Changing Details clears the remembered choices. **Tours**: with On, a short tour starts the first time you open a part of the app; with Off, none start by themselves, while Start the tour in Help keeps working. (The former modal tabs were:)
 
 ### Workloads Tab
 
@@ -105,6 +105,11 @@ The application uses specific localStorage keys for persistence:
 | `pim_visibility_[workloadId]` | Workload visibility toggle | `"true"` or `"false"` |
 | `pim_feature_enabled_[featureId]` | Feature consent status | `"true"` or `"false"` |
 | `LOG_LEVEL` | Developer log level | `"INFO"` or `"DEBUG"` |
+| `details-preference` | Details in Settings > Display | `"fewer"` or `"more"` |
+| `details-[page]` | Show more details of one page or view: `entra-dashboard-basic`, `entra-dashboard-advanced`, `entra-report`, `azure-dashboard-basic`, `azure-dashboard-advanced`, `azure-report` | `"1"` or `"0"` |
+| `tours-seen` | The tours you have seen | `["app","entra-report"]` |
+| `tours-setting` | Tours in Settings > Display | `"on"` or `"off"` |
+| `tours-demo-[product]` | The answer to the demo question per product (`entra`, `azure`); the demo keeps it in its own storage, which ends with the tab | `"yes"` or `"no"` |
 
 **SessionStorage Keys** (separate from settings):
 - `pim_groups_data_cache`: Cached PIM for Groups data
@@ -129,6 +134,6 @@ The application uses specific localStorage keys for persistence:
 
 ## Next Steps
 
-- [Dashboard Page](./06-dashboard-page.md) - Using workload toggles in Dashboard
-- [Report Page](./07-report-page.md) - Multi-workload filtering
-- [Key Concepts](./05-key-concepts.md) - Understanding workloads
+- [Dashboard Page](./07-dashboard-page.md) - Using workload toggles in Dashboard
+- [Report Page](./08-report-page.md) - Multi-workload filtering
+- [Key Concepts](./06-key-concepts.md) - Understanding workloads

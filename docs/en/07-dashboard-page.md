@@ -8,7 +8,7 @@ The Dashboard is the central hub for monitoring your Privileged Identity Managem
 
 **Purpose:** Real-time visibility into PIM coverage and assignment distribution across Directory Roles and PIM for Groups.
 
-**Page head:** the title, a Basic or Advanced switch, in Advanced a Privileged roles or All roles switch, "synced N min ago", Refresh (smart refresh) and Export. Under it the "counting" chips (Directory roles, PIM for Groups, Unmanaged groups, Security alerts) decide which workloads count on this page; a workload without consent shows a dashed chip with a lock that starts consent.
+**Page head:** the title, a Basic or Advanced switch, in Advanced a Privileged roles or All roles switch, **Show more details**, "synced N min ago", Refresh (smart refresh) and Export. A line closes off the head. Under the title the "counting" chips (Directory roles, PIM for Groups, Unmanaged groups, Security alerts) decide which workloads count on this page; they show with details or when a chip is off. A workload without consent shows a dashed chip with a lock that starts consent.
 
 **Filter:** a click on a card, a legend row or an Easy to miss row sets one filter, kept in the URL as `f` (for example `/dashboard?f=mfa:neither`). A bar under the chips shows the filter as a removable chip, a sentence with the count and "Open in report with this filter". Escape clears it.
 
@@ -23,6 +23,17 @@ Eight cards (4 by 2), then in two columns: **Has access** (permanent, eligible, 
 ### Advanced Mode
 
 The same head and cards, then five full width sections: **Has access, and how** (per workload bars, direct or through a group), **On activation** (MFA, approval, justification and maximum duration charts for privileged roles or all roles, plus the custom extensions list), **PIM for Groups** (groups outside PIM, top 5 managed groups), **Most privileged, and who approves** (top 6 accounts, approvers, a warning for roles with one approver) and **Right now** (running activations, eligibility ending within 7 days). The sections use the whole tenant and are dimmed while a filter is active.
+
+### Show more details
+
+The page starts calm: what counts and filters stays, the rest waits behind **Show more details**, next to Basic and Advanced.
+
+| View | Without details |
+|------|-----------------|
+| Basic | No Easy to miss and no From Microsoft. Role-assignable groups outside PIM is full width and shows the first 5 groups (groups with a role first), then "Show all N in Report" |
+| Advanced | No custom extensions under On activation and no Right now. Most privileged shows the first 5 accounts and PIM for Groups the first 5 groups outside PIM, each with a link to the Report |
+
+Basic and Advanced each remember their own choice in this browser. A filter that only a hidden block can set, such as an Easy to miss row in a shared link, shows the details for that visit; unchecking the box then clears the filter. With **Details** set to More in Settings every view shows everything and the checkbox is gone.
 
 ---
 
@@ -155,6 +166,6 @@ One filter model for the dashboard and the report (`utils/dashboardFilter.ts`): 
 
 ## Next Steps
 
-- [Report Page](./07-report-page.md) - Detailed configuration view
-- [Key Concepts](./05-key-concepts.md) - Understanding PIM terminology
+- [Report Page](./08-report-page.md) - Detailed configuration view
+- [Key Concepts](./06-key-concepts.md) - Understanding PIM terminology
 - [Data Flow](./03-data-flow.md) - How data is fetched and processed

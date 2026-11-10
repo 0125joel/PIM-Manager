@@ -74,12 +74,12 @@ flowchart LR
 
 **What it is**: A React pattern for sharing state across multiple components without "prop drilling".
 
-**In PIM Manager**: `PimDataContext` provides shared access to:
-- Role data
-- Loading states
-- Fetch functions
-- Fetch functions
-- (Planned) Write operations
+**In PIM Manager**: `UnifiedPimContext` holds the data of every workload. For Directory Roles, the hooks in `hooks/usePimData.ts` give shared access to:
+- Role data (`useRolesData`)
+- Loading states (`useRolesLoading`)
+- Fetch functions (`useRolesActions`)
+
+Writes do not go through the context: Configure calls the services from its event handlers.
 
 **Without Context**:
 ```
@@ -92,7 +92,7 @@ App
 **With Context**:
 ```
 App
- └── PimDataProvider (provides data to all)
+ └── UnifiedPimProvider (provides data to all)
       ├── Dashboard (uses context directly)
       ├── Report (uses context directly)
       └── Configure (uses context directly)
@@ -101,7 +101,9 @@ App
 **How to use**:
 ```typescript
 // In any component
-const { rolesData, loading, fetchPolicyForRole } = usePimData();
+const { rolesData } = useRolesData();
+const { loading } = useRolesLoading();
+const { fetchPolicyForRole } = useRolesActions();
 ```
 
 ---
@@ -116,7 +118,7 @@ const { rolesData, loading, fetchPolicyForRole } = usePimData();
 |--------|----------------|
 | Storage location | Browser's session storage |
 | Lifetime | Until browser tab closes |
-| Freshness check | Data older than 5 minutes is re-fetched |
+| Freshness check | Data older than 60 minutes is re-fetched |
 | Size | ~5-10 MB for typical tenant |
 
 ### Cache Flow
@@ -125,7 +127,7 @@ const { rolesData, loading, fetchPolicyForRole } = usePimData();
 flowchart TD
     A[Page Load] --> B{Cache exists?}
     B -->|No| C[Fetch from API]
-    B -->|Yes| D{Age < 5 min?}
+    B -->|Yes| D{Age < 60 min?}
     D -->|Yes| E[Use cached data]
     D -->|No| F[Fetch fresh data]
     C --> G[Store in cache]
@@ -143,7 +145,7 @@ flowchart TD
 
 **What it is**: Multiple parallel processes fetching data simultaneously, with controlled rate limiting.
 
-**Why we use it**: Fetching 130 policies sequentially would take ~5 minutes. With 3 workers, it takes ~2 minutes.
+**Why we use it**: Fetching 130 policies one after another takes minutes. A pool of workers fetches several at once, with a delay per worker so Graph does not throttle.
 
 ### Worker Pool Pattern
 
@@ -173,8 +175,8 @@ flowchart TD
 
 | Setting | Value | Reason |
 |---------|-------|--------|
-| Workers | 8 (optimized) | Maximum parallel requests without throttling |
-| Delay | 300ms (optimized) | Per-worker cooldown between requests |
+| Workers | 8 by default, 12 for the per-role policy fetch | Parallel requests without throttling |
+| Delay | 300ms by default, 200ms for the per-role policy fetch | Per-worker cooldown between requests |
 | Total throughput | ~26 policies/second | 70-80% faster than original implementation |
 
 > [!CAUTION]
@@ -258,5 +260,5 @@ This context manages data from all workloads and ensures components (like the Ex
 
 ## Next Steps
 
-- [Report Page](./07-report-page.md) - Feature documentation
+- [Report Page](./08-report-page.md) - Feature documentation
 - [Configure Page](./09-configure-page.md) - Configuration features

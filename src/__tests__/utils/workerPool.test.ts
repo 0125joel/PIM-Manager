@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Logger } from "@/utils/logger";
 import { RateLimiter } from "@/utils/rateLimiter";
 import { runWorkerPool } from "@/utils/workerPool";
 
@@ -58,5 +59,35 @@ describe("RateLimiter backOff", () => {
         const start = Date.now();
         await limiter.acquire(1);
         expect(Date.now() - start).toBeGreaterThanOrEqual(250);
+    });
+});
+
+describe("runWorkerPool errorLog", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    const failing = async () => {
+        throw Object.assign(new Error("The client 'admin@contoso.com' with object id 'abc' does not have authorization over scope '/subscriptions/x'"), { statusCode: 403, code: "AuthorizationFailed" });
+    };
+
+    it("logs the message by default", async () => {
+        const spy = vi.spyOn(Logger, "error").mockImplementation(() => {});
+        await runWorkerPool({ items: ["a"], workerCount: 1, delayMs: 0, processor: failing });
+        expect(spy).toHaveBeenCalledWith("WorkerPool", expect.stringContaining("admin@contoso.com"));
+    });
+
+    it("logs only status and code when asked, and still hands the message to onItemError", async () => {
+        const spy = vi.spyOn(Logger, "error").mockImplementation(() => {});
+        const errors: string[] = [];
+        const result = await runWorkerPool({ items: ["a"], workerCount: 1, delayMs: 0, errorLog: "statusAndCode", processor: failing, onItemError: (_item, error) => errors.push(error) });
+        expect(result.failed).toBe(1);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][1]).toBe("Worker 1 failed for item: status 403, code AuthorizationFailed");
+        expect(errors[0]).toContain("admin@contoso.com");
+    });
+
+    it("says unknown for an error without status or code", async () => {
+        const spy = vi.spyOn(Logger, "error").mockImplementation(() => {});
+        await runWorkerPool({ items: ["a"], workerCount: 1, delayMs: 0, errorLog: "statusAndCode", processor: async () => { throw new Error("secret detail"); } });
+        expect(spy.mock.calls[0][1]).toBe("Worker 1 failed for item: status unknown, code unknown");
     });
 });

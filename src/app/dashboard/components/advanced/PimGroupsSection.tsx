@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { ListSearch, matchesQuery } from "@/components/ui/ListSearch";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
@@ -19,21 +19,23 @@ interface PimGroupsSectionProps {
     onGrant: () => void;
     onRetry: () => void;
     isDimmed: boolean;
+    /** Details off (calm details spec 3.2): at most limit rows, no search, a link to the Report */
+    compact?: { limit: number; reportHref: string };
 }
 
 /** PIM for Groups: the groups outside PIM and the busiest managed groups (spec 4.3 section 3). */
 const OUTSIDE_LIMIT = 8;
 
-export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetry, isDimmed }: PimGroupsSectionProps) {
+export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetry, isDimmed, compact }: PimGroupsSectionProps) {
     const [showAllOutside, setShowAllOutside] = useState(false);
     const [query, setQuery] = useState("");
-    const isSearching = query.trim() !== "";
+    const isSearching = compact ? false : query.trim() !== "";
     const matching = isSearching ? section.outside.filter((g) => matchesQuery(g.name, query)) : section.outside;
-    const outsideRows = showAllOutside || isSearching ? matching : matching.slice(0, OUTSIDE_LIMIT);
+    const outsideRows = compact ? section.outside.slice(0, compact.limit) : showAllOutside || isSearching ? matching : matching.slice(0, OUTSIDE_LIMIT);
     return (
-        <section tabIndex={-1} aria-labelledby="adv-groups-heading" className={`${PANEL_CLASS} outline-none`}>
-            <SectionHeader eyebrow="groups" title="PIM for Groups" headingId="adv-groups-heading" isDimmed={isDimmed} />
-            <div className={isDimmed ? "opacity-45" : ""}>
+        <section tabIndex={-1} data-tour="advanced-pim-groups" aria-labelledby="adv-groups-heading" className={`${PANEL_CLASS} outline-none ${isDimmed ? DIMMED_CLASS : ""}`}>
+            <SectionHeader eyebrow="groups" title="PIM for Groups" headingId="adv-groups-heading" />
+            <div>
                 {state === "noConsent" && (
                     <StatusBox variant="consent" title="PIM for Groups is not granted yet" className="mt-4" action={<Button variant="primary" size="sm" onClick={onGrant}>Grant read access</Button>}>
                         Reading groups needs two extra read permissions. Microsoft asks you once; nothing is changed in your tenant.
@@ -64,7 +66,7 @@ export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetr
                                 <StatusBox variant="success" className="mt-3">All role-assignable groups are under PIM.</StatusBox>
                             ) : (
                                 <>
-                                {section.outside.length > OUTSIDE_LIMIT && <ListSearch value={query} onChange={setQuery} label="Search groups outside PIM" className="mt-3" />}
+                                {!compact && section.outside.length > OUTSIDE_LIMIT && <ListSearch value={query} onChange={setQuery} label="Search groups outside PIM" className="mt-3" />}
                                 {isSearching && matching.length === 0 && <p className="mt-3 text-[13px] leading-[18px] text-muted">No group matches {`"${query.trim()}"`}.</p>}
                                 <ul className="mt-3 flex flex-col">
                                     {outsideRows.map((g) => (
@@ -76,10 +78,16 @@ export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetr
                                 </ul>
                                 </>
                             )}
-                            {!isSearching && section.outside.length > OUTSIDE_LIMIT && (
+                            {!compact && !isSearching && section.outside.length > OUTSIDE_LIMIT && (
                                 <button type="button" aria-expanded={showAllOutside} onClick={() => setShowAllOutside((v) => !v)} className="mt-2 inline-flex min-h-6 items-center text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11">
                                     {showAllOutside ? "Show fewer" : `Show all ${section.outside.length} groups`}
                                 </button>
+                            )}
+                            {compact && section.outside.length > compact.limit && (
+                                <p className="mt-3 text-[13px] leading-[18px] text-muted">
+                                    {`${compact.limit} of ${section.outside.length} shown. `}
+                                    <Link href={compact.reportHref} className="text-accent underline underline-offset-2">{`Show all ${section.outside.length} in Report`}</Link>
+                                </p>
                             )}
                         </div>
                         <div className={SPLIT_END}>
@@ -95,7 +103,8 @@ export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetr
                                 <SectionNotice>No groups are managed by PIM yet.</SectionNotice>
                             ) : (
                                 <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label="Managed groups table">
-                                    <table className="w-full min-w-[26rem] border-collapse text-[13px] leading-[18px]">
+                                    {/* No minimum width, as the Accounts table: at 390 a minimum hid the last column in the scroll area */}
+                                    <table className="w-full border-collapse text-[13px] leading-[18px]">
                                         <thead>
                                             <tr className="text-right text-muted">
                                                 <th scope="col" className="py-2 pr-3 text-left font-normal">Group</th>
@@ -108,7 +117,7 @@ export function PimGroupsSection({ state, section, errorMessage, onGrant, onRetr
                                         <tbody>
                                             {section.topManaged.map((g) => (
                                                 <tr key={g.id} className="border-t border-line text-right font-mono text-ink">
-                                                    <th scope="row" className="max-w-[12rem] truncate py-2.5 pr-3 text-left font-sans font-medium" title={g.name}>{g.name}</th>
+                                                    <th scope="row" className="max-w-[12rem] break-words py-2.5 pr-3 text-left font-sans font-medium sm:truncate" title={g.name}>{g.name}</th>
                                                     <td className="py-2.5 pr-3">{g.membersEligible}</td>
                                                     <td className="py-2.5 pr-3">{g.membersActive}</td>
                                                     <td className="py-2.5 pr-3">{g.ownersEligible}</td>

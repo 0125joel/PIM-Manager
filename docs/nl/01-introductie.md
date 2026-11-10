@@ -59,6 +59,19 @@ Deze applicatie is ontworpen voor:
 
 ---
 
+## Je weg vinden: de tours
+
+Niemand leest eerst een handleiding voordat hij gaat klikken, dus PIM Manager legt zichzelf uit terwijl je rondkijkt. De eerste keer dat je een onderdeel opent, start een korte tour. Eerst één door de app zelf: de wissel tussen Entra ID en Azure, de drie pagina's, Refresh, Help, Settings en je account. Daarna één voor de pagina waar je bent. Op Azure begint hij bij de scope, want elk getal op Azure gaat over de scope die je kiest.
+
+- Elk onderdeel krijgt de eerste keer zijn eigen tour: het Dashboard in Basic en in Advanced, de Report, Configure en elk van zijn modi, en hetzelfde op Azure.
+- Een tour is een handvol stappen: wat je ziet, wat het betekent en wat je ermee kunt. De laatste stap zegt waar je daarna kijkt.
+- **Skip tour** sluit die tour. **Turn off tours** zorgt dat geen enkele tour nog vanzelf start; zet ze terug aan onder **Settings > Display > Tours**.
+- **Start the tour** in Help, in het paneel en in de volledige gids, laat je kiezen: per product en per pagina, of **All of Entra** en **All of Azure** in één keer.
+- In de live demo vraagt PIM Manager eerst **Do you want to start the tour?**. **Start the tour** toont de tour van de app en van die pagina; elke andere pagina toont zijn eigen tour als je hem voor het eerst opent; **No thanks** slaat de tour van die pagina over, en de volgende onderdelen tonen nog steeds hun eigen tour.
+- Wat de tours onthouden, welke je zag en of ze aan staan, blijft in deze browser. Geen tenantdata.
+
+---
+
 ## Vereisten
 
 ### Microsoft Entra App-registratie
@@ -87,6 +100,7 @@ De applicatie vereist een Microsoft Entra app-registratie met de volgende **gede
 | `RoleManagementPolicy.Read.AzureADGroup` | PIM Groepen policies | Groepsdata onvolledig zonder dit |
 | `PrivilegedAccess-CustomExt.Read.All` | Lijst van PIM custom extensions (Preview) | Keuzelijst en controle op verweesde koppelingen verborgen; welke extension een beleid koppelt blijft zichtbaar |
 | `Policy.Read.All` | Conditional Access-check van Configureren (op verzoek) | De check toont "Not checked"; de rest van de review loopt door |
+| `user_impersonation` (Azure Resource Manager) | De Azure-omgeving: Azure-dashboard en Azure-rapport (PIM voor Azure-resources), gevraagd met een consentpopup wanneer je Azure aanzet | Elke Azure-pagina toont het consentscherm |
 
 **Optionele schrijfmachtigingen** (via incrementele consent, alleen wanneer je in Configure kiest voor Grant permission):
 
@@ -121,7 +135,7 @@ Elke moderne browser (Chrome, Edge, Firefox, Safari) met JavaScript ingeschakeld
 ├─────────────────────────────────────────────────────────┤
 │  State Management Laag                                  │
 │  ├── UnifiedPimContext (Workload Orkestratie)           │
-│  ├── DirectoryRoleContext (Directory Rollen)            │
+│  ├── AzureContext (Azure-resources)                     │
 │  └── ViewModeContext (UI Voorkeuren)                    │
 ├─────────────────────────────────────────────────────────┤
 │  Data Services                                          │

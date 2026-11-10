@@ -16,7 +16,7 @@ export function StepsBar({ steps, current, onOpen }: StepsBarProps) {
     const name = GUIDED_STEPS.find((s) => s.step === current)?.name ?? "";
     return (
         <>
-            <nav aria-label="Steps" className="mb-4 max-sm:hidden">
+            <nav aria-label="Steps" data-tour="configure-guided-steps" className="mb-4 max-sm:hidden">
                 <ol className="grid grid-cols-5 overflow-hidden rounded border border-line bg-surface">
                     {steps.map((s) => {
                         const isDone = s.status === "done";
@@ -35,14 +35,14 @@ export function StepsBar({ steps, current, onOpen }: StepsBarProps) {
                                         <span className="truncate">{`${s.step}. ${s.name}`}</span>
                                         {isDone && <span className="sr-only">, done</span>}
                                     </span>
-                                    <span className="mt-0.5 truncate text-xs text-muted max-w-full">{s.line}</span>
+                                    <span className="mt-0.5 line-clamp-2 max-w-full text-xs text-muted">{s.line}</span>
                                 </button>
                             </li>
                         );
                     })}
                 </ol>
             </nav>
-            <p className="mb-4 text-sm text-body sm:hidden">
+            <p data-tour="configure-guided-steps" className="mb-4 text-sm text-body sm:hidden">
                 {`Step ${current} of ${GUIDED_STEPS.length}: `}
                 <span className="font-semibold text-ink">{name}</span>
             </p>

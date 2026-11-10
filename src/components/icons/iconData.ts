@@ -1,7 +1,7 @@
-// Generated from docs/Assets/next-gen/icons/*.svg (20 by 20 grid, stroke 1.5). Do not edit by hand.
+// Generated from docs/Assets/icons/*.svg (20 by 20 grid, stroke 1.5). Do not edit by hand.
 // Each icon is a list of [tag, attributes]. A style object carries the one accent element.
 
-export type IconElement = [tag: "path" | "circle" | "rect", attrs: Record<string, string | Record<string, string>>];
+export type IconElement = [tag: "path" | "circle" | "rect" | "ellipse", attrs: Record<string, string | Record<string, string>>];
 
 export const ICON_DATA = {
   "activation-requirement": [
@@ -284,6 +284,122 @@ export const ICON_DATA = {
     ["path", {"d": "M11.5 3.5V7H15"}],
     ["path", {"d": "M7.8 14v-2.2M12.2 14v-1.4"}],
     ["path", {"d": "M10 14V9.8", "style": {"stroke": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-acr": [
+    ["rect", {"x": "6.5", "y": "3", "width": "10", "height": "7", "rx": "1.5"}],
+    ["rect", {"x": "3.5", "y": "10", "width": "10", "height": "7", "rx": "1.5"}],
+    ["circle", {"cx": "13", "cy": "6.5", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-aks": [
+    ["path", {"d": "M10 2.8l6 3.4v6.6l-6 3.4-6-3.4V6.2z"}],
+    ["path", {"d": "M10 10l6-3.4M10 10v6.8M10 10L4 6.6"}],
+    ["circle", {"cx": "10", "cy": "10", "r": "1.1", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-app-gateway": [
+    ["rect", {"x": "2.5", "y": "5", "width": "6", "height": "10", "rx": "1.2"}],
+    ["path", {"d": "M11 10h6M14.5 7.5L17 10l-2.5 2.5"}],
+    ["circle", {"cx": "5.5", "cy": "10", "r": "1", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-app-insights": [
+    ["rect", {"x": "3", "y": "3", "width": "6", "height": "8", "rx": "1.5"}],
+    ["rect", {"x": "11", "y": "3", "width": "6", "height": "5", "rx": "1.5"}],
+    ["rect", {"x": "11", "y": "10", "width": "6", "height": "7", "rx": "1.5"}],
+    ["rect", {"x": "3", "y": "13", "width": "6", "height": "4", "rx": "1.5"}],
+    ["circle", {"cx": "6", "cy": "7", "r": "1.3", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-app-plan": [
+    ["rect", {"x": "3.5", "y": "3.5", "width": "13", "height": "4", "rx": "1"}],
+    ["rect", {"x": "3.5", "y": "8.5", "width": "13", "height": "4", "rx": "1"}],
+    ["rect", {"x": "3.5", "y": "13.5", "width": "13", "height": "3", "rx": "1"}],
+    ["circle", {"cx": "14.5", "cy": "5.5", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-app-service": [
+    ["circle", {"cx": "10", "cy": "10", "r": "6.5"}],
+    ["path", {"d": "M3.5 10h13M10 3.5c-2 2-2 11 0 13M10 3.5c2 2 2 11 0 13"}],
+    ["circle", {"cx": "10", "cy": "10", "r": "1.1", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-automation": [
+    ["path", {"d": "M15.29 8.93 L17.15 9.14 L17.15 10.86 L15.29 11.07 L14.50 12.98 L15.66 14.45 L14.45 15.66 L12.98 14.50 L11.07 15.29 L10.86 17.15 L9.14 17.15 L8.93 15.29 L7.02 14.50 L5.55 15.66 L4.34 14.45 L5.50 12.98 L4.71 11.07 L2.85 10.86 L2.85 9.14 L4.71 8.93 L5.50 7.02 L4.34 5.55 L5.55 4.34 L7.02 5.50 L8.93 4.71 L9.14 2.85 L10.86 2.85 L11.07 4.71 L12.98 5.50 L14.45 4.34 L15.66 5.55 L14.50 7.02z"}],
+    ["circle", {"cx": "10", "cy": "10", "r": "2.2", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-cosmos": [
+    ["circle", {"cx": "10", "cy": "6", "r": "2.4"}],
+    ["circle", {"cx": "5", "cy": "14", "r": "2.4"}],
+    ["circle", {"cx": "15", "cy": "14", "r": "2.4"}],
+    ["path", {"d": "M8.2 7.7L6.3 11.8M11.8 7.7l1.9 4.1M7.5 14h5"}],
+    ["circle", {"cx": "10", "cy": "10.5", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-key-vault": [
+    ["rect", {"x": "4.5", "y": "9", "width": "11", "height": "8", "rx": "1.8"}],
+    ["path", {"d": "M7 9V6.8a3 3 0 0 1 6 0V9"}],
+    ["circle", {"cx": "10", "cy": "13", "r": "1.2", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-lb": [
+    ["path", {"d": "M2.5 10h4"}],
+    ["rect", {"x": "6.5", "y": "7.5", "width": "3", "height": "5", "rx": "1"}],
+    ["path", {"d": "M9.5 10L13 5M9.5 10h3.5M9.5 10L13 15"}],
+    ["rect", {"x": "13.5", "y": "3.5", "width": "4", "height": "3", "rx": "0.8"}],
+    ["rect", {"x": "13.5", "y": "8.5", "width": "4", "height": "3", "rx": "0.8"}],
+    ["rect", {"x": "13.5", "y": "13.5", "width": "4", "height": "3", "rx": "0.8"}],
+  ],
+  "resource-log-analytics": [
+    ["rect", {"x": "3", "y": "4", "width": "14", "height": "12", "rx": "2"}],
+    ["path", {"d": "M6.5 8l2.5 2-2.5 2"}],
+    ["path", {"d": "M10.8 12.5h2.8", "style": {"stroke": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-logic-app": [
+    ["circle", {"cx": "4.5", "cy": "5", "r": "1.8"}],
+    ["circle", {"cx": "15.5", "cy": "5", "r": "1.8"}],
+    ["circle", {"cx": "10", "cy": "15", "r": "1.8"}],
+    ["path", {"d": "M6.3 5.6h7.4M5 6.8l4 6.6M15 6.8l-4 6.6"}],
+    ["circle", {"cx": "10", "cy": "15", "r": "0.7", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-nic": [
+    ["rect", {"x": "3", "y": "3.5", "width": "14", "height": "10", "rx": "1.5"}],
+    ["rect", {"x": "6.5", "y": "6", "width": "7", "height": "5", "rx": "1"}],
+    ["path", {"d": "M8 13.5V16.5M10 13.5V16.5M12 13.5V16.5"}],
+    ["circle", {"cx": "6.5", "cy": "5.2", "r": "0.8", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-nsg": [
+    ["path", {"d": "M10 2.8l6 2.4v4.4c0 3.6-2.5 6.3-6 7.6-3.5-1.3-6-4-6-7.6V5.2z"}],
+    ["circle", {"cx": "10", "cy": "9.8", "r": "1.8", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-public-ip": [
+    ["circle", {"cx": "10", "cy": "10", "r": "6.5"}],
+    ["path", {"d": "M10 13.5V6.5M7 9.5l3-3 3 3"}],
+    ["circle", {"cx": "10", "cy": "10", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-sql-database": [
+    ["rect", {"x": "3.5", "y": "3.5", "width": "13", "height": "13", "rx": "1.5"}],
+    ["path", {"d": "M3.5 8.5h13M3.5 12.5h13M8.5 3.5v13M13 3.5v13"}],
+  ],
+  "resource-sql-server": [
+    ["rect", {"x": "3.5", "y": "3.5", "width": "13", "height": "13", "rx": "1.5"}],
+    ["path", {"d": "M3.5 8.5h13M3.5 12.5h13"}],
+    ["circle", {"cx": "6.5", "cy": "6", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+    ["circle", {"cx": "6.5", "cy": "10.5", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+    ["circle", {"cx": "6.5", "cy": "14.5", "r": "0.9", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-storage": [
+    ["ellipse", {"cx": "10", "cy": "5", "rx": "6", "ry": "2.2"}],
+    ["path", {"d": "M4 5v10c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2V5M4 10c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2"}],
+    ["circle", {"cx": "10", "cy": "5", "r": "1", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-vm": [
+    ["rect", {"x": "2.5", "y": "3.5", "width": "15", "height": "10", "rx": "1.5"}],
+    ["path", {"d": "M7 17h6M10 13.5V17"}],
+    ["circle", {"cx": "10", "cy": "8.5", "r": "1.1", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  "resource-vnet": [
+    ["circle", {"cx": "5", "cy": "5.5", "r": "2"}],
+    ["circle", {"cx": "15", "cy": "5.5", "r": "2"}],
+    ["circle", {"cx": "10", "cy": "14.5", "r": "2"}],
+    ["path", {"d": "M7 5.5h6M6 7.3l3 5M14 7.3l-3 5"}],
+    ["circle", {"cx": "10", "cy": "14.5", "r": "0.8", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
+  ],
+  resource: [
+    ["rect", {"x": "3.5", "y": "3.5", "width": "13", "height": "13", "rx": "3"}],
+    ["circle", {"cx": "10", "cy": "10", "r": "2", "stroke": "none", "style": {"fill": "var(--pim-icon-accent, #0a6fa8)"}}],
   ],
   retry: [
     ["path", {"d": "M4 10a6 6 0 1 0 1.8-4.3"}],

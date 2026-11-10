@@ -14,18 +14,24 @@ function subscribeToMinute(onChange: () => void) {
 const getMinute = () => Math.floor(Date.now() / MINUTE_MS);
 const getServerMinute = () => 0;
 
+/** Pure view: "synced 12 min ago" in mono, hidden while loading and when there is no sync yet. */
+export function SyncStatusView({ lastSyncedAt, isLoading }: { lastSyncedAt: Date | null; isLoading: boolean }) {
+    const minute = useSyncExternalStore(subscribeToMinute, getMinute, getServerMinute);
+
+    if (isLoading || !lastSyncedAt) {
+        return null;
+    }
+
+    return <span className="font-mono text-xs text-muted">{formatSyncedAgo(lastSyncedAt, new Date(minute * MINUTE_MS))}</span>;
+}
+
 /**
  * "synced 12 min ago" in mono, hidden while a workload loads (the status sentence takes over)
  * and when there is no sync yet.
  */
 export function SyncStatus() {
     const { isWorkloadLoading, syncHistory } = useUnifiedLoading();
-    const minute = useSyncExternalStore(subscribeToMinute, getMinute, getServerMinute);
     const lastSync = syncHistory && syncHistory.length > 0 ? syncHistory[0] : null;
 
-    if (isWorkloadLoading("directoryRoles") || isWorkloadLoading("pimGroups") || !lastSync) {
-        return null;
-    }
-
-    return <span className="font-mono text-xs text-muted">{formatSyncedAgo(lastSync.timestamp, new Date(minute * MINUTE_MS))}</span>;
+    return <SyncStatusView lastSyncedAt={lastSync ? lastSync.timestamp : null} isLoading={isWorkloadLoading("directoryRoles") || isWorkloadLoading("pimGroups")} />;
 }

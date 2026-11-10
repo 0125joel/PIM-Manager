@@ -3,21 +3,40 @@
 import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { DashboardFilter } from "@/types/dashboardFilter.types";
-import { isSameFilter, type EasyToMissCategory, type EasyToMissRow } from "@/utils/dashboardStats";
+import { isSameFilter as isSameEntraFilter, type EasyToMissCategory } from "@/utils/dashboardStats";
 
-interface EasyToMissBlockProps {
+/** A row of the block; `filter` is the filter its click sets (the Entra `DashboardFilter`, or the Azure Report's) */
+export interface EasyToMissBlockRow<F = DashboardFilter> {
+    id: string;
+    category: EasyToMissCategory;
+    label: string;
+    /** null: still arriving; the row shows a skeleton and its detail, and does not filter */
+    count: number | null;
+    detail: string;
+    /** Cannot be told: a dash instead of a skeleton, and the row does not filter. Entra rows never set it. */
+    isUnknown?: true;
+    filter: F;
+}
+
+interface EasyToMissBlockProps<F> {
     /** null: the data is still loading */
-    rows: EasyToMissRow[] | null;
+    rows: EasyToMissBlockRow<F>[] | null;
     /** The Directory roles chip is off: most rows have nothing to count, said in words instead of rows of zeros */
     notice?: string;
-    filter: DashboardFilter;
-    onSetFilter: (filter: DashboardFilter) => void;
+    filter: F;
+    onSetFilter: (filter: F) => void;
+    /** Whether two filters are the same; default the Entra `isSameFilter` */
+    isSameFilter?: (a: F, b: F) => boolean;
+    /** What a click on a pressed row sets; default `{}`, the empty Entra filter */
+    emptyFilter?: F;
+    /** Details off (calm details spec 3.4): no rows with 0 or unknown, no explanation under a row, no empty category */
+    isCompact?: boolean;
 }
 
 const CATEGORIES: EasyToMissCategory[] = ["Access without an end", "Accounts you may not expect", "Roles set up halfway"];
 
 /** "Easy to miss": three categories of two rows, each row a button that filters (spec 4.5). */
-export function EasyToMissBlock({ rows, notice, filter, onSetFilter }: EasyToMissBlockProps) {
+export function EasyToMissBlock<F = DashboardFilter>({ rows, notice, filter, onSetFilter, isSameFilter = isSameEntraFilter as unknown as (a: F, b: F) => boolean, emptyFilter = {} as F, isCompact = false }: EasyToMissBlockProps<F>) {
     return (
         <section aria-labelledby="details-heading" className={PANEL_CLASS}>
             <SectionHeader eyebrow="details" title="Easy to miss" headingId="details-heading" />
@@ -25,11 +44,14 @@ export function EasyToMissBlock({ rows, notice, filter, onSetFilter }: EasyToMis
                 <p className="mt-5 text-[13px] leading-[18px] text-muted">{notice}</p>
             ) : (
             <div className="mt-5 grid grid-cols-1 gap-x-12 gap-y-6 lg:grid-cols-2 xl:grid-cols-3">
-                {CATEGORIES.map((category) => (
+                {CATEGORIES.map((category) => {
+                    const categoryRows = (rows ?? [null, null]).filter((row) => row === null || row.category === category).filter((row) => row === null || !isCompact || (row.count !== 0 && row.isUnknown !== true));
+                    if (isCompact && rows !== null && categoryRows.length === 0) return null;
+                    return (
                     <div key={category}>
                         <h3 className="text-[13px] leading-5 font-semibold text-body">{category}</h3>
                         <ul className="mt-2 flex flex-col border-b border-line">
-                            {(rows ?? [null, null]).filter((row) => row === null || row.category === category).map((row, i) => {
+                            {categoryRows.map((row, i) => {
                                 if (row === null) {
                                     return (
                                         <li key={i} className="border-t border-line py-3" aria-hidden="true">
@@ -38,22 +60,22 @@ export function EasyToMissBlock({ rows, notice, filter, onSetFilter }: EasyToMis
                                     );
                                 }
                                 const isPressed = isSameFilter(filter, row.filter);
-                                const isZero = row.count === 0;
+                                const isZero = row.count === 0 || row.isUnknown === true;
                                 return (
                                     <li key={row.id} className="border-t border-line">
                                         <button
                                             type="button"
                                             aria-pressed={isPressed}
-                                            disabled={row.count === null}
-                                            onClick={() => onSetFilter(isPressed ? {} : row.filter)}
+                                            disabled={row.count === null || row.isUnknown === true}
+                                            onClick={() => onSetFilter(isPressed ? emptyFilter : row.filter)}
                                             className={`flex w-[calc(100%+1rem)] items-start gap-4 py-3 text-left max-sm:min-h-11 -mx-2 rounded px-2 transition-colors duration-150 hover:bg-page ${isPressed ? "bg-accent-tint text-accent" : ""}`}
                                         >
                                             <span className={`w-9 shrink-0 font-mono text-xl leading-6 ${isZero ? "text-muted" : "text-warn-text"}`}>
-                                                {row.count === null ? <Skeleton width={28} height={20} /> : row.count}
+                                                {row.isUnknown ? "-" : row.count === null ? <Skeleton width={28} height={20} /> : row.count}
                                             </span>
                                             <span className="min-w-0">
                                                 <span className={`block text-[13px] leading-5 font-medium ${isZero ? "text-body" : "text-ink"} ${isPressed ? "underline underline-offset-2" : ""}`}>{row.label}</span>
-                                                <span className="block text-xs leading-4 text-muted">{row.detail}</span>
+                                                {!isCompact && <span className="block text-xs leading-4 text-muted">{row.detail}</span>}
                                             </span>
                                         </button>
                                     </li>
@@ -61,7 +83,8 @@ export function EasyToMissBlock({ rows, notice, filter, onSetFilter }: EasyToMis
                             })}
                         </ul>
                     </div>
-                ))}
+                    );
+                })}
             </div>
             )}
         </section>

@@ -1,9 +1,10 @@
 import { Document, Font, Page, Path, Circle, StyleSheet, Svg, Text, View, Link } from "@react-pdf/renderer";
 import type { ChartStyle, ExportReport, ReportChart, ReportTable } from "@/utils/exportReport";
+import { pdfCellBreak } from "@/utils/pdfText";
 
 /**
  * The PDF of the export (spec 3.5): drawn from an `ExportReport`, no captured images, charts are vector (Svg and boxes).
- * Direction A of `docs/Assets/next-gen/dashboard/design-options/pdf-options.md`: white page, IBM Plex, big numbers, no severity labels.
+ * White page, IBM Plex, big numbers, no severity labels.
  */
 
 export function registerReportFonts(origin: string): void {
@@ -15,7 +16,7 @@ export function registerReportFonts(origin: string): void {
         ],
     });
     Font.register({ family: "IBM Plex Mono", src: `${origin}/fonts/plex-mono-400.woff` });
-    // Names and role titles are never hyphenated
+    // Names and role titles are never hyphenated; a table cell breaks a long name with `pdfCellBreak` instead
     Font.registerHyphenationCallback((word) => [word]);
 }
 
@@ -34,7 +35,10 @@ const c = {
 const SERIES = ["#0a6fa8", "#8fcbea", "#d97706", "#8a8780", "#177330", "#b42318", "#6a6a64"];
 
 const s = StyleSheet.create({
-    page: { fontFamily: "IBM Plex Sans", fontSize: 9, color: c.ink, paddingTop: 40, paddingBottom: 54, paddingHorizontal: 44, lineHeight: 1.35 },
+    page: { fontFamily: "IBM Plex Sans", fontSize: 9, color: c.ink, paddingTop: 40, paddingBottom: 54, paddingHorizontal: 44 },
+    // lineHeight on the Page hides a fixed footer with a render prop (react-pdf 4.9, measured); it sits on the content
+    // instead, with the Page's fontSize repeated, because a View resolves a lineHeight factor with its own font size
+    body: { fontSize: 9, lineHeight: 1.35 },
     eyebrow: { fontFamily: "IBM Plex Mono", fontSize: 8, color: c.accent, marginBottom: 4 },
     h1: { fontSize: 24, fontWeight: 600, lineHeight: 1.25, marginBottom: 8 },
     sub: { fontSize: 10, color: c.body, marginBottom: 14 },
@@ -116,7 +120,7 @@ function Chart({ chart, style }: { chart: ReportChart; style: ChartStyle }) {
                 chart.items.map((item, index) => (
                     <View key={item.name} style={s.barRow}>
                         <View style={s.barTop}>
-                            <Text>{item.name}</Text>
+                            <Text hyphenationCallback={pdfCellBreak}>{item.name}</Text>
                             <Text style={{ fontFamily: "IBM Plex Mono", fontSize: 8 }}>{item.value} of {chart.total}, {pct(item.value, chart.total)}</Text>
                         </View>
                         <View style={s.barTrack}>
@@ -131,7 +135,7 @@ function Chart({ chart, style }: { chart: ReportChart; style: ChartStyle }) {
                         {chart.items.map((item, index) => (
                             <View key={item.name} style={s.legendRow}>
                                 <View style={[s.swatch, { backgroundColor: SERIES[index % SERIES.length] }]} />
-                                <Text>{item.name}: {item.value} ({pct(item.value, chart.total)})</Text>
+                                <Text hyphenationCallback={pdfCellBreak}>{item.name}: {item.value} ({pct(item.value, chart.total)})</Text>
                             </View>
                         ))}
                     </View>
@@ -140,7 +144,7 @@ function Chart({ chart, style }: { chart: ReportChart; style: ChartStyle }) {
             {style === "tables" &&
                 chart.items.map((item) => (
                     <View key={item.name} style={s.row}>
-                        <Text style={{ flex: 1 }}>{item.name}</Text>
+                        <Text style={{ flex: 1 }} hyphenationCallback={pdfCellBreak}>{item.name}</Text>
                         <Text style={{ width: 28, textAlign: "right" }}>{item.value}</Text>
                         <Text style={{ width: 34, textAlign: "right" }}>{pct(item.value, chart.total)}</Text>
                     </View>
@@ -163,7 +167,7 @@ function Table({ table }: { table: ReportTable }) {
             </View>
             {table.rows.map((row, r) => (
                 <View key={r} style={s.row} wrap={false}>
-                    {row.map((value, i) => <Text key={i} style={[s.cell, cell(i)]}>{value}</Text>)}
+                    {row.map((value, i) => <Text key={i} style={[s.cell, cell(i)]} hyphenationCallback={pdfCellBreak}>{value}</Text>)}
                 </View>
             ))}
             {table.note && <Text style={s.note}>{table.note}</Text>}
@@ -203,87 +207,91 @@ export function ReportDocument({ report, chartStyle }: { report: ExportReport; c
     return (
         <Document title={`${h.title}, ${h.tenant}`} author={h.exporter} creator={`PIM Manager ${h.version}`}>
             <Page size="A4" style={s.page}>
-                <Text style={s.eyebrow}>pim manager report</Text>
-                <Text style={s.h1}>{h.title}</Text>
-                <Text style={s.sub}>{h.tenant} | Microsoft Entra ID | {detailLabel}{h.audience === "management" ? " | management" : ""}</Text>
-                <View style={s.meta}>
-                    {([
-                        ["Data read", h.dataReadAt ? stamp(h.dataReadAt) : "not known"],
-                        ["Counted", h.counted.join(", ") || "nothing"],
-                        ["Filter", h.filter ?? "none"],
-                        ["Exported by", `${h.exporter}, PIM Manager ${h.version}`],
-                    ] as const).map(([k, v]) => (
-                        <View key={k} style={s.metaRow}>
-                            <Text style={s.metaKey}>{k}</Text>
-                            <Text style={s.metaVal}>{v}</Text>
-                        </View>
-                    ))}
-                </View>
+                <View style={s.body}>
+                    <Text style={s.eyebrow}>pim manager report</Text>
+                    <Text style={s.h1}>{h.title}</Text>
+                    <Text style={s.sub}>{h.tenant} | {h.environment ?? "Microsoft Entra ID"} | {detailLabel}{h.audience === "management" ? " | management" : ""}</Text>
+                    <View style={s.meta}>
+                        {([
+                            ["Data read", h.dataReadAt ? stamp(h.dataReadAt) : "not known"],
+                            ["Counted", h.counted.join(", ") || "nothing"],
+                            ["Filter", h.filter ?? "none"],
+                            ["Exported by", `${h.exporter}, PIM Manager ${h.version}`],
+                        ] as const).map(([k, v]) => (
+                            <View key={k} style={s.metaRow}>
+                                <Text style={s.metaKey}>{k}</Text>
+                                <Text style={s.metaVal} hyphenationCallback={pdfCellBreak}>{v}</Text>
+                            </View>
+                        ))}
+                    </View>
 
-                {report.numbers && (
-                    <View style={s.panel}>
-                        <Text style={s.panelEyebrow}>numbers</Text>
-                        <Text style={s.h2}>Where you stand</Text>
-                        <View style={s.kpis}>
-                            {report.numbers.map((n) => (
-                                <View key={n.label} style={s.kpi} wrap={false}>
-                                    <Text style={s.kpiLabel}>{n.label}</Text>
-                                    <Text style={[s.kpiValue, n.isWarning ? { color: c.warn } : {}]}>{n.value}</Text>
-                                    <Text style={s.kpiNote}>{n.note}</Text>
+                    {report.numbers && (
+                        <View style={s.panel}>
+                            <Text style={s.panelEyebrow}>numbers</Text>
+                            <Text style={s.h2}>Where you stand</Text>
+                            <View style={s.kpis}>
+                                {report.numbers.map((n) => (
+                                    <View key={n.label} style={s.kpi} wrap={false}>
+                                        <Text style={s.kpiLabel}>{n.label}</Text>
+                                        <Text style={[s.kpiValue, n.isWarning ? { color: c.warn } : {}]}>{n.value}</Text>
+                                        <Text style={s.kpiNote}>{n.note}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {report.attention && (
+                        <View style={s.panel}>
+                            <Text style={s.panelEyebrow}>attention</Text>
+                            <Text style={s.h2}>What needs attention</Text>
+                            {report.attention.length === 0 && <Text style={s.attnDetail}>Nothing stands out in what is counted.</Text>}
+                            {report.attention.map((a) => (
+                                <View key={a.label} style={s.attnRow} wrap={false}>
+                                    <Text style={s.attnCount}>{a.count}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.attnTitle}>{a.label}</Text>
+                                        <Text style={s.attnDetail}>{a.detail}</Text>
+                                    </View>
                                 </View>
                             ))}
                         </View>
-                    </View>
-                )}
+                    )}
 
-                {report.attention && (
-                    <View style={s.panel}>
-                        <Text style={s.panelEyebrow}>attention</Text>
-                        <Text style={s.h2}>What needs attention</Text>
-                        {report.attention.length === 0 && <Text style={s.attnDetail}>Nothing stands out in what is counted.</Text>}
-                        {report.attention.map((a) => (
-                            <View key={a.label} style={s.attnRow} wrap={false}>
-                                <Text style={s.attnCount}>{a.count}</Text>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.attnTitle}>{a.label}</Text>
-                                    <Text style={s.attnDetail}>{a.detail}</Text>
+                    {report.alerts && (
+                        <View style={s.panel}>
+                            <Text style={s.panelEyebrow}>alerts</Text>
+                            <Text style={s.h2}>From Microsoft</Text>
+                            <Text style={{ color: c.body }}>
+                                {report.alerts.openCount === 0 ? "No active alerts" : `${report.alerts.openCount} active ${report.alerts.openCount === 1 ? "alert" : "alerts"}`}, {report.alerts.passedCount} {report.alerts.passedCount === 1 ? "check" : "checks"} passed.
+                            </Text>
+                            {report.alerts.rows.map((a) => (
+                                <View key={a.title} style={s.row} wrap={false}>
+                                    <Text style={{ flex: 1 }}>{a.title}</Text>
+                                    <Text style={{ width: 70, color: c.muted }}>{a.severity}</Text>
+                                    <Text style={{ width: 60, textAlign: "right" }}>{a.affected} affected</Text>
                                 </View>
-                            </View>
-                        ))}
-                    </View>
-                )}
+                            ))}
+                        </View>
+                    )}
 
-                {report.alerts && (
-                    <View style={s.panel}>
-                        <Text style={s.panelEyebrow}>alerts</Text>
-                        <Text style={s.h2}>From Microsoft</Text>
-                        <Text style={{ color: c.body }}>
-                            {report.alerts.openCount === 0 ? "No active alerts" : `${report.alerts.openCount} active ${report.alerts.openCount === 1 ? "alert" : "alerts"}`}, {report.alerts.passedCount} {report.alerts.passedCount === 1 ? "check" : "checks"} passed.
-                        </Text>
-                        {report.alerts.rows.map((a) => (
-                            <View key={a.title} style={s.row} wrap={false}>
-                                <Text style={{ flex: 1 }}>{a.title}</Text>
-                                <Text style={{ width: 70, color: c.muted }}>{a.severity}</Text>
-                                <Text style={{ width: 60, textAlign: "right" }}>{a.affected} affected</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                {report.notes.length > 0 && (
-                    <View style={s.notes} wrap={false}>
-                        {report.notes.map((note) => <Text key={note}>{note}</Text>)}
-                    </View>
-                )}
+                    {report.notes.length > 0 && (
+                        <View style={s.notes} wrap={false}>
+                            {report.notes.map((note) => <Text key={note}>{note}</Text>)}
+                        </View>
+                    )}
+                </View>
                 <Footer report={report} />
             </Page>
 
             {report.charts && report.charts.length > 0 && (
                 <Page size="A4" style={s.page}>
-                    <Text style={s.eyebrow}>posture</Text>
-                    <Text style={s.h1}>How access is set up</Text>
-                    <View style={[s.chartGrid, { marginTop: 14 }]}>
-                        {report.charts.map((chart) => <Chart key={chart.id} chart={chart} style={chartStyle} />)}
+                    <View style={s.body}>
+                        <Text style={s.eyebrow}>posture</Text>
+                        <Text style={s.h1}>How access is set up</Text>
+                        <View style={[s.chartGrid, { marginTop: 14 }]}>
+                            {report.charts.map((chart) => <Chart key={chart.id} chart={chart} style={chartStyle} />)}
+                        </View>
                     </View>
                     <Footer report={report} />
                 </Page>
@@ -291,22 +299,26 @@ export function ReportDocument({ report, chartStyle }: { report: ExportReport; c
 
             {report.tables.length > 0 && (
                 <Page size="A4" style={s.page}>
-                    {BLOCK_ORDER.flatMap((block) => report.tables.filter((t) => t.block === block)).map((t) => <Table key={t.id} table={t} />)}
+                    <View style={s.body}>
+                        {BLOCK_ORDER.flatMap((block) => report.tables.filter((t) => t.block === block)).map((t) => <Table key={t.id} table={t} />)}
+                    </View>
                     <Footer report={report} />
                 </Page>
             )}
 
             {report.glossary && (
                 <Page size="A4" style={s.page}>
-                    <Text style={s.eyebrow}>definitions</Text>
-                    <Text style={s.h1}>How the numbers are counted</Text>
-                    <View style={s.panel}>
-                        {report.glossary.map((g) => (
-                            <View key={g.term} style={s.row} wrap={false}>
-                                <Text style={{ width: 130, fontWeight: 600 }}>{g.term}</Text>
-                                <Text style={{ flex: 1, color: c.body }}>{g.text}</Text>
-                            </View>
-                        ))}
+                    <View style={s.body}>
+                        <Text style={s.eyebrow}>definitions</Text>
+                        <Text style={s.h1}>How the numbers are counted</Text>
+                        <View style={s.panel}>
+                            {report.glossary.map((g) => (
+                                <View key={g.term} style={s.row} wrap={false}>
+                                    <Text style={{ width: 130, fontWeight: 600 }}>{g.term}</Text>
+                                    <Text style={{ flex: 1, color: c.body }}>{g.text}</Text>
+                                </View>
+                            ))}
+                        </View>
                     </View>
                     <Footer report={report} />
                 </Page>
@@ -314,17 +326,19 @@ export function ReportDocument({ report, chartStyle }: { report: ExportReport; c
 
             {report.appendix && (
                 <Page size="A4" orientation="landscape" style={s.page}>
-                    <Text style={s.eyebrow}>appendix</Text>
-                    <Text style={s.h1}>All assignments</Text>
-                    <Text style={s.note}>{report.appendix.length} rows. The CSV export has the same rows with the object ids.</Text>
-                    <View style={[s.headRow, { marginTop: 8 }]} fixed>
-                        {APPENDIX_COLUMNS.map((col) => <Text key={col.label} style={[s.th, s.cell, { width: col.width }]}>{col.label}</Text>)}
-                    </View>
-                    {report.appendix.map((row, i) => (
-                        <View key={i} style={s.row} wrap={false}>
-                            {APPENDIX_COLUMNS.map((col) => <Text key={col.label} style={[s.cell, { width: col.width }]}>{col.get(row)}</Text>)}
+                    <View style={s.body}>
+                        <Text style={s.eyebrow}>appendix</Text>
+                        <Text style={s.h1}>All assignments</Text>
+                        <Text style={s.note}>{report.appendix.length} rows. The CSV export has the same rows with the object ids.</Text>
+                        <View style={[s.headRow, { marginTop: 8 }]} fixed>
+                            {APPENDIX_COLUMNS.map((col) => <Text key={col.label} style={[s.th, s.cell, { width: col.width }]}>{col.label}</Text>)}
                         </View>
-                    ))}
+                        {report.appendix.map((row, i) => (
+                            <View key={i} style={s.row} wrap={false}>
+                                {APPENDIX_COLUMNS.map((col) => <Text key={col.label} style={[s.cell, { width: col.width }]} hyphenationCallback={pdfCellBreak}>{col.get(row)}</Text>)}
+                            </View>
+                        ))}
+                    </View>
                     <Footer report={report} />
                 </Page>
             )}

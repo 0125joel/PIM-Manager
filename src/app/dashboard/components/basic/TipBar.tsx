@@ -14,9 +14,9 @@ function subscribeToMotion(onChange: () => void) {
 }
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-interface TipBarProps {
-    tips: Tip[];
-    onSetFilter: (filter: DashboardFilter) => void;
+interface TipBarProps<F> {
+    tips: Tip<F>[];
+    onSetFilter: (filter: F) => void;
 }
 
 /**
@@ -24,7 +24,7 @@ interface TipBarProps {
  * keyboard focus is inside and with the pause button, and never advances with reduced motion. The rotating text has no
  * `aria-live`, so a screen reader is not interrupted.
  */
-export function TipBar({ tips, onSetFilter }: TipBarProps) {
+export function TipBar<F = DashboardFilter>({ tips, onSetFilter }: TipBarProps<F>) {
     // null: the first tip (tenant tips lead as soon as they arrive). After a step the shown tip is remembered by id, so
     // tips arriving while someone reads do not swap it.
     const [shownId, setShownId] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export function TipBar({ tips, onSetFilter }: TipBarProps) {
     );
 }
 
-function TipAction({ tip, onSetFilter }: { tip: Tip; onSetFilter: (filter: DashboardFilter) => void }) {
+function TipAction<F>({ tip, onSetFilter }: { tip: Tip<F>; onSetFilter: (filter: F) => void }) {
     const className = "inline-flex min-h-6 items-center whitespace-nowrap text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11";
     const { action } = tip;
     if (action.kind === "filter") {

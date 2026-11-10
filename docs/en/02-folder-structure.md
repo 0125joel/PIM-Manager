@@ -12,7 +12,7 @@ PIM-manager/
 ├── public/                # Static assets (icons, images)
 ├── src/                   # Source code (main application)
 ├── package.json           # Dependencies and scripts
-├── DEPLOYMENT.md          # Deployment instructions
+├── azuredeploy.json       # ARM template for self-hosting on Azure
 └── README.md              # Project overview
 ```
 
@@ -30,8 +30,10 @@ src/
 ├── services/              # Data fetching logic
 ├── types/                 # TypeScript type definitions
 ├── utils/                 # Helper functions
-├── config/                # Configuration constants
-└── hooks/                 # Custom React hooks
+├── config/                # Configuration constants and user texts
+├── hooks/                 # Custom React hooks
+├── workloads/             # Workload adapters and the loading engine
+└── demo/                  # Live demo on a made-up tenant (Contoso)
 ```
 
 ---
@@ -66,14 +68,6 @@ Reusable building blocks used across pages.
 | `LoadingStatus.tsx` | Inline loading indicator for background policy fetch |
 | `RoleFilters.tsx` | Filter UI component for Report page |
 | `RoleList.tsx` | List of selectable roles (used in Configure) |
-
----
-
-### 📁 `src/contexts/` - Shared State
-
-React Context for sharing data across pages.
-
-This section has been expanded below, see **📁 `src/contexts/`** for the full context list.
 
 ---
 
@@ -188,15 +182,17 @@ Global state management with React Context API.
 
 | File | Purpose |
 |------|---------|
-| `UnifiedPimContext.tsx` | **Main Orchestrator**: Manages all workloads (Directory Roles, PIM for Groups, etc.) with unified refresh logic |
-| `DirectoryRoleContext.tsx` | **Directory Roles State**: Manages role data, policies and assignments. Exports `PimDataProvider` for backward compat. |
+| `UnifiedPimContext.tsx` | **Main Orchestrator**: Manages all workloads (Directory Roles, PIM for Groups) with unified refresh logic |
+| `AzureContext.tsx` | **Azure State**: The Azure assignments and scopes, mounted only on the Azure pages |
+| `ConfigureBasketContext.tsx` | **Configure Basket**: The changes collected in Configure, kept per tenant in sessionStorage until applied or discarded |
+| `DemoModeContext.tsx` | **Demo**: Tells components they run in the live demo, so actions that write to a tenant are disabled |
 | `ViewModeContext.tsx` | **UI Preferences**: Manages Basic/Advanced view mode toggle with localStorage persistence |
 | `ToastContext.tsx` | **Notifications**: Toast notification system (success/error/info, auto-dismiss 3s) |
 
 **Key Context Relationships:**
 - `UnifiedPimContext` orchestrates multiple workloads
-- `DirectoryRoleContext` provides directory role-specific data
-- Dashboard and Report pages consume both contexts
+- The hooks in `hooks/usePimData.ts` (`useRolesData`, `useRolesLoading`, `useRolesActions`) give the Directory Roles part of it
+- Dashboard and Report pages read the data through those hooks
 
 ---
 
@@ -212,7 +208,7 @@ flowchart TD
 
     subgraph "Contexts"
         D[UnifiedPimContext]
-        E[DirectoryRoleContext]
+        E[usePimData hooks]
         F[ViewModeContext]
     end
 

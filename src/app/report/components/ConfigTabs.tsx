@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, type KeyboardEvent } from "react";
+import { useIsDetailed } from "@/contexts/DetailsContext";
 import { POLICY_NOT_READABLE } from "@/utils/policyReadAccess";
 import { POLICY_TAB_IDS, TAB_LABELS, type PolicyTabId, type PolicyView } from "@/utils/policyView";
 import { getNextIndex } from "@/utils/rovingFocus";
@@ -40,6 +41,7 @@ interface ConfigTabsProps {
  * a two-column grid of tiles. The chosen tab is state of the page, kept when another role or group is selected.
  */
 export function ConfigTabs({ view, state, tab, onTabChange }: ConfigTabsProps) {
+    const isDetailed = useIsDetailed();
     const baseId = useId();
     const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -85,7 +87,7 @@ export function ConfigTabs({ view, state, tab, onTabChange }: ConfigTabsProps) {
                 })}
             </div>
             <div role="tabpanel" tabIndex={0} id={`${baseId}-panel-${tab}`} aria-labelledby={`${baseId}-tab-${tab}`} className="mt-3 grid gap-2 sm:grid-cols-2">
-                {view && view.tabs[tab].tiles.map((tile) => <ConfigTile key={tile.id} tile={tile} />)}
+                {view && view.tabs[tab].tiles.filter((tile) => isDetailed || (tile.id !== "extensionBefore" && tile.id !== "extensionAfter")).map((tile) => <ConfigTile key={tile.id} tile={tile} />)}
                 {!view && state === "notReadable" && <p className="text-[13px] leading-5 text-body sm:col-span-2">{POLICY_NOT_READABLE}</p>}
                 {!view && state !== "notReadable" && PLACEHOLDERS[tab].map((placeholder) => <ConfigTile key={placeholder.label} tile={null} placeholder={placeholder} state={state === "failed" ? "failed" : "loading"} />)}
             </div>

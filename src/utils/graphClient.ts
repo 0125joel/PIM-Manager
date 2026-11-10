@@ -1,4 +1,4 @@
-import { Client, CustomAuthenticationProvider, MiddlewareFactory, type Context, type Middleware } from "@microsoft/microsoft-graph-client";
+import { Client, CustomAuthenticationProvider, MiddlewareFactory, RetryHandler, RetryHandlerOptions, type Context, type Middleware, type ShouldRetry } from "@microsoft/microsoft-graph-client";
 import { graphRateLimiter, type RateLimiter } from "./rateLimiter";
 
 const DEFAULT_PAUSE_MS = 10_000;
@@ -35,10 +35,23 @@ export class ThrottleWatcher implements Middleware {
     }
 }
 
-/** The default Graph SDK chain plus a `ThrottleWatcher` in front of the network call. */
+/**
+ * The SDK retries only reads. A write is sent once: `withRetry` and `runApply` decide whether a write may be sent again
+ * (a POST only after `findSchedule` says it is not there), which the SDK cannot know.
+ */
+export const retryOnlyReads: ShouldRetry = (_delay, _attempt, request, options) => {
+    const method = (typeof request === "string" ? options?.method : request.method) ?? options?.method ?? "GET";
+    return method.toUpperCase() === "GET";
+};
+
+/**
+ * The default Graph SDK chain, with the SDK retrying reads only, plus a ThrottleWatcher in front of the network call.
+ */
 export function createGraphClient(accessToken: string): Client {
     const authProvider = new CustomAuthenticationProvider((done) => done(null, accessToken));
     const chain = MiddlewareFactory.getDefaultMiddlewareChain(authProvider);
+    const retryAt = chain.findIndex((m) => m instanceof RetryHandler);
+    if (retryAt >= 0) chain[retryAt] = new RetryHandler(new RetryHandlerOptions(undefined, undefined, retryOnlyReads));
     // The last handler is the one that calls fetch
     chain.splice(chain.length - 1, 0, new ThrottleWatcher());
     return Client.initWithMiddleware({ middleware: chain });

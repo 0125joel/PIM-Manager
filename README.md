@@ -36,7 +36,7 @@ It reads your PIM setup through Microsoft Graph, straight from your browser. No 
 - **Report**: every directory role and PIM group, with its assignments and its policy, side by side. Filters live in the URL, so a link shows a colleague exactly what you see. Export to CSV for people, to an import file for Configure, or to a JSON backup with every policy.
 - **Configure**: change settings and assignments for one role, or the same rules for fifty. Edit them directly, follow the Guided route, import a file, or start from the PIM Monitor access model. Nothing is written until you review it. The review runs the checks and a validation-only dry run, the apply saves a snapshot first, and the last ten applies can be undone.
 
-It covers directory roles and PIM for Groups. AI agents with a role (Microsoft Entra Agent ID) are counted separately, so they do not hide between your admins. Azure resource roles are not in yet.
+It covers directory roles and PIM for Groups. AI agents with a role (Microsoft Entra Agent ID) are counted separately, so they do not hide between your admins. Azure resource roles are in too, read only for now: switch the top bar from Entra ID to Azure and you get a Report and a dashboard of your Azure role assignments. Configure for Azure comes in a later version.
 
 ## Try it
 
@@ -81,8 +81,8 @@ Azure creates the Static Web App, downloads the latest release and deploys it. T
 ## How it handles your data
 
 - **Client-side only.** Every Graph call runs in your browser with your own token. Tenant data never touches a server of ours, because there is none.
-- **Least privilege.** Sign-in asks for read permissions only. Write permissions are asked for when you choose Grant permission in Configure, per workload, never at sign-in.
-- **Strict Content Security Policy.** No inline scripts or styles, apart from the hashed hydration scripts. Besides Microsoft's sign-in and Graph, the app only talks to pimmonitor.com for the access model catalog, GitHub for the update check and, on the hosted version, Cloudflare Web Analytics. None of them get tenant data.
+- **Least privilege.** Sign-in asks for read permissions only. Write permissions are asked for when you choose Grant permission in Configure, per workload, never at sign-in. Azure asks for one more, `https://management.azure.com/user_impersonation`, when you choose Turn on Azure. In a tenant where users cannot consent themselves, an admin grants it once.
+- **Strict Content Security Policy.** No inline scripts or styles, apart from the hashed hydration scripts. Besides Microsoft's sign-in, Graph and Azure Resource Manager, the app only talks to pimmonitor.com for the access model catalog, GitHub for the update check and, on the hosted version, Cloudflare Web Analytics. None of them get tenant data.
 
 ## What's new
 
@@ -100,7 +100,7 @@ The full documentation lives in [`docs/`](docs/).
 
 ## Transparency
 
-PIM Manager's architecture, security model and zero-trust principles were designed by [Joël Prins](https://www.linkedin.com/in/joelprins/).
+PIM Manager's architecture, security model and zero-trust principles were designed by [Joël Prins](https://www.linkedin.com/in/jo%C3%ABl-prins/).
 Generative AI helped with the coding and research of this project. Every file, function and logic block has been reviewed and approved by a human engineer, because a tool that touches privileged access has to earn its trust.
 
 For details on how data is processed, see [Data flow](docs/en/03-data-flow.md).

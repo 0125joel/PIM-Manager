@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Client } from "@microsoft/microsoft-graph-client";
-import { createFindSchedule, createFindPendingRequest, runApply } from "@/services/configureApplyService";
+import { createFindSchedule, createFindPendingRequest, createReadRule, runApply } from "@/services/configureApplyService";
 import type { BasketSetting, Change, SettingValue, Target } from "@/types/configure.types";
 import type { RoleDetailData } from "@/types/directoryRole.types";
 import type { PimGroupData } from "@/types/pimGroup.types";
@@ -306,6 +306,7 @@ export function useConfigureApply(input: ConfigureApplyInput): ConfigureApply {
                     signal: abort.signal,
                     findSchedule: createFindSchedule(client),
                     findPendingRequest: createFindPendingRequest(client),
+                    readRule: createReadRule(client),
                     saveSnapshot: async () => {
                         const entry: HistoryEntry = { runId, at: startedAt, by: current.by, changes, results: {}, targetCount: targets.length, snapshot };
                         if (!saveHistoryEntry(history, tenantId, entry)) throw new Error("The snapshot could not be stored in this browser.");

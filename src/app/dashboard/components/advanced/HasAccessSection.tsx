@@ -1,7 +1,7 @@
 "use client";
 
 import { StackedBar } from "@/components/charts/StackedBar";
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { DashboardFilter } from "@/types/dashboardFilter.types";
 import type { HasAccess } from "@/utils/dashboardAdvanced";
@@ -23,6 +23,8 @@ interface HasAccessSectionProps {
     /** null: loading */
     access: HasAccess | null;
     notice?: string;
+    /** The heading of the rows on the left */
+    rowsHeading?: string;
     /** PIM for Groups is not in the numbers: the group rows say so instead of showing 0 */
     groupsNote?: string;
     isDimmed: boolean;
@@ -31,18 +33,18 @@ interface HasAccessSectionProps {
 }
 
 /** Has access, and how: assignment types per workload and direct or through a group (spec 4.3 section 1). */
-export function HasAccessSection({ access, notice, groupsNote, isDimmed, filter, onSetFilter }: HasAccessSectionProps) {
+export function HasAccessSection({ access, notice, rowsHeading = "Assignment type per workload", groupsNote, isDimmed, filter, onSetFilter }: HasAccessSectionProps) {
     const toggle = (target: DashboardFilter) => onSetFilter(isSameFilter(filter, target) ? {} : target);
     return (
-        <section aria-labelledby="adv-who-heading" className={PANEL_CLASS}>
-            <SectionHeader eyebrow="who" title="Has access, and how" headingId="adv-who-heading" isDimmed={isDimmed} />
-            <div className={isDimmed ? "opacity-45" : ""}>
+        <section aria-labelledby="adv-who-heading" data-tour="advanced-has-access" className={`${PANEL_CLASS} ${isDimmed ? DIMMED_CLASS : ""}`}>
+            <SectionHeader eyebrow="who" title="Has access, and how" headingId="adv-who-heading" />
+            <div>
                 {notice ? (
                     <SectionNotice>{notice}</SectionNotice>
                 ) : (
                     <div className="mt-5 grid grid-cols-1 lg:grid-cols-2">
                         <div className={SPLIT_START}>
-                            <SubHeading>Assignment type per workload</SubHeading>
+                            <SubHeading>{rowsHeading}</SubHeading>
                             <ul className="mt-3 flex flex-col gap-2">
                                 {(access?.rows ?? [null, null, null]).map((row, i) => (
                                     <li key={row?.label ?? i} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-3 text-[13px] leading-[18px] text-ink sm:grid-cols-[10rem_1fr_3rem]">
@@ -114,7 +116,9 @@ export function HasAccessSection({ access, notice, groupsNote, isDimmed, filter,
                                         })}
                                     </ul>
                                     <p className="mt-3 font-mono text-xs leading-[18px] text-accent">
-                                        {access.viaGroup} {access.viaGroup === 1 ? "assignment" : "assignments"} via {access.groupsHoldingRoles} {access.groupsHoldingRoles === 1 ? "group" : "groups"}. Membership decides who gets the role.
+                                        {access.viaGroup === 0
+                                            ? "No assignment comes through a group."
+                                            : `${access.viaGroup} ${access.viaGroup === 1 ? "assignment" : "assignments"} via ${access.groupsHoldingRoles} ${access.groupsHoldingRoles === 1 ? "group" : "groups"}. Membership decides who gets the role.`}
                                     </p>
                                 </>
                             ) : (

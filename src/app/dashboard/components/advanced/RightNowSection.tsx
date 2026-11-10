@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { daysUntil, formatEndsIn, type RightNow, type RightNowRow } from "@/utils/dashboardAdvanced";
 import { EmergencyBadge, SPLIT_END, SPLIT_START, SubHeading } from "./shared";
@@ -36,7 +36,7 @@ function List({ className, title, count, rows, empty, format, emergencyAccountId
                             return (
                                 <li key={`${row.principalId}-${row.what}-${i}`} className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 border-t border-line py-2.5 text-[13px] leading-[18px] sm:grid-cols-[9rem_1fr_auto]">
                                     <span className="truncate font-medium text-ink" title={row.who}>{row.who}{emergencyAccountIds.has(row.principalId.toLowerCase()) && <EmergencyBadge />}</span>
-                                    <span className="truncate text-body max-sm:col-span-2 max-sm:row-start-2" title={row.what}>{row.what}</span>
+                                    <span className="min-w-0 break-words text-body max-sm:col-span-2 max-sm:row-start-2" title={row.what}>{row.what}</span>
                                     <span className={`font-mono ${when.isWarning ? "text-warn-text" : "text-body"}`}>{when.text}</span>
                                 </li>
                             );
@@ -52,10 +52,10 @@ function List({ className, title, count, rows, empty, format, emergencyAccountId
 /** Right now: activations that are running and eligibilities that end soon (spec 4.3 section 5). */
 export function RightNowSection({ data, groupsNote, emergencyAccountIds, isDimmed }: RightNowSectionProps) {
     return (
-        <section aria-labelledby="adv-activity-heading" className={PANEL_CLASS}>
-            <SectionHeader eyebrow="activity" title="Right now" headingId="adv-activity-heading" isDimmed={isDimmed} />
+        <section aria-labelledby="adv-activity-heading" className={`${PANEL_CLASS} ${isDimmed ? DIMMED_CLASS : ""}`}>
+            <SectionHeader eyebrow="activity" title="Right now" headingId="adv-activity-heading" />
             {groupsNote && <p className="mt-2 text-xs leading-4 text-muted">{groupsNote}</p>}
-            <div className={`mt-5 grid grid-cols-1 lg:grid-cols-2 ${isDimmed ? "opacity-45" : ""}`}>
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2">
                 <List className={SPLIT_START} emergencyAccountIds={emergencyAccountIds} title="Active through activation" count={data ? data.activatedCount : null} rows={data?.activated ?? []} empty="Nobody has an activation running." format={(row) => ({ text: `ends ${formatEndsIn(row.msLeft)}`, isWarning: false })} />
                 <List
                     className={SPLIT_END}

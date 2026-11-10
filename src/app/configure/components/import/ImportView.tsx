@@ -50,6 +50,7 @@ export function ImportView({ url, data, io, session, setSession, referenceOpen, 
     const chosenKind = session?.chosenKind ?? null;
     const file = useMemo(() => (text !== undefined && fileName !== undefined ? readImportFile(text, fileName, chosenKind) : null), [text, fileName, chosenKind]);
     const isAssignments = file?.kind === "roleAssignments" || file?.kind === "groupAssignments";
+    const isRoleAssignments = file?.kind === "roleAssignments";
     const isSettings = file?.kind === "rolePolicies" || file?.kind === "groupPolicies";
     const isModel = file?.kind === "accessModel";
     const isChoices = file?.kind === "accessModelChoices";
@@ -80,7 +81,7 @@ export function ImportView({ url, data, io, session, setSession, referenceOpen, 
         const key = `${sessionId}|${chosenKind}|${attempt}`;
         if (asked.current.has(key)) return;
         const needed = isAssignments
-            ? neededLookups(rows, mergePrincipals(session?.lookups ?? EMPTY_PRINCIPALS, known))
+            ? neededLookups(rows, mergePrincipals(session?.lookups ?? EMPTY_PRINCIPALS, known), isRoleAssignments)
             : { ids: approverIdsToLookUp(rows, approverNames), upns: [] as string[] };
         if (needed.ids.length === 0 && needed.upns.length === 0) return;
         asked.current.add(key);
@@ -92,7 +93,7 @@ export function ImportView({ url, data, io, session, setSession, referenceOpen, 
             .catch(() => setLookupFailedFor(sessionId))
             // Only the look-up of the file on screen ends the checking (I-05): an older one settling late changes nothing
             .finally(() => { if (checkingKey.current === key) setIsChecking(false); });
-    }, [sessionId, chosenKind, attempt, isAssignments, isSettings, isLoaded, rows, known, approverNames, session?.lookups, io, setSession]);
+    }, [sessionId, chosenKind, attempt, isAssignments, isRoleAssignments, isSettings, isLoaded, rows, known, approverNames, session?.lookups, io, setSession]);
     const needsUnits = isAssignments && file?.kind === "roleAssignments" && (rows ?? []).some((r) => typeof r.scopeId === "string" && /^\/administrativeUnits\//i.test(r.scopeId.trim()));
     useEffect(() => {
         if (!sessionId || !needsUnits || session?.units || unitsFailed) return;

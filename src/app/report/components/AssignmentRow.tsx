@@ -6,7 +6,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
 import { Tag } from "@/components/ui/Tag";
 import { REPORT_TERMS, type ReportTermKey } from "@/config/help/reportTerms";
+import { useIsDetailed } from "@/contexts/DetailsContext";
 import { formatDate } from "@/utils/dateFormat";
+import { isTagShown, type RowTagKind } from "@/utils/calmTags";
 import { buildMembershipRows, describeScopeTag, type AssignmentRowModel, type RowKind } from "@/utils/reportRows";
 import { useMembershipHook } from "./MembershipContext";
 
@@ -22,32 +24,36 @@ const TYPE: Record<RowKind, { term: ReportTermKey }> = {
 
 /** The tags of one row in the order of spec 3.2: Type, How, Scope, End, Origin, Emergency; groups add the relation and Always on. Only the Emergency access marker has an icon: the other tags say it in words (icons only where they carry meaning). */
 function RowTags({ row }: { row: AssignmentRowModel }) {
+    const isDetailed = useIsDetailed();
+    const show = (kind: RowTagKind) => isTagShown(kind, isDetailed);
     const type = TYPE[row.kind];
     const scope = row.scope ? describeScopeTag(row.scope) : null;
     return (
         <div className="flex flex-wrap items-center justify-end gap-1.5 max-sm:justify-start">
-            <Tag tip={REPORT_TERMS[type.term].text}>{REPORT_TERMS[type.term].label}</Tag>
-            {row.relation && <Tag tip={REPORT_TERMS[row.relation].text}>{REPORT_TERMS[row.relation].label}</Tag>}
+            {show("type") && <Tag tip={REPORT_TERMS[type.term].text}>{REPORT_TERMS[type.term].label}</Tag>}
+            {row.relation && show(row.relation === "owner" ? "relationOwner" : "relationMember") && <Tag tip={REPORT_TERMS[row.relation].text}>{REPORT_TERMS[row.relation].label}</Tag>}
             {row.how.type === "direct" ? (
-                !row.relation && <Tag tip={REPORT_TERMS.direct.text}>Direct</Tag>
+                !row.relation && show("direct") && <Tag tip={REPORT_TERMS.direct.text}>Direct</Tag>
             ) : (
-                <Tag variant="accent" tip={row.isViaGroupUnnamed ? REPORT_TERMS.viaGroupUnnamed.text : REPORT_TERMS.viaGroup.text}>
-                    {row.how.groupName ? `Via group: ${row.how.groupName}` : "Via group"}
-                </Tag>
+                show("viaGroup") && (
+                    <Tag variant="accent" tip={row.isViaGroupUnnamed ? REPORT_TERMS.viaGroupUnnamed.text : REPORT_TERMS.viaGroup.text}>
+                        {row.how.groupName ? `Via group: ${row.how.groupName}` : "Via group"}
+                    </Tag>
+                )
             )}
-            {scope && <Tag tip={scope.term ? REPORT_TERMS[scope.term].text : scope.tip}>{scope.label}</Tag>}
+            {scope && show(scope.term === "tenantWide" ? "scopeTenantWide" : "scopeOther") && <Tag tip={scope.term ? REPORT_TERMS[scope.term].text : scope.tip}>{scope.label}</Tag>}
             {row.isAlwaysOn ? (
-                <Tag variant="warn" tip={REPORT_TERMS.alwaysOn.text}>Always on</Tag>
+                show("alwaysOn") && <Tag variant="warn" tip={REPORT_TERMS.alwaysOn.text}>Always on</Tag>
             ) : row.end.type === "expires" ? (
-                <Tag tip={REPORT_TERMS.expires.text}>{`Expires ${formatDate(row.end.date)}`}</Tag>
+                show("expires") && <Tag tip={REPORT_TERMS.expires.text}>{`Expires ${formatDate(row.end.date)}`}</Tag>
             ) : row.end.type === "permanent" ? (
-                <Tag variant="warn" tip={REPORT_TERMS.permanent.text}>Permanent</Tag>
+                show("permanent") && <Tag variant="warn" tip={REPORT_TERMS.permanent.text}>Permanent</Tag>
             ) : (
-                <Tag tip={REPORT_TERMS.noEndDate.text}>No end date</Tag>
+                show("noEndDate") && <Tag tip={REPORT_TERMS.noEndDate.text}>No end date</Tag>
             )}
-            {row.origin === "activated" && <Tag tip={REPORT_TERMS.activated.text}>Activated</Tag>}
-            {row.origin === "assigned" && <Tag tip={REPORT_TERMS.assigned.text}>Assigned</Tag>}
-            {row.isEmergency && <Tag icon="emergency-access" variant="band" tip={REPORT_TERMS.emergency.text}>Emergency access</Tag>}
+            {row.origin === "activated" && show("activated") && <Tag tip={REPORT_TERMS.activated.text}>Activated</Tag>}
+            {row.origin === "assigned" && show("assigned") && <Tag tip={REPORT_TERMS.assigned.text}>Assigned</Tag>}
+            {row.isEmergency && show("emergency") && <Tag icon="emergency-access" variant="band" tip={REPORT_TERMS.emergency.text}>Emergency access</Tag>}
         </div>
     );
 }

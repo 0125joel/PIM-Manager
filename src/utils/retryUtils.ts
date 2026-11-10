@@ -8,7 +8,7 @@
  */
 
 import { Logger } from './logger';
-import { graphRateLimiter } from './rateLimiter';
+import { graphRateLimiter, type RateLimiter } from './rateLimiter';
 
 interface RetryableError {
     statusCode?: number;
@@ -71,6 +71,7 @@ function isRetryableError(error: unknown): boolean {
  * @param maxRetries - Maximum number of retry attempts (default: 3)
  * @param baseDelay - Base delay in milliseconds (default: 1000ms)
  * @param operationName - Name for logging purposes
+ * @param limiter - The limiter that pauses every worker after a 429 (default: the Graph limiter)
  * @returns The result of the operation
  * @throws The last error if all retries are exhausted
  *
@@ -86,7 +87,8 @@ export async function withRetry<T>(
     operation: () => Promise<T>,
     maxRetries: number = 3,
     baseDelay: number = 1000,
-    operationName: string = 'operation'
+    operationName: string = 'operation',
+    limiter: RateLimiter = graphRateLimiter
 ): Promise<T> {
     let lastError: unknown;
 
@@ -119,7 +121,7 @@ export async function withRetry<T>(
                     retryAfterSource = 'header';
                 }
                 // Every other worker pauses too, otherwise they keep the throttling going
-                graphRateLimiter.backOff(delay);
+                limiter.backOff(delay);
                 Logger.warn(
                     'Throttle',
                     `${operationName}: 429 throttled, retry-after=${delay}ms (source: ${retryAfterSource}), attempt ${attempt + 1}/${maxRetries}`

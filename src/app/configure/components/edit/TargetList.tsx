@@ -136,7 +136,7 @@ export function TargetList(props: TargetListProps) {
 /** "Select several to change together" (spec 5.2): switches the detail to several targets (spec 5.6); the text is part of the switch */
 function SelectSeveralSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
     return (
-        <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="flex w-fit items-center gap-2.5 text-left text-[13px] text-body max-sm:min-h-11">
+        <button type="button" data-tour="configure-select-several" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="flex w-fit items-center gap-2.5 text-left text-[13px] text-body max-sm:min-h-11">
             <span aria-hidden="true" className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded border transition-colors duration-150 ${on ? "border-accent bg-accent" : "border-line bg-page"}`}>
                 <span className={`inline-block h-3.5 w-3.5 rounded-sm border bg-surface transition-transform duration-150 ${on ? "translate-x-[18px] border-accent" : "translate-x-0.5 border-line"}`} />
             </span>

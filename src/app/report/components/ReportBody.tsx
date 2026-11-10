@@ -15,6 +15,7 @@ import { getRolesHeldByGroups } from "@/utils/groupsOutsidePim";
 import type { RowContext } from "@/utils/reportRows";
 import { areSettingsPending, describeNoMatch, isPrivilegedStatusMissing, summarizeFailedRoles, summarizeFailureCause } from "@/utils/reportStates";
 import { combineMarking, getSearchMarking, searchGroups, searchRoles } from "@/utils/reportSearch";
+import { DetailsProvider } from "@/contexts/DetailsContext";
 import { MembershipProvider, type UseMembership } from "./MembershipContext";
 import { GroupDetail } from "./groups/GroupDetail";
 import type { ConfigureLinkTarget } from "@/utils/configureLinks";
@@ -65,16 +66,20 @@ export interface ReportBodyProps {
     url: ReportUrlActions;
     /** "Change in Configure" (spec 16): the link for a role or group the admin may change, else null; the fixture passes none */
     changeHrefFor?: (target: ConfigureLinkTarget) => string | null;
+    /** Calm details (spec 2.2): whether details show, and the checkbox (left out with the setting More). Default: details on, no checkbox */
+    details?: { isDetailed: boolean; toggle?: ReactNode };
+    /** Opens the filter panel on load (the fixture route); left out, the panel starts as the viewer left it */
+    initialIsFiltersOpen?: boolean;
 }
 
 /**
  * The Report page without any context: head, toolbar and the master-detail layout, driven by props and the URL state, so
  * the page and the fixture route (`/dev/report`) render the same body. The data container is `app/report/page.tsx`.
  */
-export function ReportBody({ roles, groups, emergencyAccountIds, isRolesLoading, isGroupsConsented, isGroupsLoading, policiesLoading, customExtensions, blueprintNames, authenticationContexts, useMembership, onGrantGroups, rolesError, onRetryAll, failedRoleIds, onRetryFailed, isRetryingFailed = false, groupsError, onRetryGroups, syncedText, refresh, status, onExport, url, changeHrefFor }: ReportBodyProps) {
+export function ReportBody({ roles, groups, emergencyAccountIds, isRolesLoading, isGroupsConsented, isGroupsLoading, policiesLoading, customExtensions, blueprintNames, authenticationContexts, useMembership, onGrantGroups, rolesError, onRetryAll, failedRoleIds, onRetryFailed, isRetryingFailed = false, groupsError, onRetryGroups, syncedText, refresh, status, onExport, url, changeHrefFor, details = { isDetailed: true }, initialIsFiltersOpen }: ReportBodyProps) {
     const { state } = url;
     const view = state.view;
-    const [isFiltersOpen, setIsFiltersOpen] = useState(readFiltersOpen);
+    const [isFiltersOpen, setIsFiltersOpen] = useState(() => initialIsFiltersOpen ?? readFiltersOpen());
     const [sort, setSort] = useState<ReportSort>("assignments");
     // The tab of the configuration is kept when another role is selected (spec 3.3)
     const [tab, setTab] = useState<PolicyTabId>("activation");
@@ -200,45 +205,47 @@ export function ReportBody({ roles, groups, emergencyAccountIds, isRolesLoading,
     );
 
     return (
-        <div data-focus-fallback tabIndex={-1} className="mx-auto flex max-w-[1376px] flex-col gap-4 outline-none">
-            <ReportHead syncedText={syncedText} refresh={refresh} isExportDisabled={roles.length === 0} onExport={() => onExport({ roles: filteredRoles, groups: filteredGroups, filterSentence: chips.map((c) => c.label).join(", "), searchTerm: state.q.trim() })} />
-            <ReportToolbar
-                view={view}
-                onViewChange={url.setView}
-                roleCount={isRolesUnknown ? null : roles.length}
-                groupCount={groupCount}
-                isGroupsLocked={isGroupsLocked}
-                query={state.q}
-                onQueryChange={url.setQuery}
-                filterCount={countKeysOfView(state.filter, view)}
-                isFiltersOpen={isFiltersOpen}
-                onFiltersToggle={() => {
-                    writeFiltersOpen(!isFiltersOpen);
-                    setIsFiltersOpen(!isFiltersOpen);
-                }}
-                panel={<ReportFilterPanel view={view} filter={state.filter} onChange={url.setFilter} roleOptions={roleOptions} extensionOptions={extensionOptions} chips={chips} policiesLoading={isSettingsPending} />}
-                chips={chips}
-                onRemoveChip={removeChip}
-                onClearAll={clearAll}
-                resultText={total > 0 ? `${shownCount} of ${total} ${isGroupsView ? "groups" : "roles"}` : null}
-            />
-            {status}
-            {!isGroupsView && !isRolesUnknown && isPrivilegedStatusMissing(roles) && <PrivilegedStatusWarning />}
-            {failedSummary && <FailedRolesBox summary={failedSummary} onRetry={onRetryFailed} isRetrying={isRetryingFailed} />}
-            {isAllFailed ? (
-                <AllFailedBox cause={summarizeFailureCause([rolesError])} onRetry={onRetryAll} />
-            ) : isGroupsFailed ? (
-                <AllFailedBox what="groups" cause={summarizeFailureCause([groupsError])} onRetry={onRetryGroups} />
-            ) : isGroupsView && isGroupsLocked ? (
-                <StatusBox variant="consent" title="PIM for Groups is not granted yet" action={<Button variant="primary" onClick={onGrantGroups}>Grant read access</Button>}>
-                    Groups under PIM and role-assignable groups outside it need read access to PIM for Groups. The Roles view works without it.
-                </StatusBox>
-            ) : (
-                <MembershipProvider useMembership={useMembership}>
-                    <ReportLayout list={list} detail={detailBody} hasSelection={hasSelection} backLabel={isGroupsView ? "All groups" : "All roles"} onBack={url.clearSelection} />
-                </MembershipProvider>
-            )}
-        </div>
+        <DetailsProvider isDetailed={details.isDetailed}>
+            <div data-focus-fallback tabIndex={-1} className="mx-auto flex max-w-[1376px] flex-col gap-4 outline-none">
+                <ReportHead syncedText={syncedText} refresh={refresh} isExportDisabled={roles.length === 0} detailsToggle={details.toggle} onExport={() => onExport({ roles: filteredRoles, groups: filteredGroups, filterSentence: chips.map((c) => c.label).join(", "), searchTerm: state.q.trim() })} />
+                <ReportToolbar
+                    view={view}
+                    onViewChange={url.setView}
+                    roleCount={isRolesUnknown ? null : roles.length}
+                    groupCount={groupCount}
+                    isGroupsLocked={isGroupsLocked}
+                    query={state.q}
+                    onQueryChange={url.setQuery}
+                    filterCount={countKeysOfView(state.filter, view)}
+                    isFiltersOpen={isFiltersOpen}
+                    onFiltersToggle={() => {
+                        writeFiltersOpen(!isFiltersOpen);
+                        setIsFiltersOpen(!isFiltersOpen);
+                    }}
+                    panel={<ReportFilterPanel view={view} filter={state.filter} onChange={url.setFilter} roleOptions={roleOptions} extensionOptions={extensionOptions} chips={chips} policiesLoading={isSettingsPending} />}
+                    chips={chips}
+                    onRemoveChip={removeChip}
+                    onClearAll={clearAll}
+                    resultText={total > 0 && (details.isDetailed || chips.length > 0 || state.q.trim() !== "") ? `${shownCount} of ${total} ${isGroupsView ? "groups" : "roles"}` : null}
+                />
+                {status}
+                {!isGroupsView && !isRolesUnknown && isPrivilegedStatusMissing(roles) && <PrivilegedStatusWarning />}
+                {failedSummary && <FailedRolesBox summary={failedSummary} onRetry={onRetryFailed} isRetrying={isRetryingFailed} />}
+                {isAllFailed ? (
+                    <AllFailedBox cause={summarizeFailureCause([rolesError])} onRetry={onRetryAll} />
+                ) : isGroupsFailed ? (
+                    <AllFailedBox what="groups" cause={summarizeFailureCause([groupsError])} onRetry={onRetryGroups} />
+                ) : isGroupsView && isGroupsLocked ? (
+                    <StatusBox variant="consent" title="PIM for Groups is not granted yet" action={<Button variant="primary" onClick={onGrantGroups}>Grant read access</Button>}>
+                        Groups under PIM and role-assignable groups outside it need read access to PIM for Groups. The Roles view works without it.
+                    </StatusBox>
+                ) : (
+                    <MembershipProvider useMembership={useMembership}>
+                        <ReportLayout list={list} detail={detailBody} hasSelection={hasSelection} backLabel={isGroupsView ? "All groups" : "All roles"} onBack={url.clearSelection} />
+                    </MembershipProvider>
+                )}
+            </div>
+        </DetailsProvider>
     );
 }
 

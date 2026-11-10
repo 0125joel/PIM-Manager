@@ -28,7 +28,7 @@ const LINKS = {
   pimMonitor: "https://pimmonitor.com/",
   intoTheCloud: "https://intothecloud.eu/",
   prinsCloud: "https://prins.cloud/",
-  linkedIn: "https://www.linkedin.com/in/jo%C3%ABl-prins-4b4655aa/",
+  linkedIn: "https://www.linkedin.com/in/jo%C3%ABl-prins/",
 };
 
 // Palette B (globals.css): warm neutrals; light blue from the IntoTheCloud logo (#48c5fa) for decoration,
@@ -520,6 +520,10 @@ const OPTIONAL_SCOPES: { group: string; scopes: [string, string][] }[] = [
     ],
   },
   { group: "Custom extensions (Preview)", scopes: [["PrivilegedAccess-CustomExt.Read.All", "Read PIM custom extensions"]] },
+  {
+    group: "Azure resource roles",
+    scopes: [["https://management.azure.com/user_impersonation", "Read Azure role assignments and role settings, asked at Turn on Azure"]],
+  },
   { group: "Configure, Conditional Access check", scopes: [["Policy.Read.All", "Check Conditional Access policies before you apply"]] },
   {
     group: "Configure, directory roles (write)",
@@ -578,7 +582,7 @@ function PermissionsAccordion() {
               </div>
             ))}
             <p className={`text-[13px] leading-5 ${C.muted}`}>
-              Optional scopes are requested when you switch on the feature that needs them. Admin consent is required.
+              Optional scopes are requested when you switch on the feature that needs them. The Graph scopes need admin consent; the Azure scope only when your tenant does not let users consent themselves.
             </p>
           </div>
         </div>

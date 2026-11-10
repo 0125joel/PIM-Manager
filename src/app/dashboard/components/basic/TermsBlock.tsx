@@ -54,7 +54,7 @@ export function TermsBlock({ terms, notice, caveat, isWaitingForSettings = false
         : "On activation, loading";
 
     return (
-        <section aria-labelledby="terms-heading" className={PANEL_CLASS}>
+        <section aria-labelledby="terms-heading" data-tour="dashboard-terms" className={PANEL_CLASS}>
             <SectionHeader eyebrow="terms" title="On activation" headingId="terms-heading" />
             {notice ? (
                 <p className="mt-5 text-[13px] leading-[18px] text-muted">{notice}</p>

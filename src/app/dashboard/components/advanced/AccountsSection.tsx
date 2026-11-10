@@ -1,6 +1,7 @@
 "use client";
 
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import Link from "next/link";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { isAgentKind } from "@/utils/principalUtils";
 import type { AccountRow, ApproversSummary, DashboardScope } from "@/utils/dashboardAdvanced";
@@ -15,15 +16,20 @@ interface AccountsSectionProps {
     isPending: boolean;
     notice?: string;
     isDimmed: boolean;
+    /** Details off (calm details spec 3.2): at most limit rows and a link to the Report */
+    limit?: number;
+    reportHref?: string;
+    /** Details off on Azure (calm details spec 3.5): only these tags show */
+    keepTags?: readonly string[];
 }
 
 /** Most privileged, and who approves (spec 4.3 section 4). */
-export function AccountsSection({ accounts, approvers, scope, isPending, notice, isDimmed }: AccountsSectionProps) {
+export function AccountsSection({ accounts, approvers, scope, isPending, notice, isDimmed, limit, reportHref, keepTags }: AccountsSectionProps) {
     const rolesLabel = scope === "all" ? "Roles" : "Privileged roles";
     return (
-        <section aria-labelledby="adv-accounts-heading" className={PANEL_CLASS}>
-            <SectionHeader eyebrow="accounts" title="Most privileged, and who approves" headingId="adv-accounts-heading" isDimmed={isDimmed} />
-            <div className={isDimmed ? "opacity-45" : ""}>
+        <section aria-labelledby="adv-accounts-heading" data-tour="advanced-accounts" className={`${PANEL_CLASS} ${isDimmed ? DIMMED_CLASS : ""}`}>
+            <SectionHeader eyebrow="accounts" title="Most privileged, and who approves" headingId="adv-accounts-heading" />
+            <div>
                 {notice ? (
                     <SectionNotice>{notice}</SectionNotice>
                 ) : (
@@ -40,7 +46,8 @@ export function AccountsSection({ accounts, approvers, scope, isPending, notice,
                             ) : accounts.length === 0 ? (
                                 <SectionNotice>No accounts hold a role.</SectionNotice>
                             ) : (
-                                <table className="w-full min-w-[22rem] border-collapse text-[13px] leading-[18px]">
+                                // No minimum width: at 390 a minimum hid the Eligible column in the scroll area, with nothing saying it scrolls
+                                <table className="w-full border-collapse text-[13px] leading-[18px]">
                                     <thead>
                                         <tr className="text-right text-muted">
                                             <th scope="col" className="py-2 pr-3 text-left font-normal">Account</th>
@@ -50,12 +57,20 @@ export function AccountsSection({ accounts, approvers, scope, isPending, notice,
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {accounts.map((a) => (
+                                        {(limit ? accounts.slice(0, limit) : accounts).map((a) => (
                                             <tr key={a.id} className="border-t border-line text-right font-mono text-ink">
                                                 <th scope="row" className="max-w-[14rem] py-2.5 pr-3 text-left font-sans font-medium">
-                                                    <span className="inline-block max-w-[10rem] truncate align-middle" title={a.name}>{a.name}</span>
-                                                    {a.kind === "servicePrincipal" && <KindTag label="app" />}
-                                                    {isAgentKind(a.kind) && <KindTag label="agent" />}
+                                                    {/* Below 640 the name wraps rather than truncates, so the table fits without hiding a name or a column */}
+                                                    <span className="inline-block max-w-[10rem] align-middle break-words sm:truncate" title={a.name}>{a.name}</span>
+                                                    {a.tags ? (
+                                                        // The Azure dashboard sets the tags; the emergency badge below already shows "emergency"
+                                                        a.tags.filter((t) => t !== "emergency" && (!keepTags || keepTags.includes(t))).map((t) => <KindTag key={t} label={t} />)
+                                                    ) : (
+                                                        <>
+                                                            {a.kind === "servicePrincipal" && <KindTag label="app" />}
+                                                            {isAgentKind(a.kind) && <KindTag label="agent" />}
+                                                        </>
+                                                    )}
                                                     {a.isEmergency && <EmergencyBadge />}
                                                 </th>
                                                 <td className="py-2.5 pr-3">{a.privilegedRoles}</td>
@@ -65,6 +80,12 @@ export function AccountsSection({ accounts, approvers, scope, isPending, notice,
                                         ))}
                                     </tbody>
                                 </table>
+                            )}
+                            {limit && reportHref && accounts && accounts.length > limit && (
+                                <p className="mt-3 text-[13px] leading-[18px] text-muted">
+                                    {`${limit} of ${accounts.length} shown. `}
+                                    <Link href={reportHref} className="text-accent underline underline-offset-2">Show all in Report</Link>
+                                </p>
                             )}
                             </div>
                         </div>

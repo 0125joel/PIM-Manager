@@ -24,19 +24,30 @@ function keepFocus() {
     });
 }
 
-/** The "filtered" row under the chips (spec 4.6): removable chip, a sentence with the count, a link to the report. */
-export function FilterBar({ filter, sentence, onRemoveKey, reportFilter, names }: FilterBarProps) {
-    const labels = getFilterLabels(filter, names);
+export interface FilterBarChip {
+    key: string;
+    label: string;
+    onRemove: () => void;
+}
+
+/** Pure view of the "filtered" row: chips, a sentence and the report link. */
+export function FilterBarView({ chips, sentence, reportHref }: { chips: FilterBarChip[]; sentence: string; reportHref: string }) {
     return (
         <div role="region" aria-label="Active filter" onClickCapture={keepFocus} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md bg-accent-tint px-3 py-2.5">
             <span className="font-mono text-xs text-accent">filtered</span>
-            {labels.map(({ key, label }) => (
-                <Chip key={key} kind="filter" label={label} onRemove={() => onRemoveKey(key)} />
+            {chips.map((chip) => (
+                <Chip key={chip.key} kind="filter" label={chip.label} onRemove={chip.onRemove} />
             ))}
             <p className="min-w-0 flex-1 text-[13px] leading-[18px] text-ink">{sentence}</p>
-            <Link href={`/report?f=${serializeDashboardFilter(reportFilter)}`} className="inline-flex min-h-6 items-center gap-1 text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11 max-sm:items-center">
+            <Link href={reportHref} className="inline-flex min-h-6 items-center gap-1 text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11 max-sm:items-center">
                 Open in report with this filter
             </Link>
         </div>
     );
+}
+
+/** The "filtered" row under the chips (spec 4.6): removable chip, a sentence with the count, a link to the report. */
+export function FilterBar({ filter, sentence, onRemoveKey, reportFilter, names }: FilterBarProps) {
+    const chips: FilterBarChip[] = getFilterLabels(filter, names).map(({ key, label }) => ({ key, label, onRemove: () => onRemoveKey(key) }));
+    return <FilterBarView chips={chips} sentence={sentence} reportHref={`/report?f=${serializeDashboardFilter(reportFilter)}`} />;
 }

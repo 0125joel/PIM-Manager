@@ -43,6 +43,7 @@ export const PERMISSION_PURPOSES: Record<string, string> = {
     "RoleManagementPolicy.ReadWrite.AzureADGroup": "changing the PIM settings of a group",
     "PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup": "creating and removing eligible group assignments",
     "PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup": "creating and removing active group assignments",
+    "https://management.azure.com/user_impersonation": "your Azure role assignments and role settings, through Azure Resource Manager",
 };
 
 function items(scopes: readonly string[], prefix = ""): PermissionGroup["items"] {

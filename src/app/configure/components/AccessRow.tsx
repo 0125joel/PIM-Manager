@@ -35,7 +35,7 @@ export function AccessRow({ view, onRetry, onGrant, isGranting, reportHref }: Ac
     );
 
     return (
-        <section aria-label="What you can change" className="mb-4">
+        <section aria-label="What you can change" data-tour="configure-access" className="mb-4">
             <div role={row.kind === "checking" ? "status" : undefined} className={`rounded px-4 py-3 text-sm ${TONE[row.kind]}`}>
                 {row.kind === "checking" && (
                     <p className="flex items-center gap-2 text-body"><Icon name="spinner" size={16} />{row.title}</p>

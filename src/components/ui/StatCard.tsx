@@ -2,6 +2,7 @@
 
 import { Icon } from "@/components/icons/Icon";
 import { Skeleton } from "./Skeleton";
+import { DIMMED_CLASS } from "./SectionHeader";
 
 interface StatCardProps {
     label: string;
@@ -20,7 +21,7 @@ interface StatCardProps {
 export function StatCard({ label, value, breakdown, isWarning = false, isPressed = false, isDimmed = false, onSelect }: StatCardProps) {
     const className = `flex w-full flex-col gap-2 rounded border px-[18px] py-[14px] text-left transition-colors duration-150 ${
         isPressed ? "border-accent bg-accent-tint" : "border-line bg-surface"
-    } ${isDimmed ? "opacity-45" : ""} ${onSelect ? "cursor-pointer hover:border-accent" : ""}`;
+    } ${isDimmed ? DIMMED_CLASS : ""} ${onSelect ? "cursor-pointer hover:border-accent" : ""}`;
 
     const content = (
         <>

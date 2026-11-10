@@ -327,7 +327,7 @@ if (!isAuthenticated) {
 - Geen Google Analytics
 - Geen Mixpanel, Segment, Amplitude
 - Geen error tracking (Sentry, Rollbar)
-- Geen telemetrie beacons
+- Geen telemetrie beacons behalve Cloudflare Web Analytics op de gehoste site, die het paginapad ontvangt maar geen querystring of tenantdata
 - Alleen Microsoft Graph API calls
 
 **Bezoekersteller:** Externe badge in README (niet-functioneel, alleen cosmetisch)
@@ -413,7 +413,7 @@ Content-Security-Policy:
   script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
   style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -424,6 +424,8 @@ Content-Security-Policy:
 > `'unsafe-eval'` is **niet** nodig en is bewust weggelaten. `'wasm-unsafe-eval'` in `script-src` is vereist door `@react-pdf/renderer` om zijn WebAssembly module te initialiseren (nodig voor PDF export). `'unsafe-inline'` staat **niet** in `script-src`: de Next.js static export injecteert een kleine, vaste set inline hydration-scripts (`self.__next_f.push`, `self.__next_s.push`) en omdat de HTML tijdens de build wordt gegenereerd is hun inhoud bekend. `npm run build` draait na `next build` het script `scripts/generate-csp-hashes.mjs`; dat hasht elk inline `<script>` in `out/**/*.html` (SHA-256) en vervangt de placeholder `__CSP_SCRIPT_HASHES__` in `out/_headers` en `out/staticwebapp.config.json` door de lijst `'sha256-...'`. De bronbestanden in `public/` houden de placeholder, dus alleen de geëxporteerde kopieën bevatten hashes en de deployment moet altijd de bestanden uit `out/` gebruiken (de Azure-testworkflow leest `config_file_location: "out"`). Het theme- en runtime-configscript zijn externe bestanden (`/theme-init.js`, `/env-config.js`) en vallen onder `'self'`. Ook `style-src` is alleen `'self'`: Tailwind komt als stylesheet, de geëxporteerde HTML heeft geen inline `<style>`-element of `style`-attribuut (het post-build script laat de build falen als er een verschijnt), en React zet de `style`-prop via de CSSOM, die CSP niet blokkeert. `https://static.cloudflareinsights.com` (`script-src`) en `https://cloudflareinsights.com` (`connect-src`) laten de beacon van Cloudflare Web Analytics door: bij automatische injectie rapporteert die aan de eigen `/cdn-cgi/rum` (`'self'`), bij het handmatige of Pages-snippet aan `cloudflareinsights.com`. De host staat er zonder pad in, zodat zowel `beacon.min.js` als de geversioneerde URL `beacon.min.js/v...` matcht. Op Cloudflare Pages moet het build command `npm run build` zijn: met alleen `next build` gaat de placeholder live en wordt elk inline script geblokkeerd (lege pagina, React error #412).
 
 > `https://pimmonitor.com` in `connect-src` laat Configure de openbare access model-catalogus van PIM Monitor lezen (`/catalog/v1/eam-catalog.json`). Het verzoek is een gewone GET zonder credentials en bevat geen tenantgegevens; als de host geblokkeerd is, gebruikt de app de kopie die met de app wordt meegeleverd.
+
+> `https://management.azure.com` in `connect-src` is Azure Resource Manager, voor de Azure-omgeving (PIM voor Azure-resources). De app roept het aan met het eigen token van de aangemelde gebruiker (de gedelegeerde scope `user_impersonation`, één keer gevraagd met een consent-popup), dus wat terugkomt volgt de Azure-rollen van de gebruiker. Er gaat geen tenantdata ergens anders heen.
 
 **Aanvullende Headers:**
 ```
@@ -535,7 +537,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 Als je een beveiligingsprobleem ontdekt in PIM Manager:
 
 1. Open **GEEN** publieke GitHub issue
-2. Gebruik [GitHub Security Advisories](https://github.com/0125joel/PIM-manager-private/security/advisories) (privé rapportage)
+2. Volg het meldbeleid in [SECURITY.md](https://github.com/0125joel/PIM-Manager/blob/main/SECURITY.md)
 3. Of email security contact: [Zie GitHub profiel](https://github.com/0125joel)
 
 **Wat te Includeren:**

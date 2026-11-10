@@ -9,7 +9,7 @@ Dit document beschrijft de Configure-pagina, waar je PIM-instellingen en toewijz
 De startpagina toont je **schrijftoegang** (wat je mag wijzigen, per gebied), de **ingangskaarten**, het paneel **access model** en **Last applies**. Vier modi staan in de modusbalk en in de URL (`mode=edit|guided|import|model`):
 
 1. **Edit**: een master-detail lijst van rollen en groepen. Kies een doel, wijzig instellingen op de tabs Activation, Assignment en Notification, bekijk en wijzig wie toegang heeft (Who has it, Add people). *Select several* wijzigt één waarde op meerdere doelen; *Copy settings to* kopieert de instellingen van een doel.
-2. **Guided**: een route in stappen (Start, Targets, Settings, People) voor een wijziging op veel doelen, eventueel vanuit het PIM Monitor access model.
+2. **Guided**: een route in stappen (Start, Targets, Settings, People, Review) voor een wijziging op veel doelen, eventueel vanuit het PIM Monitor access model.
 3. **Import**: sleep een CSV- of JSON-bestand (toewijzingen, rol- of groepsinstellingen, een access model-bestand, of een bestand met de keuzes van het access model dat je op de pagina Access model hebt opgeslagen; een back-up wordt herkend maar kan nog niet worden geïmporteerd). PIM Manager herkent het bestand, toont een naslag van de kolommen en een sjabloon, en vergelijkt elke rij met de tenant.
 4. **Access model**: het bord van het Enterprise Access Model (vlakken en niveaus), de catalogus van rollen met verwachte instellingen en de plaatsing van je groepen. Exporteren slaat de aanbevolen rolinstellingen op als CSV die je kunt bewerken en weer importeren, en je keuzes van labels en groepsplaatsingen als JSON. Hier wordt niets naar de tenant geschreven.
 

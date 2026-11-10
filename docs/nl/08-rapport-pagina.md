@@ -9,7 +9,7 @@ De Rapportpagina laat elke rol en groep zien zoals ze nu zijn: wie wat heeft, ho
 Eén pagina met links een lijst en rechts het detail van het gekozen item. Onder 1024 px breed is het detail een eigen weergave met een Terug-knop, en de lijst komt terug waar je gebleven was.
 
 ```
-Report                                  [Refresh] [Export]
+Report  [ ] Show more details     synced 3 min ago [Refresh] [Export]
 [Roles 146 | Groups 12] [Search a role, a group or a person] [Filters]
 chips: Privileged only x   Has assignments x   Clear all      7 of 146 roles
 +----------------------+--------------------------------------------+
@@ -26,7 +26,7 @@ Het adres van de pagina bevat de staat, dus een link opent dezelfde weergave: `v
 
 ## Rollen
 
-De lijst toont de naam, een tag Privileged of Custom, "{n} eligible, {n} active" en alleen twee waarschuwingen: "No MFA on activation" en "Permanent active". Sorteer op meeste toewijzingen, naam of meest permanent.
+De lijst toont de naam, een tag Privileged of Custom, "{n} eligible, {n} active" en, met Show more details, alleen twee waarschuwingen: "No MFA on activation" en "Permanent active". Sorteer op meeste toewijzingen, naam of meest permanent.
 
 Het detail heeft twee delen.
 
@@ -53,6 +53,10 @@ Beweeg over een tag of geef hem focus (op een telefoon: tik erop) voor de uitleg
 Een tab met een probleem heeft een oranje stip: een bevoorrechte rol zonder MFA of authenticatiecontext, een beleid dat permanente actieve toewijzingen toestaat, of een activatie die niemand meldt.
 
 ---
+
+### Show more details
+
+Zonder **Show more details** toont het Rapport alleen wat afwijkt van het gewone. Een rij houdt Permanent, Always on, Via group, Owner, Emergency access en een scope die niet tenant-wide is; het type, Member, Direct, Tenant-wide, Expires, No end date, Assigned en Activated wachten achter het vinkje. De lijsten laten hun rode waarschuwingen weg, de kop van een groep laat de typelabels weg, de Custom extension-tegels vallen weg, en het aantal van de lijst staat er alleen bij een filter of zoekterm. Het Rapport onthoudt de keuze in deze browser; **Details** op More in Settings toont alles.
 
 ## Groepen
 
@@ -99,7 +103,7 @@ Inhoud en bereik zijn selectievakjes: welke bestanden, directory roles, PIM for 
 
 De bestandsnamen zijn `pim-overview-assignments-{datum}.csv`, `pim-overview-role-settings-{datum}.csv`, `pim-overview-group-settings-{datum}.csv`, `pim-bulk-role-policies-{datum}.csv`, `pim-bulk-group-policies-{datum}.csv`, `pim-bulk-role-assignments-{datum}.csv`, `pim-bulk-group-assignments-{datum}.csv` en `pim-backup-{datum}.json`.
 
-Elke cel is volgens RFC 4180 beschermd en een cel die begint met `=`, `+`, `-` of `@` krijgt een apostrof ervoor, zodat een spreadsheet tekst toont en geen formule. Het PDF-rapport blijft op het Dashboard.
+Elke cel is volgens RFC 4180 beschermd en een cel die begint met `=`, `+`, `-` of `@` krijgt een apostrof ervoor, zodat een spreadsheet tekst toont en geen formule. Hetzelfde geldt voor zo'n teken direct na een `;`, omdat Excel met een puntkomma als scheidingsteken daar een nieuwe cel begint. Het PDF-rapport blijft op het Dashboard.
 
 > [!NOTE]
 > Export en import delen één kolomdefinitie per bestandstype (`src/utils/exportSchema.ts`). De tests schrijven elk bestand, lezen het terug en vergelijken het met de bron, en controleren dat Configure Import (`detectCsvKind` in `src/utils/importDetect.ts`) elk bulkbestand nog herkent.

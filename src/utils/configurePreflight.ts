@@ -543,8 +543,14 @@ export function buildPreflight(input: PreflightInput): PreflightCheck[] {
             : { outcome: "pass", text: "No new assignment is there already." }));
     }
 
-    // 18. A group as role principal that is not role-assignable: the picker offers only role-assignable groups
-    checks.push(check("groupPrincipal", "Groups as role principal", { outcome: "prevented", text: "Only role-assignable groups can be picked for a role." }));
+    // 18. A group as role principal that is not role-assignable: the picker offers only role-assignable groups, the import
+    // refuses one it cannot confirm, so this catches one known to be not role-assignable (the dry run lets it through)
+    {
+        const notAssignable = adds.filter((a) => a.target.kind === "role" && a.principal.kind === "group" && (a.principal.isAssignableToRole === false || a.principal.isAssignableToRole === null));
+        checks.push(check("groupPrincipal", "Groups as role principal", notAssignable.length
+            ? { outcome: "block", items: notAssignable.map((a) => ({ target: a.target, changeId: changeId(a), text: `${a.principal.displayName} is not role-assignable, so it cannot hold ${nameOf(a.target)}.` })), text: "Leave these out: only a role-assignable group can hold a directory role." }
+            : { outcome: "prevented", text: "Only role-assignable groups can be picked for a role." }));
+    }
 
     // 19. A pending or scheduled request on the same assignment (T8, PendingRoleAssignmentRequest)
     {

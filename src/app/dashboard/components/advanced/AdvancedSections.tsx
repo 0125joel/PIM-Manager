@@ -6,6 +6,7 @@ import type { RoleDetailData } from "@/types/directoryRole.types";
 import type { PimGroupData } from "@/types/pimGroup.types";
 import { useNow } from "@/hooks/useNow";
 import { isPrivilegedReported } from "@/utils/dashboardStats";
+import { serializeDashboardFilter } from "@/utils/dashboardFilter";
 import { computeActivationCharts, computeApprovers, computeCustomExtensionRows, computeGroupsSection, computeHasAccess, computeRightNow, getFilterOwnerSection, isInScope, computeTopAccounts, type DashboardScope } from "@/utils/dashboardAdvanced";
 import type { CountingState } from "../basic/DashboardOverview";
 import { AccountsSection } from "./AccountsSection";
@@ -34,11 +35,13 @@ export interface AdvancedSectionsProps {
     pimGroupsError?: string | null;
     onGrantPimGroups: () => void;
     onRetryPimGroups: () => void;
+    /** Details off hides Custom extensions and Right now and shortens the lists (calm details spec 3.2) */
+    isDetailed?: boolean;
 }
 
 /** The five sections of the Advanced dashboard (spec 4.3). Whole tenant data; the filter dims them instead of narrowing them. */
 export function AdvancedSections(props: AdvancedSectionsProps) {
-    const { rolesData, groupsData, counting, scope, emergencyAccountIds, tenantExtensionIds, filter, isFiltered, onSetFilter, isRolesLoading, isGroupsLoading, policiesLoading, rolesError, pimGroupsConsented, pimGroupsError, onGrantPimGroups, onRetryPimGroups } = props;
+    const { rolesData, groupsData, counting, scope, emergencyAccountIds, tenantExtensionIds, filter, isFiltered, onSetFilter, isRolesLoading, isGroupsLoading, policiesLoading, rolesError, pimGroupsConsented, pimGroupsError, onGrantPimGroups, onRetryPimGroups, isDetailed = true } = props;
     const now = useNow();
 
     const rolesFailed = counting.directoryRoles && !!rolesError && rolesData.length === 0;
@@ -78,10 +81,10 @@ export function AdvancedSections(props: AdvancedSectionsProps) {
     return (
         <div className="mt-4 flex flex-col gap-4">
             <HasAccessSection access={access} notice={rolesNotice} groupsNote={groupsNote} isDimmed={dimmed("access")} filter={filter} onSetFilter={onSetFilter} />
-            <ActivationSection charts={charts} scope={scope} isPending={policiesPending || isUnknown} notice={scopedNotice} isPolicyLoading={policiesLoading} extensions={extensions} filter={filter} onSetFilter={onSetFilter} isDimmed={dimmed("activation")} />
-            <PimGroupsSection state={groupsState} section={groupsSection} errorMessage={pimGroupsError} onGrant={onGrantPimGroups} onRetry={onRetryPimGroups} isDimmed={isFiltered} />
-            <AccountsSection accounts={accounts} approvers={approvers} scope={scope} isPending={policiesPending || isUnknown} notice={scopedNotice} isDimmed={isFiltered} />
-            <RightNowSection data={rightNow} groupsNote={groupsNote} emergencyAccountIds={emergencyAccountIds} isDimmed={isFiltered} />
+            <ActivationSection charts={charts} scope={scope} isPending={policiesPending || isUnknown} notice={scopedNotice} isPolicyLoading={policiesLoading} extensions={isDetailed ? extensions : []} filter={filter} onSetFilter={onSetFilter} isDimmed={dimmed("activation")} />
+            <PimGroupsSection state={groupsState} section={groupsSection} errorMessage={pimGroupsError} onGrant={onGrantPimGroups} onRetry={onRetryPimGroups} isDimmed={isFiltered} compact={isDetailed ? undefined : { limit: 5, reportHref: `/report?view=groups&f=${serializeDashboardFilter({ groupPim: "outside" })}` }} />
+            <AccountsSection accounts={accounts} approvers={approvers} scope={scope} isPending={policiesPending || isUnknown} notice={scopedNotice} isDimmed={isFiltered} limit={isDetailed ? undefined : 5} reportHref={scope === "all" ? "/report" : `/report?f=${serializeDashboardFilter({ privileged: true })}`} />
+            {isDetailed && <RightNowSection data={rightNow} groupsNote={groupsNote} emergencyAccountIds={emergencyAccountIds} isDimmed={isFiltered} />}
         </div>
     );
 }

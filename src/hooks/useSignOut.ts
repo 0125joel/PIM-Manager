@@ -2,18 +2,24 @@
 
 import { useCallback } from "react";
 import { useMsal } from "@azure/msal-react";
+import { clearAzureSession } from "@/contexts/AzureContext";
 import { useUnifiedActions } from "@/contexts/UnifiedPimContext";
 import { clearPimSessionCaches } from "@/utils/cacheUtils";
 import { clearCustomExtensionsCache } from "@/hooks/useCustomExtensions";
 import { clearStoredBaskets } from "@/utils/configureBasket";
 import { clearConfigureHistory } from "@/utils/configureHistory";
 
-/** Clears the cached Graph data (see utils/cacheUtils.ts), the Configure basket and history and the loaded data, then signs out of Microsoft Entra ID. */
+/**
+ * Stops and clears the Azure data first (its provider lives under /azure, outside the shell, so through
+ * `clearAzureSession`; a run that ends later can then not write its cache back), then the cached Graph data (see
+ * utils/cacheUtils.ts), the Configure basket and history and the loaded data, then signs out of Microsoft Entra ID.
+ */
 export function useSignOut(): () => void {
     const { instance } = useMsal();
     const { clearWorkload } = useUnifiedActions();
 
     return useCallback(() => {
+        clearAzureSession();
         clearPimSessionCaches();
         clearStoredBaskets(typeof sessionStorage === "undefined" ? null : sessionStorage);
         // Reading localStorage itself throws when site data is blocked

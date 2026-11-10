@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusBox } from "@/components/ui/StatusBox";
+import { useIsDetailed } from "@/contexts/DetailsContext";
 import type { GroupListRow, ReportSort } from "@/utils/reportList";
 import { ListFrame, ListRowButton } from "../ListFrame";
 
@@ -20,6 +21,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 /** Two sections with sticky headers, Outside PIM first (spec 2.4). */
 export function GroupList({ rows, currentId, onSelect, sort, onSortChange, roleAssignableCount, outsideTotal }: GroupListProps) {
+    const isDetailed = useIsDetailed();
     const outside = rows.filter((r) => r.isOutsidePim);
     const under = rows.filter((r) => !r.isOutsidePim);
     const stopId = rows.some((r) => r.id === currentId) ? currentId : outside[0]?.id ?? under[0]?.id;
@@ -35,7 +37,7 @@ export function GroupList({ rows, currentId, onSelect, sort, onSortChange, roleA
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] leading-[18px] text-muted">
                         <span>{plural(row.roleCount, "role", "roles")}</span>
                         {row.memberCount !== undefined && <span>{`${plural(row.memberCount, "member", "members")}, always on`}</span>}
-                        <span className="text-danger-text">Outside PIM</span>
+                        {isDetailed && <span className="text-danger-text">Outside PIM</span>}
                     </span>
                 </ListRowButton>
             ))}

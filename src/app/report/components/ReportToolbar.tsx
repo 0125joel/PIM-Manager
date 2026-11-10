@@ -86,7 +86,7 @@ export function ReportToolbar({ view, onViewChange, roleCount, groupCount, isGro
                 filtersButton.current?.focus();
             }}
         >
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3" data-tour="report-toolbar">
                 <SegmentedControl
                     variant="tablist"
                     ariaLabel="Report view"

@@ -45,5 +45,10 @@ debug.log
 *.tsbuildinfo
 next-env.d.ts
 /visual-output/
+/visual-baseline/
 
 .claude/settings.local.json
+.claude/worktrees/
+
+# Local agent run evidence (never versioned)
+/.agent-runs/

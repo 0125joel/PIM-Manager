@@ -6,7 +6,7 @@ export const SETTINGS_HELP: HelpPage = {
     intro: "Settings holds what the app may read and write, how it looks, and the accounts it should treat as emergency access.",
     blocks: [
         { title: "Permissions", text: "A table per workload with read and write consent. Grant a permission here before you need it, or when the app asks." },
-        { title: "Display", text: "Theme, the default dashboard view and the Privileged or All roles scope." },
+        { title: "Display", text: "Theme, the view the dashboard and the Azure Report open in, and Details. With Fewer, each page remembers its own Show more details; with More, every page shows everything. Changing Details resets the pages. Tours On starts a short tour the first time you open a part of the app; Off stops that, and Start the tour in Help still works." },
         { title: "Emergency access accounts", text: "Mark your break glass accounts. They are tagged everywhere and counted apart from permanent access." },
         { title: "Advanced", text: "The log level and Clear cached data, which makes the next load a full one." },
     ],

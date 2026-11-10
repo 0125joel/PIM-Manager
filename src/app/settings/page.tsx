@@ -16,6 +16,9 @@ import type { FoundUser } from "@/hooks/useUserSearch";
 import { clearPimSessionCaches } from "@/utils/cacheUtils";
 import { parseEmergencyAccountsImport, serializeEmergencyAccounts, type EmergencyAccount } from "@/utils/emergencyAccounts";
 import { readViewMode, writeViewMode, type ViewModePreference } from "@/utils/viewModePreference";
+import { readAzureReportView, writeAzureReportView, type AzureReportViewPreference } from "@/utils/azureReportViewPreference";
+import { readDetailsPreference, writeDetailsPreference, type DetailsPreference } from "@/utils/detailsPreference";
+import { readTourSetting, writeTourSetting, type TourSetting } from "@/utils/tourProgress";
 import { parseAccessModelCatalog } from "@/utils/accessModelCatalog";
 import { labelName } from "@/utils/accessModelView";
 import { matchContext, readContextChoices, writeContextChoice } from "@/utils/authContextSlug";
@@ -73,6 +76,9 @@ export default function SettingsPage() {
     const { refreshAllWorkloads } = useUnifiedActions();
 
     const [viewMode, setViewMode] = useState<ViewModePreference>(() => (typeof window === "undefined" ? "basic" : (readViewMode() ?? "basic")));
+    const [azureReportView, setAzureReportView] = useState<AzureReportViewPreference>(() => (typeof window === "undefined" ? "roles" : readAzureReportView()));
+    const [details, setDetails] = useState<DetailsPreference>(() => (typeof window === "undefined" ? "fewer" : readDetailsPreference()));
+    const [tours, setTours] = useState<TourSetting>(() => (typeof window === "undefined" ? "on" : readTourSetting()));
     const [logLevel, setLogLevel] = useState<string>(() => (typeof window === "undefined" ? DEFAULT_LOG_LEVEL : readLogLevel()));
     const [emergencyStatus, setEmergencyStatus] = useState<StatusLine | null>(null);
     const [isClearing, setIsClearing] = useState(false);
@@ -140,6 +146,20 @@ export default function SettingsPage() {
         writeViewMode(mode);
     }, []);
 
+    const handleAzureReportViewChange = useCallback((view: AzureReportViewPreference) => {
+        setAzureReportView(view);
+        writeAzureReportView(view);
+    }, []);
+
+    const handleDetailsChange = useCallback((value: DetailsPreference) => {
+        setDetails(value);
+        writeDetailsPreference(value);
+    }, []);
+    const handleToursChange = useCallback((value: TourSetting) => {
+        setTours(value);
+        writeTourSetting(value);
+    }, []);
+
     const handleClearCache = useCallback(async () => {
         setIsClearing(true);
         setClearStatus(null);
@@ -159,7 +179,7 @@ export default function SettingsPage() {
     return (
         <SettingsView
             permissions={{ rows: permissions.rows, busyRow: permissions.busyRow, message: permissions.message, onAction: permissions.act, onDismissMessage: permissions.dismissMessage }}
-            display={{ theme, onThemeChange: setTheme, viewMode, onViewModeChange: handleViewModeChange }}
+            display={{ theme, onThemeChange: setTheme, viewMode, onViewModeChange: handleViewModeChange, azureReportView, onAzureReportViewChange: handleAzureReportViewChange, details, onDetailsChange: handleDetailsChange, tours, onToursChange: handleToursChange }}
             emergency={{
                 tenantLabel: tenantName ?? (emergency.tenantId ? emergency.tenantId.slice(0, 8) : null),
                 accounts: emergency.accounts,

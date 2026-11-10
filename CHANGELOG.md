@@ -2,6 +2,67 @@
 
 ---
 
+## v3.1.0 - 2026-11-10
+
+PIM Manager 3.1 crosses over to Azure.
+
+Flip the switch in the top bar from Entra ID to Azure and you get a Report and a dashboard for your Azure role assignments. From management groups all the way down to a single resource, delegated subscriptions from Azure Lighthouse included. You see what your Azure roles let you read, nothing more. Azure is turned on per account, with a one-time consent that is only asked when you choose it. Configure for Azure comes in a later version.
+
+The app also explains itself now. Every page has a short tour that starts the first time you open it, and Help lets you start any tour again. And the pages got calmer: the dashboards and the Reports open with what counts, and Show more details brings back the rest. Less noise, same answers.
+
+Configure got safer too. A setting another admin changed since your review is no longer written over, and a write is never sent twice when Graph is busy.
+
+Before you upgrade, if you host PIM Manager yourself:
+
+- Run the template again. It deploys this build with its security headers. The Content Security Policy now allows `https://management.azure.com`, which the Azure pages read from. The sign-in permissions are unchanged.
+- Azure asks each user once for consent to Azure Resource Manager (`https://management.azure.com/user_impersonation`, Azure Service Management in the portal) when they choose Turn on Azure. Users in your tenant cannot consent themselves? Then add that permission to your App Registration and grant admin consent before you hand it out. The [deployment docs](docs/en/10-deployment.md) show where.
+
+### PIM for Azure resources
+
+- **Azure arrives, starting with the Report and the dashboard.** The Entra ID | Azure switch in the top bar now works and opens the Azure pages. Azure Configure comes in a later version. Leaving Configure with unsaved changes through the switch asks first.
+- **Turned on per account, when you want it.** Azure asks a one-time consent for Azure Resource Manager when you choose Turn on Azure, not at sign-in. You see only the scopes your Azure roles let you read. When there are none, the page says so and shows the Azure roles you are eligible for. A role change in Azure can take up to 10 minutes to show; Refresh reads it again. Signing out clears the Azure data, and another account in the same tab never sees it.
+- **The Azure Report.** A scope tree from the root through management groups and subscriptions down to resource groups and resources, with management groups nested as in Azure. A subscription of another tenant (Azure Lighthouse) is marked Delegated and gets its own tree. Choose Roles or Assignments: the roles of a scope with their description and settings, or every assignment, including the ones inherited from above. Search and filters work as in the Entra Report and live in the address bar, so a filtered view can be shared. Tags show the type, state, end date, Activated or Assigned and Emergency access, and an account that no longer exists in Microsoft Entra ID shows as Deleted. In Settings you choose which view the Azure Report opens in. In a large tenant the part below a subscription you can read only in part is read in steps of about a minute; the page says how much is left, and Read the rest reads the next part.
+- **The Azure dashboard.** Basic and Advanced, as on Entra, with a scope bar instead of the workload chips: everything you can read or one scope, with or without inherited assignments, and with or without delegated subscriptions. Eight cards, Has access, On activation, Easy to miss (including deleted accounts that still hold a role) and From Microsoft, PIM's own alerts per subscription (preview, read only). Advanced adds the activation charts, the most privileged accounts and who approves, and Right now. Every card and row filters the page, and Open in report opens the Azure Report on the same assignments. Role settings that could not be read are left out of the numbers and named in a warning, never counted as "approval not required".
+- **Export.** The Azure Report exports a CSV of every assignment and a CSV of the role settings per role and scope, for the current view or every scope you can read. The Azure dashboard exports PDF or CSV like the Entra dashboard, with Full with appendix for the admin audience.
+
+### Tours
+
+- **A tour for every page.** The first time you open a part of the app, a tour starts by itself: one of the app, then one per page and view, on Entra and Azure, including Advanced, the Azure scope and each Configure mode. Each step says what it means, how it works and what to watch. On a phone, a step about a control in the account menu points at the account button. Used PIM Manager before? You get the tours too, the same as someone new.
+- **Your choice.** Start the tour in Help lets you pick the app tour, one tour per page, or all of Entra or Azure. Turn off tours, or Settings > Display > Tours, stops them from starting by themselves. The live demo asks once per product. The tours replace the old feature highlights.
+
+### Calmer pages
+
+- **Show more details.** The Entra and Azure dashboards and Reports now start with what counts. Without details, the Reports show only the tags that deviate from the usual, the role lists drop their red signals, and the dashboards leave out blocks such as From Microsoft and cap the long tables at 5 rows with a link to the rest. Show more details next to the title brings everything back, and each page remembers your choice in this browser.
+- **One setting for all pages.** Settings > Display > Details, Fewer or More. With More every page shows everything; changing it resets the choice of each page.
+
+### Changed
+
+- **Sync time next to Refresh.** The Report shows "synced 3 min ago" next to Refresh, as the dashboard does.
+- **Better on a phone.** The dashboard Export is a button with the export icon below 1024 pixels. The Accounts and Managed groups tables of Advanced fit on a phone, and long names wrap instead of disappearing into a scroll area. Cards in a row are equally high.
+- **Clearer wording.** When no assignment comes through a group, Direct or through a group says so instead of "0 assignments via 2 groups".
+
+### Fixed
+
+- **A failed read no longer looks complete.** When Graph keeps failing to read the holders of a role, the Report and the dashboard stop with Try again and keep the data you had, instead of showing the role with fewer or no holders. This also stops Configure from saving an incomplete undo snapshot.
+- **Configure writes are sent once.** A 429, 503 or 504 could make a write go out up to three more times. An assignment that had landed could then show as "Already there." and be left out of Undo. Retries now apply to reads only, and Stop stops a retry.
+- **Groups that cannot hold a role.** Import refuses a row that puts a group that is not role-assignable on a directory role, and a group whose role-assignability cannot be confirmed. Microsoft's validation does not catch this, so the request used to fail after you applied it.
+- **Maximum active assignment.** When Graph returns no maximum, Configure shows 6 months, which is what it writes. It showed 15 days and wrote 6 months.
+- **PDF export.** Long names wrap inside their table cell instead of running over the next column, and the footer with tenant, export time and page number shows on every page again.
+- **Import keeps going without group access.** When Microsoft Graph refuses to read groups or applications, the people in those rows are marked unknown and the rest of the file is still checked, instead of the whole check failing.
+- **Export stops when you leave.** Leaving the page while an export runs stops it, so no file downloads on the next page.
+- **Readable while filtered.** A dashboard block that your filter cannot answer used to fade to a pale grey that was hard to read. It now dims its border and background and keeps its text readable, on Entra and Azure.
+- **Small layout fixes.** The line under each Guided step wraps to two lines instead of being cut off at tablet widths. Long activity text under Right now wraps instead of being cut off. On a phone, the file names in the Report export dialog wrap instead of being cut off.
+- **Self-hosted: no internal notes on your site.** The 3.0.1 release package carried a file with instructions for coding agents, and a self-hosted copy served it from its site root. Nothing about your tenant was in it, but it had no business being there. The build now leaves it out and stops when one slips through.
+- **Self-hosted: a redeploy that actually deploys.** Running the Deploy to Azure template again within a day did nothing. Now every run fetches the latest release and deploys it.
+
+### Security
+
+- **No silent overwrites in Configure.** Each policy rule is read again just before it is written. A rule that another admin changed since your review is not written over; the result says so and asks you to read again. This adds one Graph call per written rule.
+- **The account you see is the account that acts.** A token from a sign-in window finished with another account is refused, with a message to sign in with the account PIM Manager shows. That goes for Azure too: finish the Turn on Azure window with another account and Azure stays off. Before, reads and writes after such a window went to the other account's tenant.
+- **CSV formulas.** A formula character after a `;` or a line break inside a cell now gets an apostrophe too, so Excel with a semicolon list separator shows text instead of running a formula. Import reads the original text back.
+
+---
+
 ## v3.0.1 - 2026-10-22
 
 A security update. Next.js goes from 16.4.0 to 16.4.2 for two advisories published today (GHSA-2464-fhr4-w9xw and GHSA-p3m5-59mp-jv5r). PIM Manager is a static site without the parts of Next.js these are about, so a hosted PIM Manager was not exposed. If you host PIM Manager yourself, update anyway: from today a build on 16.4.0 stops with a security error.

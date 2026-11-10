@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
-import { NAV_ITEMS, isNavActive } from "@/utils/shellNavigation";
+import { environmentFromPath, homePathFor, isNavActive, isNavItemActive, navItemsFor } from "@/utils/shellNavigation";
 import { AccountMenu, type AccountMenuContent } from "./AccountMenu";
 import { EnvironmentSwitcher } from "./EnvironmentSwitcher";
 
@@ -20,19 +20,20 @@ const BAR_BUTTON = "inline-flex h-8 w-8 items-center justify-center rounded text
 export function TopBar({ currentPath, account, isMenuOpen, onMenuOpenChange }: TopBarProps) {
     const { user, tenantName } = account;
     const accountRef = useRef<HTMLButtonElement>(null);
+    const environment = environmentFromPath(currentPath);
 
     return (
         <header className="sticky top-0 z-30 hidden h-14 items-center border-b border-line bg-surface px-4 sm:flex md:px-6 lg:px-8">
-            <Link href="/dashboard" data-tour="app-title" className="text-base font-semibold text-ink">
+            <Link href={homePathFor(environment)} data-tour="app-title" className="text-base font-semibold text-ink">
                 PIM Manager
             </Link>
-            <div className="ml-2 md:ml-4">
-                <EnvironmentSwitcher variant="bar" />
+            <div className="ml-2 md:ml-4" data-tour="environment-switcher">
+                <EnvironmentSwitcher variant="bar" currentPath={currentPath} />
             </div>
             <span className="mx-2 h-6 w-px bg-line md:mx-4" aria-hidden="true" />
-            <nav aria-label="Main" className="flex h-full items-stretch gap-4 md:gap-6">
-                {NAV_ITEMS.map((item) => {
-                    const isActive = isNavActive(currentPath, item.path);
+            <nav aria-label="Main" data-tour="main-nav" className="flex h-full items-stretch gap-4 md:gap-6">
+                {navItemsFor(environment).map((item) => {
+                    const isActive = isNavItemActive(currentPath, item);
                     return (
                         <Link
                             key={item.path}
@@ -52,12 +53,13 @@ export function TopBar({ currentPath, account, isMenuOpen, onMenuOpenChange }: T
                 <button type="button" onClick={account.onOpenHelp} data-tour="sidebar-help" aria-label="Help" className={BAR_BUTTON}>
                     <Icon name="help" size={20} />
                 </button>
-                <Link href="/settings" aria-label="Settings" aria-current={isNavActive(currentPath, "/settings") ? "page" : undefined} className={`${BAR_BUTTON} ${isNavActive(currentPath, "/settings") ? "bg-page text-ink" : ""}`}>
+                <Link href="/settings" data-tour="settings-link" aria-label="Settings" aria-current={isNavActive(currentPath, "/settings") ? "page" : undefined} className={`${BAR_BUTTON} ${isNavActive(currentPath, "/settings") ? "bg-page text-ink" : ""}`}>
                     <Icon name="settings" size={20} />
                 </Link>
                 <div className="relative ml-2">
                     <button
                         ref={accountRef}
+                        data-tour="account-menu"
                         type="button"
                         aria-haspopup="menu"
                         aria-expanded={isMenuOpen}
@@ -69,7 +71,7 @@ export function TopBar({ currentPath, account, isMenuOpen, onMenuOpenChange }: T
                         {tenantName && <span className="hidden max-w-[160px] truncate font-medium lg:inline">{tenantName}</span>}
                         <Icon name="chevron-down" size={16} className="text-body" />
                     </button>
-                    <AccountMenu {...account} isOpen={isMenuOpen} onClose={() => onMenuOpenChange(false)} anchorRef={accountRef} />
+                    <AccountMenu {...account} currentPath={currentPath} isOpen={isMenuOpen} onClose={() => onMenuOpenChange(false)} anchorRef={accountRef} />
                 </div>
             </div>
         </header>

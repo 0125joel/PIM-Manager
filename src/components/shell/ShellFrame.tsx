@@ -3,6 +3,7 @@ import type { AccountMenuContent } from "./AccountMenu";
 import { TopBar } from "./TopBar";
 import { CompactHeader } from "./CompactHeader";
 import { BottomNav } from "./BottomNav";
+import { environmentFromPath } from "@/utils/shellNavigation";
 
 export type ShellMenu = "top" | "bottom" | null;
 
@@ -36,7 +37,7 @@ export function ShellFrame({ currentPath, account, isRefreshing, onRefresh, open
             </a>
             {banner}
             <TopBar currentPath={currentPath} account={account} isMenuOpen={openMenu === "top"} onMenuOpenChange={(isOpen) => onOpenMenuChange(isOpen ? "top" : null)} />
-            <CompactHeader tenantName={account.tenantName} isRefreshing={isRefreshing} onRefresh={onRefresh} />
+            <CompactHeader tenantName={account.tenantName} environment={environmentFromPath(currentPath)} isRefreshing={isRefreshing} onRefresh={onRefresh} />
             <div className="flex">
                 <main id="main" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-8 max-sm:pb-[calc(72px+env(safe-area-inset-bottom)+1rem)]">
                     {children}

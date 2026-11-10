@@ -20,13 +20,20 @@ function describeError(error: unknown): string {
     return `status ${getErrorStatusCode(error) ?? "unknown"}, code ${getErrorCode(error) ?? "unknown"}`;
 }
 
+/** Object ids are GUIDs. Anything else is not asked: it cannot change the filter, and it counts as not found */
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface DirectoryObject {
     id: string;
     displayName?: string;
     userPrincipalName?: string;
+    isAssignableToRole?: boolean | null;
 }
 
 const SELECT = "id,displayName,userPrincipalName";
+
+/** One id chunk: what Graph found, or a 403 on groups or service principals (those people stay unknown) */
+type ChunkOutcome = { kind: "found"; items: DirectoryObject[] } | { kind: "refused" };
 
 async function readChunk(client: Client, path: string, filter: string, select: string): Promise<DirectoryObject[]> {
     const response = await withRetry(() => client.api(path).version("v1.0").filter(filter).select(select).get(), 3, 1000, `lookup ${path}`);
@@ -34,7 +41,15 @@ async function readChunk(client: Client, path: string, filter: string, select: s
 }
 
 const asRef = (kind: PrincipalRef["kind"], o: DirectoryObject): PrincipalRef | null =>
-    o.id && o.displayName ? { id: o.id, kind, displayName: o.displayName, ...(o.userPrincipalName ? { userPrincipalName: o.userPrincipalName } : {}) } : null;
+    o.id && o.displayName
+        ? {
+            id: o.id,
+            kind,
+            displayName: o.displayName,
+            ...(o.userPrincipalName ? { userPrincipalName: o.userPrincipalName } : {}),
+            ...(kind === "group" && "isAssignableToRole" in o ? { isAssignableToRole: o.isAssignableToRole ?? null } : {}),
+        }
+        : null;
 
 export async function lookupPrincipals(client: Client, { ids, upns }: { ids: readonly string[]; upns: readonly string[] }, signal?: AbortSignal): Promise<PrincipalIndex> {
     // A look-up that failed (429 after the retries, network) is not "nobody with this id": it throws, the caller says so and can try again
@@ -47,6 +62,18 @@ export async function lookupPrincipals(client: Client, { ids, upns }: { ids: rea
         if (ref.userPrincipalName) byUpn.set(ref.userPrincipalName.toLowerCase(), ref);
     };
 
+    /**
+     * Keeps the raw error of a failed chunk (the pool's `onItemError` only gets its message) and rethrows it, so the pool
+     * counts the chunk as failed. An abort is not a failure.
+     */
+    const fail = (error: unknown, what: string): never => {
+        if (!signal?.aborted) {
+            failure ??= error;
+            Logger.warn("principalLookup", `Could not look up ${what}: ${describeError(error)}`);
+        }
+        throw error;
+    };
+
     // Users by UPN
     await runWorkerPool<string[], DirectoryObject[]>({
         items: chunkArray([...upns], USER_ID_CHUNK_SIZE),
@@ -54,53 +81,62 @@ export async function lookupPrincipals(client: Client, { ids, upns }: { ids: rea
         delayMs: 300,
         signal,
         rateLimiter: graphRateLimiter,
+        errorLog: "statusAndCode",
         processor: async (chunk) => {
             // The SDK does not encode $filter: a guest UPN's # (or a & or %) would cut the URL short, so each value is encoded (I-09)
             const filter = `userPrincipalName in (${chunk.map((u) => `'${encodeURIComponent(escapeODataString(u))}'`).join(",")})`;
             try {
                 return await readChunk(client, "/users", filter, SELECT);
-            } catch (error) {
+            } catch (error: unknown) {
                 Logger.warn("principalLookup", `The UPN filter was refused, asking per UPN: ${describeError(error)}`);
                 const found: DirectoryObject[] = [];
                 for (const upn of chunk) {
                     try {
                         await graphRateLimiter.acquire(1, signal);
                         found.push((await withRetry(() => client.api(`/users/${encodeURIComponent(upn)}`).version("v1.0").select(SELECT).get(), 3, 1000, "lookup one UPN")) as DirectoryObject);
-                    } catch (inner) {
+                    } catch (inner: unknown) {
                         // Only "not found" means nobody; anything else is a failed look-up
-                        if (getErrorStatusCode(inner) !== 404) throw inner;
+                        if (getErrorStatusCode(inner) !== 404) fail(inner, `${chunk.length} UPN(s)`);
                     }
                 }
                 return found;
             }
         },
         onItemComplete: (_chunk, users) => users.forEach((u) => keep(asRef("user", u))),
-        onItemError: (chunk, error) => {
-            failure = error;
-            Logger.warn("principalLookup", `Could not look up ${chunk.length} UPN(s): ${describeError(error)}`);
-        },
     });
 
     // By id: users first, then groups, then service principals for what is left
-    let left = [...ids];
+    let left = ids.filter((id) => GUID.test(id));
     for (const [path, kind] of [["/users", "user"], ["/groups", "group"], ["/servicePrincipals", "servicePrincipal"]] as const) {
         if (left.length === 0) break;
-        await runWorkerPool<string[], DirectoryObject[]>({
+        await runWorkerPool<string[], ChunkOutcome>({
             items: chunkArray(left, USER_ID_CHUNK_SIZE),
             workerCount: 4,
             delayMs: 300,
             signal,
             rateLimiter: graphRateLimiter,
-            processor: (chunk) => readChunk(client, path, `id in (${chunk.map((id) => `'${escapeODataString(id)}'`).join(",")})`, path === "/users" ? SELECT : "id,displayName"),
-            onItemComplete: (_chunk, found) => found.forEach((o) => keep(asRef(kind, o))),
-            // A group or application read can be refused without the permission (403): those people stay unknown; anything else failed
-            onItemError: (chunk, error) => {
-                if (path === "/users" || getErrorStatusCode(error) !== 403) failure = error;
-                Logger.warn("principalLookup", `Could not look up ${chunk.length} id(s) in ${path}: ${describeError(error)}`);
+            errorLog: "statusAndCode",
+            processor: async (chunk): Promise<ChunkOutcome> => {
+                // Each value is encoded, as for the UPNs (a GUID comes through unchanged)
+                const filter = `id in (${chunk.map((id) => `'${encodeURIComponent(escapeODataString(id))}'`).join(",")})`;
+                try {
+                    return { kind: "found", items: await readChunk(client, path, filter, path === "/users" ? SELECT : path === "/groups" ? "id,displayName,isAssignableToRole" : "id,displayName") };
+                } catch (error: unknown) {
+                    // A group or application read can be refused without the permission (403): those people stay unknown; anything else failed
+                    if (path !== "/users" && getErrorStatusCode(error) === 403) {
+                        Logger.warn("principalLookup", `The read of ${path} was refused; ${chunk.length} id(s) stay unknown: ${describeError(error)}`);
+                        return { kind: "refused" };
+                    }
+                    return fail(error, `${chunk.length} id(s) in ${path}`);
+                }
+            },
+            onItemComplete: (_chunk, outcome) => {
+                if (outcome.kind === "found") outcome.items.forEach((o) => keep(asRef(kind, o)));
             },
         });
         left = left.filter((id) => !byId.has(id.toLowerCase()));
     }
-    if (failure) throw failure instanceof Error ? failure : new Error(String(failure));
+    // The caller gets status and code, never the Graph message: it can repeat the filter with the ids and UPNs asked for
+    if (failure) throw Object.assign(new Error(`Looking up people failed: ${describeError(failure)}`), { statusCode: getErrorStatusCode(failure), code: getErrorCode(failure) });
     return { byId, byUpn };
 }

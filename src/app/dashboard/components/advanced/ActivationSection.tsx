@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StackedBar } from "@/components/charts/StackedBar";
 import type { DashboardFilter, MaxDurationBucket } from "@/types/dashboardFilter.types";
@@ -16,6 +16,9 @@ const DURATION_ROWS: { key: MaxDurationBucket; label: string; isWarning: boolean
     { key: "over12h", label: "> 12 h", isWarning: true },
 ];
 
+const DEFAULT_UNIT = { privileged: "privileged roles", all: "roles" };
+const DEFAULT_COUNT_NOUN = { one: "role", many: "roles" };
+
 interface ActivationSectionProps {
     /** null: nothing to show yet */
     charts: ActivationCharts | null;
@@ -25,10 +28,16 @@ interface ActivationSectionProps {
     /** Policy loading is still running (a finished load with missing policies says "not counted") */
     isPolicyLoading?: boolean;
     notice?: string;
+    /** The nouns of the title: "On activation, 21 privileged roles"; Azure counts role × scope */
+    unit?: { privileged: string; all: string };
+    /** The noun of the "not counted" footnotes, singular and plural; Azure counts role × scope, as in the title */
+    countNoun?: { one: string; many: string };
     extensions: CustomExtensionRow[];
     filter: DashboardFilter;
     onSetFilter: (filter: DashboardFilter) => void;
     isDimmed: boolean;
+    /** Details off (calm details spec 3.5): the "not counted" footnotes are left out */
+    isDetailed?: boolean;
 }
 
 function RequiredBar({ label, required, notRequired }: { label: string; required: number; notRequired: number }) {
@@ -44,17 +53,17 @@ function RequiredBar({ label, required, notRequired }: { label: string; required
 }
 
 /** On activation: MFA, approval, justification and maximum duration, then the custom extensions (spec 4.3 section 2). */
-export function ActivationSection({ charts, scope, isPending, isPolicyLoading = false, notice, extensions, filter, onSetFilter, isDimmed }: ActivationSectionProps) {
-    const noun = scope === "all" ? "roles" : "privileged roles";
+export function ActivationSection({ charts, scope, isPending, isPolicyLoading = false, notice, unit = DEFAULT_UNIT, countNoun = DEFAULT_COUNT_NOUN, extensions, filter, onSetFilter, isDimmed, isDetailed = true }: ActivationSectionProps) {
+    const noun = scope === "all" ? unit.all : unit.privileged;
     const toggle = (target: DashboardFilter) => () => onSetFilter(isSameFilter(filter, target) ? {} : target);
     const pressed = (target: DashboardFilter) => isSameFilter(filter, target);
     const show = !isPending && charts !== null;
     const maxDuration = Math.max(1, ...(charts ? Object.values(charts.durations) : [1]));
 
     return (
-        <section aria-labelledby="adv-terms-heading" className={PANEL_CLASS}>
-            <SectionHeader eyebrow="terms" title={charts && !notice ? `On activation, ${charts.roleCount} ${noun}` : "On activation"} headingId="adv-terms-heading" isDimmed={isDimmed} />
-            <div className={isDimmed ? "opacity-45" : ""}>
+        <section aria-labelledby="adv-terms-heading" data-tour="advanced-activation" className={`${PANEL_CLASS} ${isDimmed ? DIMMED_CLASS : ""}`}>
+            <SectionHeader eyebrow="terms" title={charts && !notice ? `On activation, ${charts.roleCount} ${noun}` : "On activation"} headingId="adv-terms-heading" />
+            <div>
                 {notice ? (
                     <SectionNotice>{notice}</SectionNotice>
                 ) : (
@@ -121,11 +130,11 @@ export function ActivationSection({ charts, scope, isPending, isPolicyLoading = 
                             </div>
                         </div>
 
-                        {charts && charts.unloaded > 0 && !isPolicyLoading && (
-                            <p className="mt-4 text-xs leading-4 text-muted">{charts.unloaded} {charts.unloaded === 1 ? "role is" : "roles are"} not counted: the settings could not be loaded.</p>
+                        {isDetailed && charts && charts.unloaded > 0 && !isPolicyLoading && (
+                            <p className="mt-4 text-xs leading-4 text-muted">{charts.unloaded} {charts.unloaded === 1 ? `${countNoun.one} is` : `${countNoun.many} are`} not counted: the settings could not be loaded.</p>
                         )}
-                        {charts && charts.notReadable > 0 && (
-                            <p className="mt-4 text-xs leading-4 text-muted">{charts.notReadable} {charts.notReadable === 1 ? "role is" : "roles are"} not counted: the settings are not readable with your current access.</p>
+                        {isDetailed && charts && charts.notReadable > 0 && (
+                            <p className="mt-4 text-xs leading-4 text-muted">{charts.notReadable} {charts.notReadable === 1 ? `${countNoun.one} is` : `${countNoun.many} are`} not counted: the settings are not readable with your current access.</p>
                         )}
 
                         {extensions.length > 0 && (

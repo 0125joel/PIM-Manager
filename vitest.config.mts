@@ -11,6 +11,8 @@ export default defineConfig({
         include: ["src/__tests__/**/*.test.ts"],
         environment: "node",
         coverage: {
+            // Markdown (such as src/services/AGENTS.md) is not code; the include globs of test:coverage would parse it.
+            exclude: ["**/*.md"],
             // Only `npm run test:coverage` measures; `npm test` is unaffected. A floor per file for the Configure write
             // path, review and Import utils (N-014): each file just under what it had on 2026-10-08, so a new branch
             // without a test fails the coverage run.

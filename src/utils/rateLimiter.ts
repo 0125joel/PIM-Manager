@@ -23,6 +23,8 @@ export class RateLimiter {
     private windowMs: number;
     /** After a 429 every caller waits, not only the one that was throttled */
     private blockedUntil = 0;
+    /** Told when a 429 starts or extends the pause, so a page can say that loading waits */
+    private listeners = new Set<() => void>();
 
     constructor(maxRu: number = DEFAULT_RU_BUDGET, windowMs: number = WINDOW_MS) {
         this.maxRu = maxRu;
@@ -76,6 +78,20 @@ export class RateLimiter {
      */
     backOff(ms: number): void {
         this.blockedUntil = Math.max(this.blockedUntil, Date.now() + ms);
+        for (const listener of this.listeners) listener();
+    }
+
+    /** Until when every caller waits after a 429, in ms since the epoch; in the past when nothing waits */
+    getBlockedUntil(): number {
+        return this.blockedUntil;
+    }
+
+    /** Calls `listener` on every `backOff`; returns the function that stops it */
+    subscribe(listener: () => void): () => void {
+        this.listeners.add(listener);
+        return () => {
+            this.listeners.delete(listener);
+        };
     }
 
     private sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -114,3 +130,10 @@ export class RateLimiter {
  * All worker pools share this instance to enforce a tenant-wide RU budget
  */
 export const graphRateLimiter = new RateLimiter(DEFAULT_RU_BUDGET);
+
+/**
+ * Limiter for Azure Resource Manager, separate from Graph: ARM throttles per principal per subscription and per tenant
+ * (a bucket of 250 reads refilling 25 per second). 200 requests per 10s at cost 1 stays under that for one browser and
+ * leaves room for the portal.
+ */
+export const armRateLimiter = new RateLimiter(200, WINDOW_MS);

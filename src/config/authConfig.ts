@@ -69,6 +69,10 @@ export const loginRequest: PopupRequest = {
     ],
 };
 
+// Azure Resource Manager (PIM for Azure resources): one delegated scope, asked when the user turns on Azure.
+// Not a Graph workload, so it is not in WorkloadType or WORKLOAD_SCOPES. What the user sees follows their Azure roles.
+export const AZURE_SCOPES: string[] = ["https://management.azure.com/user_impersonation"];
+
 export const graphConfig = {
     graphMeEndpoint: "https://graph.microsoft.com/v1.0/me",
 };

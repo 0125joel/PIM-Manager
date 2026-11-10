@@ -2,9 +2,9 @@
 
 import { HELP_PAGES } from "@/config/help";
 import { PAGE_TITLE_CLASS, PANEL_CLASS } from "@/components/ui/SectionHeader";
-import { requestTourRestart } from "@/hooks/useOnboarding";
+import { requestTourChoice } from "@/hooks/useOnboarding";
 import { Button } from "@/components/ui/Button";
-import { loginRequest } from "@/config/authConfig";
+import { AZURE_SCOPES, loginRequest } from "@/config/authConfig";
 import { ALERTS_PERMISSION, CONDITIONAL_ACCESS_PERMISSION, CUSTOM_EXTENSION_SCOPES } from "@/config/constants";
 import { WORKLOAD_SCOPES, WORKLOAD_WRITE_SCOPES } from "@/hooks/useIncrementalConsent";
 import { buildPermissionCatalog } from "@/utils/permissionCatalog";
@@ -17,6 +17,7 @@ const PERMISSIONS = buildPermissionCatalog({
         { feature: "Security alerts", scopes: [ALERTS_PERMISSION] },
         { feature: "Custom extensions", scopes: [CUSTOM_EXTENSION_SCOPES.read] },
         { feature: "Conditional Access check", scopes: [CONDITIONAL_ACCESS_PERMISSION] },
+        { feature: "Azure resources", scopes: AZURE_SCOPES },
     ],
     write: [
         { workload: "Directory roles", scopes: WORKLOAD_WRITE_SCOPES.directoryRoles },
@@ -59,7 +60,7 @@ export default function HelpPage() {
                     <h1 className={PAGE_TITLE_CLASS}>Guide</h1>
                     <p className="text-sm text-muted">How PIM Manager works, page by page.</p>
                 </div>
-                <Button onClick={requestTourRestart}>Start the tour</Button>
+                <Button onClick={requestTourChoice}>Start the tour</Button>
             </div>
 
             <nav aria-label="On this page" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">

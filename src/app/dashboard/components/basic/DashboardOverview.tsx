@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { RoleDetailData } from "@/types/directoryRole.types";
 import type { PimGroupData } from "@/types/pimGroup.types";
 import type { DashboardFilter, DashboardFilterKey } from "@/types/dashboardFilter.types";
-import { buildFilterNames, filterAppliesToGroups, isEmptyDashboardFilter } from "@/utils/dashboardFilter";
+import { buildFilterNames, filterAppliesToGroups, isEmptyDashboardFilter, serializeDashboardFilter } from "@/utils/dashboardFilter";
 import { buildStatsView, buildViewFilterSentence, type CountingState } from "@/utils/dashboardView";
 import { buildTips } from "@/utils/tipRules";
 import { computeCards, computeEasyToMiss, computeTerms, computeWho, unavailableCards, getEffectiveDashboardFilter, type DashboardStatsInput } from "@/utils/dashboardStats";
@@ -54,10 +54,12 @@ interface DashboardOverviewProps {
     tenantExtensionIds?: ReadonlySet<string> | null;
     /** "Change in Configure" (spec 16) for a group outside PIM the admin may change; the fixture passes none */
     changeHrefFor?: (target: ConfigureLinkTarget) => string | null;
+    /** Details off hides Easy to miss and From Microsoft and shortens the groups block (calm details spec 3.1) */
+    isDetailed?: boolean;
 }
 
 /** Filter bar, the eight cards and, in Basic, Who and Terms (spec 4.2 items 1 and 2): every number comes from `dashboardStats`. */
-export function DashboardOverview({ rolesData, groupsData, counting, filter, isRolesLoading, isGroupsLoading, policiesLoading, emergencyAccountIds, onSetFilter, onRemoveFilterKey, showBlocks, showAdvanced = false, scope = "privileged", tenantExtensionIds = null, rolesError, pimGroupsConsented, onGrantPimGroups, pimGroupsError, onRetryPimGroups, alerts, changeHrefFor }: DashboardOverviewProps) {
+export function DashboardOverview({ rolesData, groupsData, counting, filter, isRolesLoading, isGroupsLoading, policiesLoading, emergencyAccountIds, onSetFilter, onRemoveFilterKey, showBlocks, showAdvanced = false, scope = "privileged", tenantExtensionIds = null, rolesError, pimGroupsConsented, onGrantPimGroups, pimGroupsError, onRetryPimGroups, alerts, changeHrefFor, isDetailed = true }: DashboardOverviewProps) {
     const effective = useMemo(() => getEffectiveDashboardFilter(filter), [filter]);
     const isFiltered = !isEmptyDashboardFilter(effective);
     const appliesToGroups = !isFiltered || filterAppliesToGroups(effective);
@@ -119,15 +121,15 @@ export function DashboardOverview({ rolesData, groupsData, counting, filter, isR
             {/* Always mounted so that a change of the filter is announced */}
             <p role="status" className="sr-only">{isFiltered ? sentence : ""}</p>
             {isFiltered && <FilterBar filter={filter} reportFilter={effective} sentence={sentence} onRemoveKey={onRemoveFilterKey} names={filterNames} />}
-            <CardGrid stats={stats} filter={filter} isGroupsDimmed={isFiltered && !appliesToGroups} onSetFilter={onSetFilter} />
+            <div data-visual-section="dashboard-cards" data-tour="dashboard-cards"><CardGrid stats={stats} filter={filter} isGroupsDimmed={isFiltered && !appliesToGroups} onSetFilter={onSetFilter} /></div>
             {showBlocks && (
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div data-visual-section="dashboard-who-terms" className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <WhoBlock notice={isRolesFailed ? rolesNotice : undefined} who={who} filter={filter} isFiltered={isFiltered && !appliesToGroups} onSetFilter={onSetFilter} />
                     <TermsBlock terms={terms} notice={rolesNotice} caveat={termsCaveat} isWaitingForSettings={rolesData.length > 0 && policiesLoading} filter={filter} onSetFilter={onSetFilter} />
                 </div>
             )}
-            {showBlocks && (
-                <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {showBlocks && isDetailed && (
+                <div data-visual-section="dashboard-groups-easy" className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <GroupsOutsidePimBlock state={groupsState} rows={outsideRows} roleAssignableCount={roleAssignableCount} isDimmed={isFiltered && !appliesToGroups} onGrant={onGrantPimGroups} errorMessage={pimGroupsError} onRetry={onRetryPimGroups} changeHrefFor={changeHrefFor} />
                     <div className="flex flex-col gap-4">
                         <EasyToMissBlock rows={easyToMiss} notice={rolesNotice} filter={filter} onSetFilter={onSetFilter} />
@@ -135,8 +137,15 @@ export function DashboardOverview({ rolesData, groupsData, counting, filter, isR
                     </div>
                 </div>
             )}
+            {showBlocks && !isDetailed && (
+                <div data-visual-section="dashboard-groups-easy" className="mt-4 grid grid-cols-1 gap-4">
+                    <GroupsOutsidePimBlock state={groupsState} rows={outsideRows} roleAssignableCount={roleAssignableCount} isDimmed={isFiltered && !appliesToGroups} onGrant={onGrantPimGroups} errorMessage={pimGroupsError} onRetry={onRetryPimGroups} changeHrefFor={changeHrefFor} compact={{ limit: 5, reportHref: `/report?view=groups&f=${serializeDashboardFilter({ groupPim: "outside" })}` }} />
+                </div>
+            )}
             {showAdvanced && (
+                <div data-visual-section="dashboard-advanced">
                 <AdvancedSections
+                    isDetailed={isDetailed}
                     rolesData={rolesData}
                     groupsData={groupsData}
                     counting={counting}
@@ -155,6 +164,7 @@ export function DashboardOverview({ rolesData, groupsData, counting, filter, isR
                     onGrantPimGroups={onGrantPimGroups}
                     onRetryPimGroups={onRetryPimGroups ?? (() => undefined)}
                 />
+                </div>
             )}
             {showBlocks && <div className="mt-4"><TipBar tips={tips} onSetFilter={onSetFilter} /></div>}
         </>

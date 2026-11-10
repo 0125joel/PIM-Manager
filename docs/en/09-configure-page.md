@@ -9,7 +9,7 @@ This document explains the Configure page, where you change PIM settings and ass
 The start page shows your **write access** (what you may change, per area), the **entry cards**, the **access model** panel and **Last applies**. Four modes sit in the mode bar, kept in the URL (`mode=edit|guided|import|model`):
 
 1. **Edit**: a master-detail list of roles and groups. Pick a target, change settings on the Activation, Assignment and Notification tabs, see and change who has access (Who has it, Add people). *Select several* changes one value on many targets at once; *Copy settings to* copies a target's settings.
-2. **Guided**: a route in steps (Start, Targets, Settings, People) for a change on many targets, optionally from the PIM Monitor access model.
+2. **Guided**: a route in steps (Start, Targets, Settings, People, Review) for a change on many targets, optionally from the PIM Monitor access model.
 3. **Import**: drop a CSV or JSON file (assignments, role or group settings, an access model file, or a file of the access model choices saved from the Access model page; a backup is recognised but cannot be imported yet). PIM Manager recognises the file, shows a reference of the columns and a template, and compares every row with the tenant.
 4. **Access model**: the board of the Enterprise Access Model (planes and levels), the catalog of roles with their expected settings, and the placement of your groups. Export saves the recommended role settings as a CSV you can edit and import again, and your label choices and group placements as JSON. Nothing here writes to the tenant.
 

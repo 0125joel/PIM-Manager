@@ -11,7 +11,7 @@
 export const SITE_URL = "https://pimmanager.com";
 export const SITE_NAME = "PIM Manager";
 export const REPO_URL = "https://github.com/0125joel/PIM-Manager";
-export const AUTHOR = { name: "Joël Prins", url: "https://www.linkedin.com/in/jo%C3%ABl-prins-4b4655aa/" };
+export const AUTHOR = { name: "Joël Prins", url: "https://www.linkedin.com/in/jo%C3%ABl-prins/" };
 export const OG_IMAGE_PATH = "/og-image.png";
 export const OG_IMAGE_ALT = "PIM Manager dashboard: who has privileged access in an Entra ID tenant, and on which terms";
 
@@ -36,7 +36,7 @@ export const COVERAGE: CoverageItem[] = [
     core: false,
     name: "Azure resource roles",
     text: "Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources",
-    status: "planned",
+    status: "available",
   },
 ];
 
@@ -62,7 +62,7 @@ export const SITE_TITLE = "PIM Manager: who holds admin roles in Microsoft Entra
 const BASE_DESCRIPTION =
   "See who holds Microsoft Entra admin roles, from users and guests to apps and AI agents, and change PIM policies in bulk. Open source, runs in your browser.";
 export const SITE_DESCRIPTION = AZURE_AVAILABLE
-  ? "See who holds admin roles in Microsoft Entra and Azure RBAC, from users and guests to apps and AI agents, and change PIM in bulk. Open source, in your browser."
+  ? "See who holds admin roles in Entra and Azure RBAC, from users and guests to apps and AI agents, and change Entra PIM in bulk. Open source, in your browser."
   : BASE_DESCRIPTION;
 
 export const SITE_KEYWORDS = [
@@ -89,7 +89,7 @@ export interface FaqItem {
 }
 
 const azureAnswer = AZURE_AVAILABLE
-  ? "Yes. Besides Entra directory roles and PIM for Groups, PIM Manager covers PIM for Azure resources: Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources. These come from Azure Resource Manager, a separate API from Microsoft Graph."
+  ? "Yes, to read. Besides Entra directory roles and PIM for Groups, PIM Manager shows PIM for Azure resources in an Azure Report and an Azure dashboard: role eligibility and assignments on management groups, subscriptions, resource groups and resources. They come from Azure Resource Manager, a separate API from Microsoft Graph. Changing PIM in bulk is for Entra for now; Configure for Azure comes in a later version."
   : "Not yet. Azure resource roles (Azure RBAC through PIM, on management groups, subscriptions, resource groups and resources) are in development. Today PIM Manager covers Entra directory roles and PIM for Groups. Azure resources come from Azure Resource Manager, a separate API from Microsoft Graph, and are built on the same report and configuration model.";
 
 export const FAQ: FaqItem[] = [
@@ -123,7 +123,7 @@ export const FAQ: FaqItem[] = [
   {
     question: "Which permissions does it need?",
     answer:
-      "Read permissions on sign-in. Write permissions are only requested when you choose to grant them in Configure, per workload. An admin consents once per tenant.",
+      "Read permissions on sign-in. Write permissions are only requested when you choose to grant them in Configure, per workload. An admin consents once per tenant. Azure asks for one extra read permission, for Azure Resource Manager, when you choose Turn on Azure; users can consent to that one themselves if the tenant allows it.",
   },
   {
     question: "How is it different from the Entra admin center?",

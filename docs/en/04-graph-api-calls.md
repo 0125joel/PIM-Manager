@@ -52,6 +52,8 @@ This document details all Microsoft Graph API endpoints used by PIM Manager. Und
 | users, groups (`$search`, `startswith` fallback) | Search for people in Add people and the approver picker | User.Read.All, Group.Read.All |
 | directory/administrativeUnits, applications (`$search`) | The scopes of a new role assignment | AdministrativeUnit.Read.All, Application.Read.All |
 | users, groups, servicePrincipals (`id in (...)`, `userPrincipalName in (...)`) | Import: the people of a file that the loaded assignments do not name | User.Read.All, Group.Read.All, Application.Read.All |
+| servicePrincipals (`id in (...)`, `$select=id,servicePrincipalType`) | Azure dashboard and Azure Report: tell apps from managed identities among the service principals that hold an Azure role, 15 ids per request | Application.Read.All |
+| users, groups (`id in (...)`, `$select=id`) | Azure dashboard and Azure Report: find principals that hold an Azure role but no longer exist, 15 ids per request | User.Read.All, Group.Read.All |
 
 ---
 
@@ -107,11 +109,6 @@ GET /roleManagement/directory/roleAssignments?$expand=principal
 > [!WARNING]
 > Permanent assignments bypass PIM entirely. These users don't need to activate their role.
 
-### 1. Unified PIM Context (`UnifiedPimContext.tsx`)
-- `GET /roleManagement/directory/roleDefinitions` (Fallback Full Sync)
-- `GET /roleManagement/directory/roleAssignmentScheduleInstances`
-- `GET /roleManagement/directory/roleEligibilityScheduleInstances`
-
 ---
 
 ### 3. Role Eligibility Schedules
@@ -120,15 +117,16 @@ GET /roleManagement/directory/roleAssignments?$expand=principal
 GET /roleManagement/directory/roleEligibilitySchedules?$expand=principal
 ```
 
-**API Version**: `beta`
+**API Version**: `v1.0`
 
 **Purpose**: Shows who is **eligible** for a role via PIM.
 
 **Key Fields**:
 - `principalId` - User or group ID
 - `roleDefinitionId` - Which role
+- `directoryScopeId` - Where the role applies
 - `scheduleInfo` - Start/end dates
-- `memberType` - Direct or inherited (via group)
+- `status` - State of the schedule
 
 ---
 
@@ -138,9 +136,24 @@ GET /roleManagement/directory/roleEligibilitySchedules?$expand=principal
 GET /roleManagement/directory/roleAssignmentSchedules?$expand=principal
 ```
 
-**API Version**: `beta`
+**API Version**: `v1.0`
 
-**Purpose**: Shows currently **active** PIM assignments (activated roles).
+**Purpose**: Shows **active** PIM assignments, both assigned and activated (`assignmentType`). The principal is expanded, so an app or a group that only holds an active assignment is known by its type and name.
+
+---
+
+### 5. Role Assignment Schedule Instances
+
+```http
+GET /roleManagement/directory/roleAssignmentScheduleInstances
+```
+
+**API Version**: `v1.0`
+
+**Purpose**: `memberType` `Group` marks an activation that came through a group. This read only marks activations: when it fails, the load goes on and no activation is marked.
+
+> [!NOTE]
+> Calls 2 to 5 run together after the role definitions are in (`directoryRoleService.ts`).
 
 ---
 
@@ -152,7 +165,7 @@ GET /roleManagement/directory/roleAssignmentSchedules?$expand=principal
 GET /policies/roleManagementPolicyAssignments?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole' and roleDefinitionId eq '{roleId}'&$expand=policy($expand=rules)
 ```
 
-**API Version**: `beta`
+**API Version**: `v1.0`
 
 **Purpose**: Get PIM configuration for a specific role.
 
@@ -446,7 +459,7 @@ GET /identityGovernance/roleManagementAlerts/alerts
 
 ## Custom Extensions API Calls (Preview)
 
-PIM Custom Extensions let a role or group activation call an external REST API (typically a Logic App behind API Management) that answers `Approved`, `AutoApproved` or `Denied`. PIM Manager reads which extension a policy links, links one from Configure and lists the tenant's extensions for the picker. Building the endpoint stays outside the app; `docs/Assets/pim-custom-extension-logic-app-setup.md` covers that side.
+PIM Custom Extensions let a role or group activation call an external REST API (typically a Logic App behind API Management) that answers `Approved`, `AutoApproved` or `Denied`. PIM Manager reads which extension a policy links, links one from Configure and lists the tenant's extensions for the picker. Building the endpoint stays outside the app.
 
 ### Linked extension on a policy (no extra permission)
 
@@ -486,7 +499,7 @@ GET /identityGovernance/privilegedAccess/customExtensions
 PATCH /policies/roleManagementPolicies/{policyId}/rules/CustomExtension_PreApproval_EndUser_Assignment
 ```
 
-Body: `@odata.type`, `id`, `isEnabled`, `customExtensionId`, `customAttributes` and a `target` that carries its own `"@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget"` with `operations: ["All"]` (the `createRuleTarget()` shape). Never send `displayName`. An unlink sends `customExtensionId: ""` with `isEnabled: false`. Confirmed live on v1.0 and beta for Directory Roles (`docs/Assets/pim-custom-extensions-research.md` §3.3a); PIM for Groups uses the same rule ids. A `target` copied from a GET response (no discriminator, lowercase `all`) fails with `MissingProvider`.
+Body: `@odata.type`, `id`, `isEnabled`, `customExtensionId`, `customAttributes` and a `target` that carries its own `"@odata.type": "microsoft.graph.unifiedRoleManagementPolicyRuleTarget"` with `operations: ["All"]` (the `createRuleTarget()` shape). Never send `displayName`. An unlink sends `customExtensionId: ""` with `isEnabled: false`. Confirmed live on v1.0 and beta for Directory Roles; PIM for Groups uses the same rule ids. A `target` copied from a GET response (no discriminator, lowercase `all`) fails with `MissingProvider`.
 
 **Permission**: `RoleManagementPolicy.ReadWrite.Directory` or `RoleManagementPolicy.ReadWrite.AzureADGroup`, the existing Configure write scopes; linking needs no custom extension scope.
 

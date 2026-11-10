@@ -8,7 +8,7 @@ Het Dashboard is de centrale hub voor het monitoren van je Privileged Identity M
 
 **Doel:** Realtime inzicht in PIM-dekking en de verdeling van toewijzingen over Directory Roles en PIM for Groups.
 
-**Paginakop:** de titel, een Basic- of Advanced-schakelaar, in Advanced een schakelaar Privileged roles of All roles, "synced N min ago", Refresh (slim verversen) en Export. Eronder de "counting"-chips (Directory roles, PIM for Groups, Unmanaged groups, Security alerts) die bepalen welke workloads op deze pagina meetellen; een workload zonder toestemming toont een gestippelde chip met slot die de toestemming start.
+**Paginakop:** de titel, een Basic- of Advanced-schakelaar, in Advanced een schakelaar Privileged roles of All roles, **Show more details**, "synced N min ago", Refresh (slim verversen) en Export. Een lijn sluit de kop af. Onder de titel de "counting"-chips (Directory roles, PIM for Groups, Unmanaged groups, Security alerts) die bepalen welke workloads op deze pagina meetellen; ze staan er met details of als een chip uit staat. Een workload zonder toestemming toont een gestippelde chip met slot die de toestemming start.
 
 **Filter:** een klik op een kaart, legenda-rij of Easy to miss-rij zet precies een filter, bewaard in de URL als `f` (bijvoorbeeld `/dashboard?f=mfa:neither`). Een balk onder de chips toont het filter als verwijderbare chip, een zin met het aantal en "Open in report with this filter". Escape wist het filter.
 
@@ -23,6 +23,17 @@ Acht kaarten (4 bij 2), daarna in twee kolommen: **Has access** (donut permanent
 ### Advanced
 
 Dezelfde kop en kaarten, daarna vijf secties over de volle breedte: **Has access, and how**, **On activation** (grafieken voor MFA, approval, justification en maximale duur voor privileged of alle rollen, plus de lijst custom extensions), **PIM for Groups**, **Most privileged, and who approves** (top 6 accounts, approvers, een waarschuwing bij rollen met een approver) en **Right now** (lopende activeringen, eligibility die binnen 7 dagen eindigt). De secties gebruiken de hele tenant en worden gedimd zolang een filter actief is.
+
+### Show more details
+
+De pagina begint rustig: wat telt en filtert blijft staan, de rest wacht achter **Show more details**, naast Basic en Advanced.
+
+| Weergave | Zonder details |
+|----------|----------------|
+| Basic | Geen Easy to miss en geen From Microsoft. Role-assignable groups outside PIM staat over de volle breedte en toont de eerste 5 groepen (groepen met een rol eerst), daarna "Show all N in Report" |
+| Advanced | Geen custom extensions onder On activation en geen Right now. Most privileged toont de eerste 5 accounts en PIM for Groups de eerste 5 groepen buiten PIM, elk met een link naar het Rapport |
+
+Basic en Advanced onthouden elk hun eigen keuze in deze browser. Een filter dat alleen een verborgen blok kan zetten, zoals een Easy to miss-rij in een gedeelde link, toont de details voor dat bezoek; vink je het vakje uit, dan verdwijnt het filter. Met **Details** op More in Settings toont elke weergave alles en is het vinkje weg.
 
 ---
 
@@ -69,26 +80,9 @@ Rij van gekleurde chips die actieve workloads tonen met tandwiel knop om Instell
 - Kan niet alle workloads verbergen (minimaal 1 actief)
 - URL override: `?workload=pimGroups` toont alleen die workload
 
-### Instellingen Modal
+### Instellingenpagina
 
-**Tabbladen:**
-
-**Workloads Tab:**
-- In-/uitschakelen workloads (vereist toestemming)
-- Toon/verberg workloads (zichtbaarheidstoggle)
-- Sub-features management (bijv. Security Alerts)
-
-**Developer Tab:**
-- Log Level selector (INFO / DEBUG)
-- Console gebruiksinstructies
-
-**Workload Statussen:**
-- **Niet ingeschakeld** - Blauwe "Inschakelen" knop (triggert toestemming)
-- **Ingeschakeld + Zichtbaar** - "Verbergen" knop beschikbaar
-- **Ingeschakeld + Verborgen** - "Tonen" knop beschikbaar
-- **Vergrendeld** - "Altijd aan" badge (Directory Roles)
-
-**Persistentie:** localStorage met prefixes `pim_visibility_` en `pim_feature_enabled_`
+Workloadrechten, weergave, noodtoegangsaccounts en geavanceerde opties staan op de pagina `/settings` (het tandwiel naast de chips, of het accountmenu). Toestemming vraag je per workload aan vanuit de rechtentabel. Voorkeuren worden opgeslagen in localStorage (`pim_feature_enabled_`, `pim_write_consent_`).
 
 ---
 
@@ -173,6 +167,6 @@ Een filtermodel voor dashboard en rapport (`utils/dashboardFilter.ts`): `assignm
 
 ## Volgende Stappen
 
-- [Rapport Pagina](./07-rapport-pagina.md) - Gedetailleerde configuratieweergave
-- [Belangrijke Concepten](./05-belangrijke-concepten.md) - PIM-terminologie begrijpen
+- [Rapport Pagina](./08-rapport-pagina.md) - Gedetailleerde configuratieweergave
+- [Belangrijke Concepten](./06-belangrijke-concepten.md) - PIM-terminologie begrijpen
 - [Dataflow](./03-dataflow.md) - Hoe data opgehaald en verwerkt wordt

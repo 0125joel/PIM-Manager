@@ -28,7 +28,7 @@ function renderElement([tag, attrs]: IconElement, key: number) {
 }
 
 /**
- * The NextGen icon set (docs/Assets/next-gen/icons). The line takes the text colour;
+ * The icon set (docs/Assets/icons). The line takes the text colour;
  * the one accent element reads --pim-icon-accent or --pim-icon-warn.
  * Always place it next to a visible label, or give the button an aria-label.
  */

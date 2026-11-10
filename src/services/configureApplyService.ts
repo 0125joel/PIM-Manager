@@ -1,6 +1,6 @@
 import type { Client } from "@microsoft/microsoft-graph-client";
 import type { Target } from "@/types/configure.types";
-import { sameEnd, type AssignmentItem, type ApplyPlan, type ApplyResult, type ChangeResult, type SettingsItem } from "@/utils/applyPlan";
+import { ruleMovedFields, sameEnd, type AssignmentItem, type ApplyPlan, type ApplyResult, type ChangeResult, type SettingsItem } from "@/utils/applyPlan";
 import { SCHEDULE_REQUEST_PATHS } from "@/utils/assignmentRequests";
 import { targetKey } from "@/utils/configureBasket";
 import { getErrorMessage } from "@/utils/errorUtils";
@@ -34,6 +34,11 @@ export interface RunApplyOptions {
      * without it, only the schedule decides
      */
     findPendingRequest?: (item: AssignmentItem) => Promise<boolean>;
+    /**
+     * The rule as it is now, read just before its PATCH; when a written field moved since the review, the policy is not
+     * written (no etag on policy rules, lessons/entra.md). Without it, the rules are written as planned
+     */
+    readRule?: (policyId: string, ruleId: string) => Promise<unknown>;
     /** Aborted: the write in flight finishes, everything after it is "stopped" */
     signal?: AbortSignal;
     /** Each change as it starts and ends */
@@ -98,7 +103,32 @@ export async function runApply(client: Client, plan: ApplyPlan, options: RunAppl
     const writeSettings = async (item: SettingsItem) => {
         for (const id of item.changeIds) notify(id, "writing");
         const written: string[] = [];
+        // A stop before a rule's PATCH: a change whose every rule landed is done (as a failed PATCH below), the rest failed
+        const stopBefore = (message: string) => {
+            failedSettings.add(targetKey(item.target));
+            for (const id of item.changeIds) {
+                const rules = item.rulesByChange?.[id];
+                if (rules && rules.length > 0 && rules.every((r) => written.includes(r))) settle(id, { status: "done" });
+                else settle(id, { status: "failed", message });
+            }
+        };
         for (const update of item.updates) {
+            // The rule as it is now, read just before its PATCH: a field another admin changed since the review is not written over
+            if (options.readRule && item.readRules) {
+                const before = written.length ? `; written before it: ${written.join(", ")}` : "; nothing of this policy was written";
+                let moved: string[];
+                try {
+                    await graphRateLimiter.acquire(1, options.signal);
+                    moved = ruleMovedFields(item.readRules[update.ruleId], await options.readRule(item.policyId, update.ruleId), update.body);
+                } catch (error: unknown) {
+                    stopBefore(`Rule ${update.ruleId} could not be read again before writing (${getErrorMessage(error)})${before}.`);
+                    return;
+                }
+                if (moved.length > 0) {
+                    stopBefore(`Rule ${update.ruleId} changed since your review (${moved.join(", ")})${before}. Read again and review.`);
+                    return;
+                }
+            }
             try {
                 // The pool paid for the first attempt of each PATCH; a retry pays again (W-12)
                 let attempt = 0;
@@ -260,6 +290,14 @@ export function createFindSchedule(client: Client): (item: AssignmentItem) => Pr
         });
         return found ? { end: found.scheduleInfo?.expiration?.endDateTime ?? null } : null;
     };
+}
+
+/** `readRule` against Graph (v1.0): one rule of a policy as it is now, read just before its PATCH */
+export function createReadRule(client: Client): (policyId: string, ruleId: string) => Promise<unknown> {
+    return (policyId, ruleId) => withRetry(
+        () => client.api(`/policies/roleManagementPolicies/${encodeURIComponent(policyId)}/rules/${encodeURIComponent(ruleId)}`).version("v1.0").get(),
+        3, 1000, `configureApply:read:${policyId}:${ruleId}`,
+    );
 }
 
 /** Request statuses after which nothing more happens: such a request is no reason to hold back a new one */

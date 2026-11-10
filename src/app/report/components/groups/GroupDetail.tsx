@@ -7,8 +7,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
 import { Tag } from "@/components/ui/Tag";
 import { REPORT_TERMS } from "@/config/help/reportTerms";
+import { useIsDetailed } from "@/contexts/DetailsContext";
 import type { AuthenticationContext } from "@/types/shared.types";
 import type { GroupPimPolicy, PimGroupData } from "@/types/pimGroup.types";
+import { isTagShown } from "@/utils/calmTags";
 import { formatDate } from "@/utils/dateFormat";
 import { getEntraGroupUrl, type RoleHeldByGroup } from "@/utils/groupsOutsidePim";
 import { buildPolicyView, type PolicyTabId, type PolicyViewContext } from "@/utils/policyView";
@@ -44,6 +46,7 @@ const MEMBER_ROWS_SHOWN = 200;
 
 /** A group, outside PIM (a warning, roles held, members read on demand) or under PIM (roles held, assignments, Member and Owner settings), spec 4. */
 export function GroupDetail({ data, held, rowContext, authenticationContexts, customExtensions, relation, onRelationChange, tab, onTabChange, isHiddenByFilter, getShareUrl, onOpenRole, changeHref }: GroupDetailProps) {
+    const isDetailed = useIsDetailed();
     const isOutside = data.isManaged === false;
     const typeLabel = GROUP_TYPE_LABEL[data.group.groupType];
     const heldRows = useMemo(() => buildRolesHeldRows(held), [held]);
@@ -60,7 +63,7 @@ export function GroupDetail({ data, held, rowContext, authenticationContexts, cu
                                 {isOutside ? <Tag variant="danger" tip={REPORT_TERMS.outsidePim.text}>Outside PIM</Tag> : <Tag tip={REPORT_TERMS.underPim.text}>Under PIM</Tag>}
                             </h2>
                             {data.group.description && <p title={data.group.description} className="mt-1.5 line-clamp-2 max-w-[70ch] text-[13px] leading-[18px] text-body">{data.group.description}</p>}
-                            {(typeLabel || data.group.isAssignableToRole === true) && (
+                            {isDetailed && (typeLabel || data.group.isAssignableToRole === true) && (
                                 <p className="mt-2 flex flex-wrap gap-1.5">
                                     {typeLabel && <Tag>{typeLabel}</Tag>}
                                     {data.group.isAssignableToRole === true && <Tag>Role-assignable</Tag>}
@@ -101,10 +104,10 @@ export function GroupDetail({ data, held, rowContext, authenticationContexts, cu
                                         <span className="flex flex-wrap items-center justify-end gap-1.5 max-sm:justify-start">
                                             {row.kind === "eligible" && <Tag>Eligible</Tag>}
                                             {row.kind === "active" && <Tag>Active</Tag>}
-                                            {row.end.type === "expires" && <Tag tip={REPORT_TERMS.expires.text}>{`Expires ${formatDate(row.end.date)}`}</Tag>}
-                                            {row.end.type === "permanent" && <Tag variant="warn" tip={REPORT_TERMS.permanent.text}>Permanent</Tag>}
-                                            {row.end.type === "noEnd" && row.kind !== "permanent" && <Tag tip={REPORT_TERMS.noEndDate.text}>No end date</Tag>}
-                                            {scope && <Tag tip={scope.term ? REPORT_TERMS[scope.term].text : scope.tip}>{scope.label}</Tag>}
+                                            {row.end.type === "expires" && isTagShown("expires", isDetailed) && <Tag tip={REPORT_TERMS.expires.text}>{`Expires ${formatDate(row.end.date)}`}</Tag>}
+                                            {row.end.type === "permanent" && isTagShown("permanent", isDetailed) && <Tag variant="warn" tip={REPORT_TERMS.permanent.text}>Permanent</Tag>}
+                                            {row.end.type === "noEnd" && row.kind !== "permanent" && isTagShown("noEndDate", isDetailed) && <Tag tip={REPORT_TERMS.noEndDate.text}>No end date</Tag>}
+                                            {scope && isTagShown(scope.term === "tenantWide" ? "scopeTenantWide" : "scopeOther", isDetailed) && <Tag tip={scope.term ? REPORT_TERMS[scope.term].text : scope.tip}>{scope.label}</Tag>}
                                         </span>
                                     </li>
                                 );

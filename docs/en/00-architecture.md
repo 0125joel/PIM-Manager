@@ -28,6 +28,7 @@ PIM Manager is a client-side Next.js application for managing and visualizing Mi
 
 - **Directory Roles** (Entra ID Roles) - Fully implemented
 - **PIM for Groups** - Fully implemented
+- **Azure** (PIM for Azure resources) - Report and dashboard through Azure Resource Manager (ARM), read only; Configure comes later
 - **Intune Roles** - Planned (Phase 4)
 - **Exchange Roles** - Planned (Phase 4)
 
@@ -376,6 +377,12 @@ After refactoring, all services follow a consistent pattern:
 | User Search | Search users and groups in Add people | `userSearchService.ts` |
 | Scope Options | Administrative units and applications as the scope of a new assignment | `scopeOptionsService.ts` |
 | Group Membership | Members and owners of a group, read on demand in the Report | `groupMembershipService.ts` |
+| Azure Scopes | Subscriptions, resource groups, resources and the management group hierarchy you can read (Azure Resource Manager) | `azureScopeService.ts` |
+| Azure Assignments | Active and eligible PIM role assignments on Azure resources (Azure Resource Manager) | `azureAssignmentService.ts` |
+| Azure Role Settings | One role's settings at one scope, read only (Azure Resource Manager) | `azurePolicyService.ts` |
+| Azure Role Definitions | Azure role definitions, for the description and the privileged check (Azure Resource Manager) | `azureRoleDefinitionService.ts` |
+| Azure Alerts | The PIM alerts of a subscription, read only (Azure Resource Manager) | `azureAlertService.ts` |
+| Service Principal Types | Whether a service principal behind an Azure assignment is an app or a managed identity, and whether the principal still exists (Graph) | `servicePrincipalTypeService.ts` |
 | Policy Parser | Parse PIM policy rule structures into `PolicySettings` | `utils/policyParser.ts` |
 | Intune (future) | Intune RBAC roles | `intuneService.ts` |
 
@@ -486,7 +493,7 @@ interface AggregatedData {
             <ToastProvider>             ← Toast notifications
               <GlobalProgressBar />
               <AppShell>{children}</AppShell>   ← Top bar, compact header, bottom navigation
-              <OnboardingWrapper />     ← First-visit tour and feature highlights
+              <OnboardingWrapper />     ← Tours on the first visit of each part
             </ToastProvider>
           </ErrorBoundary>
         </UnifiedPimProvider>
@@ -497,7 +504,7 @@ interface AggregatedData {
 
 The provider tree lives in `components/AppProviders.tsx` (a client component rendered by `app/layout.tsx`). The MSAL redirect bridge page `/redirect` is rendered outside this tree: MSAL v5 delivers popup and silent token responses to that page, which broadcasts them to the opener and must not be wrapped in `MsalProvider`.
 
-> **Note:** `ViewModeProvider` is not part of the global layout. It is applied locally in `app/dashboard/page.tsx` only. `ConfigureBasketProvider` is applied locally in `app/configure/page.tsx`.
+> **Note:** `ViewModeProvider` is not part of the global layout. It is applied locally in `app/dashboard/page.tsx` and, with its own storage key, in `app/azure/page.tsx`. `ConfigureBasketProvider` is applied locally in `app/configure/page.tsx`. `AzureProvider` (`contexts/AzureContext.tsx`) holds the Azure data and is mounted only in `app/azure/layout.tsx`, so it wraps the Azure pages alone.
 
 > **Note:** The static HTML and the hydration pass render only the start-up spinner; the tree follows on the client. In a demo tab `DemoModeProvider` wraps it and `DemoAuthProvider` takes the place of `AuthProvider`. The old `PimDataProvider` and `DirectoryRoleContext` are gone: Directory Roles live in `UnifiedPimProvider`.
 
@@ -568,9 +575,15 @@ async function runWorkerPool<TItem, TResult>({
 | PIM for Groups: managed groups (smart refresh, 2 calls per group) | 3 | 500ms | `refreshPimGroupAssignments` |
 | PIM for Groups: unmanaged groups | 5 | 200ms | `fetchAllPimGroupData`, `refreshPimGroupAssignments` (one lightweight call per group) |
 | PIM for Groups: member count of unmanaged groups | 6 | 500ms | `addMemberCounts` (`pimGroupService.ts`) |
+| Azure: assignments (instances and eligibility schedules per subscription; resource groups and resources of a subscription that refuses its own level) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`, with `armRateLimiter`; `costPerItem` 2, because each item reads two lists together |
+| Azure: role settings of the role and scope pairs (settings dialog, export) | 4 | 250ms | `readAzureRolePolicyPairs` and the policies hook in `hooks/useAzureRolePolicy.ts`, with `armRateLimiter`, `costPerItem` 1; the root scope sends no request |
+| Azure dashboard: custom role definitions per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, with `armRateLimiter`, `costPerItem` 1; the tenant-level lists and the first subscription's built-in roles are single calls |
+| Azure dashboard: PIM alerts per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, with `armRateLimiter`, `costPerItem` 1 |
 | Worker pool default (if not specified) | 8 | 300ms | `runWorkerPool` |
 
 The Configure apply (`services/configureApplyService.ts`) runs its steps on `runWorkerPool` with 4 workers and a 500 ms delay. `updatePimPolicy` is not pooled: its rules are PATCHed one at a time with a 300 ms pause. Every Graph call, pooled or not, also passes through `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window of 500 resource units per 10 seconds).
+
+Azure Resource Manager has its own limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window of 200 requests per 10 seconds), separate from `graphRateLimiter`. The ARM client (`utils/armClient.ts`) also takes one unit from the same limiter for every request it sends, in addition to the `costPerItem` the worker pool takes per item. After a 429 the client pauses the limiter for the `Retry-After` of the answer, so every worker waits.
 
 **Microsoft Graph API Limits (Identity & Access):**
 - Small tenant: 3,500 ResourceUnits per 10 sec
@@ -720,11 +733,11 @@ Key architectural decisions documented for future reference:
 |---|----------|--------|-----------|
 | ADR-001 | **Client-side only** (no backend) | Accepted | Avoids server costs, simpler deployment, data stays with user |
 | ADR-002 | **Static Export** via Next.js | Accepted | Cloudflare Pages hosting, no server-side rendering needed |
-| ADR-003 | **UnifiedPimContext** for multi-workload | Accepted | Single source of truth, scales to new workloads |
+| ADR-003 | **UnifiedPimContext** for multi-workload | Accepted | Single source of truth, scales to new workloads. Azure has its own `AzureProvider` (`src/contexts/AzureContext.tsx`) next to it, mounted only around the Azure pages |
 | ADR-004 | **Worker Pool pattern** for API throttling | Accepted | Prevents 429 errors, up to 8x faster than sequential |
 | ADR-005 | **Aggregated cards** instead of per-workload | Accepted | Cleaner UI, scales better |
 | ADR-006 | **Incremental Consent** per workload | Accepted | Least privilege, user chooses which data |
-| ADR-007 | **Beta API** only where v1.0 lacks the data: `isPrivileged`, alerts, custom extensions, PIM for Groups resources, group members and member count | ⚠️ Risk Accepted | Needed for security insights and PIM for Groups; each beta call carries its reason in a code comment. The `isPrivileged` read falls back to v1.0 without that field |
+| ADR-007 | **Beta API** only where v1.0 lacks the data: `isPrivileged`, alerts, custom extensions, PIM for Groups resources, group members and member count | ⚠️ Risk Accepted | Needed for security insights and PIM for Groups; each beta call carries its reason in a code comment. The `isPrivileged` read falls back to v1.0 without that field. The ARM endpoint for PIM alerts (`roleManagementAlerts`, `src/services/azureAlertService.ts`) is also a preview, `2022-08-01-preview` |
 
 > See `docs/adr/` for detailed ADR documents (if created).
 
@@ -891,7 +904,7 @@ src/
 │   ├── useConfigureReview.ts     # Configure review (pre-flight, dry run)
 │   ├── useConfigureApply.ts      # Configure apply, result and undo
 │   ├── useLeaveGuard.ts          # Warn on unsaved changes in Configure
-│   ├── useOnboarding.ts          # First-visit tour and feature highlight state
+│   ├── useOnboarding.ts          # Start the tour: opens the choice of tours
 │   └── useUpdateCheck.ts         # GitHub release check (self-hosted only)
 │
 ├── types/

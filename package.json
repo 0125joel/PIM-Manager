@@ -1,10 +1,10 @@
 {
   "name": "pim-manager",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/generate-csp-hashes.mjs",
+    "build": "next build && node scripts/strip-private-output.mjs && node scripts/generate-csp-hashes.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

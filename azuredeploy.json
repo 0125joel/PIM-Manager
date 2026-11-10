@@ -32,6 +32,13 @@
       "metadata": {
         "description": "App Registration Client ID from Microsoft Entra ID"
       }
+    },
+    "forceUpdateTag": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Changes on every deployment so the deployment script runs again on a redeploy. Leave the default."
+      }
     }
   },
   "variables": {
@@ -89,6 +96,7 @@
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ],
       "properties": {
+        "forceUpdateTag": "[parameters('forceUpdateTag')]",
         "azCliVersion": "2.74.0",
         "storageAccountSettings": {
           "storageAccountName": "[variables('storageAccountName')]",

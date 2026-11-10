@@ -24,12 +24,16 @@ export const DASHBOARD_HELP: HelpPage = {
             items: [{ label: "Privileged or All roles", text: "Advanced counts privileged roles by default. The switch in the title bar counts every role instead." }],
         },
         {
+            title: "Show more details",
+            paragraphs: ["The page starts calm: what counts and filters stays, the rest waits behind Show more details next to Basic and Advanced. Without it, Basic leaves out Easy to miss and From Microsoft and shows the first 5 groups outside PIM; Advanced leaves out custom extensions and Right now and shows the first 5 accounts and groups. The workload chips appear when a chip is off. Each view remembers its own choice in this browser, and a filter that only a hidden block can set shows the details for that visit. In Settings, Details set to More shows everything everywhere."],
+        },
+        {
             title: "Filtering",
             paragraphs: ["Click a card, a legend row or an Easy to miss row and every block that the filter is about changes. The filter sits in the address bar (the f parameter), so you can share the view. Escape or the bar above the cards clears it. Blocks that a filter does not apply to are dimmed and say so."],
         },
         {
             title: "What is counted",
-            paragraphs: ["The chips under the title decide which workloads count: Directory roles, PIM for Groups, Unmanaged groups, Agents and Security alerts. Agents switches AI agents (Microsoft Entra Agent ID) on or off in every number; it is on by default. A number that is not known yet shows a placeholder, never zero. A block that failed to load says why and offers Try again."],
+            paragraphs: ["The chips under the title, shown with details or when one is off, decide which workloads count: Directory roles, PIM for Groups, Unmanaged groups, Agents and Security alerts. Agents switches AI agents (Microsoft Entra Agent ID) on or off in every number; it is on by default. A number that is not known yet shows a placeholder, never zero. A block that failed to load says why and offers Try again."],
         },
         {
             title: "Refresh",

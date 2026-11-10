@@ -11,7 +11,7 @@ import type { DashboardFilter, MaxDurationBucket } from "@/types/dashboardFilter
 import type { PrincipalKind } from "@/utils/principalUtils";
 
 /**
- * Pure numbers for the five sections of the Advanced dashboard (spec 4.3). Definitions are in docs/Assets/next-gen/dashboard/plans/ng-37-plan.md;
+ * Pure numbers for the five sections of the Advanced dashboard. The functions below and their tests are the definitions;
  * the Basic definitions (`dashboardStats.ts`, `assignmentKinds.ts`) are reused so a number means the same everywhere.
  */
 
@@ -43,7 +43,7 @@ export function getFilterOwnerSection(filter: DashboardFilter): AdvancedSectionI
 // ---------------------------------------------------------------------------------------------
 
 export interface AccessRow {
-    label: "Directory roles" | "Group members" | "Group owners";
+    label: string;
     permanent: number;
     eligible: number;
     activeTimeBound: number;
@@ -59,7 +59,7 @@ export interface HasAccess {
     groupsHoldingRoles: number;
 }
 
-function toRow(label: AccessRow["label"], c: AssignmentCounts): AccessRow {
+function toRow(label: string, c: AssignmentCounts): AccessRow {
     const total = c.permanent + c.eligible + c.timeBound;
     return { label, permanent: c.permanent, eligible: c.eligible, activeTimeBound: c.timeBound, total };
 }
@@ -229,6 +229,8 @@ export interface AccountRow {
     privilegedRoles: number;
     permanent: number;
     eligible: number;
+    /** Set by the Azure dashboard: the tags to show (guest, app, managed identity, agent, group, emergency, delegated); absent: the Entra tags from kind */
+    tags?: string[];
 }
 
 /** Accounts ranked by the number of distinct roles in scope they hold (eligible or active). */

@@ -63,7 +63,7 @@ export function DropZone({ onFile, onExample, takeFocus = false }: DropZoneProps
     };
 
     return (
-        <div className="rounded border border-line bg-surface p-4 sm:p-5">
+        <div className="rounded border border-line bg-surface p-4 sm:p-5" data-tour="configure-import-drop">
             <div
                 onDragOver={(event) => { event.preventDefault(); setIsOver(true); }}
                 onDragLeave={() => setIsOver(false)}

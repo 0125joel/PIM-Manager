@@ -64,7 +64,7 @@ De chip bar op Dashboard biedt snelle toggles:
 
 ## Settings Modal Tabs
 
-De Settings-pagina heeft deze secties: Workloads en rechten, Weergave, Noodtoegangsaccounts en Geavanceerd. (De tabs van de vroegere modal waren:)
+De Settings-pagina heeft deze secties: Workloads en rechten, Weergave, Noodtoegangsaccounts en Geavanceerd. Weergave bevat het thema, de weergave waarin het dashboard en het Azure Report openen, en **Details**: met Fewer onthoudt elke pagina en weergave zijn eigen Show more details; met More toont elke pagina alles. Details wijzigen wist de onthouden keuzes. **Tours**: met On start de eerste keer dat je een onderdeel opent een korte tour; met Off start er geen vanzelf, en Start the tour in Help blijft werken. (De tabs van de vroegere modal waren:)
 
 ### Workloads Tab
 
@@ -107,6 +107,11 @@ De applicatie gebruikt specifieke localStorage keys voor persistentie:
 | `pim_visibility_[workloadId]` | Workload zichtbaarheid toggle | `"true"` of `"false"` |
 | `pim_feature_enabled_[featureId]` | Feature consent status | `"true"` of `"false"` |
 | `LOG_LEVEL` | Developer log level | `"INFO"` of `"DEBUG"` |
+| `details-preference` | Details in Settings > Weergave | `"fewer"` of `"more"` |
+| `details-[page]` | Show more details van één pagina of weergave: `entra-dashboard-basic`, `entra-dashboard-advanced`, `entra-report`, `azure-dashboard-basic`, `azure-dashboard-advanced`, `azure-report` | `"1"` of `"0"` |
+| `tours-seen` | De tours die je gezien hebt | `["app","entra-report"]` |
+| `tours-setting` | Tours in Settings > Weergave | `"on"` of `"off"` |
+| `tours-demo-[product]` | Het antwoord op de demovraag per product (`entra`, `azure`); de demo bewaart het in zijn eigen opslag, die stopt met het tabblad | `"yes"` of `"no"` |
 
 **SessionStorage Keys** (apart van settings):
 - `pim_groups_data_cache`: Gecachte PIM for Groups data
@@ -127,6 +132,10 @@ De applicatie gebruikt specifieke localStorage keys voor persistentie:
 | `src/contexts/UnifiedPimContext.tsx` | Multi-workload state management |
 | `src/utils/logger.ts` | Gecentraliseerde logging met LOG_LEVEL ondersteuning |
 
-## Architectuur Notities
+---
 
-Zie [architecture_gap_analysis.md](../../.gemini/antigravity/brain/.../architecture_gap_analysis.md) voor Gap 4: WorkloadChips als Data Filters.
+## Volgende Stappen
+
+- [Dashboard Pagina](./07-dashboard-pagina.md) - Workload toggles gebruiken op het Dashboard
+- [Rapport Pagina](./08-rapport-pagina.md) - Filteren over meerdere workloads
+- [Belangrijke Concepten](./06-belangrijke-concepten.md) - Workloads begrijpen

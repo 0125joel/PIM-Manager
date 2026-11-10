@@ -28,6 +28,8 @@ export interface PrincipalRef {
     kind: "user" | "group" | "servicePrincipal";
     displayName: string;
     userPrincipalName?: string;
+    /** Groups only: as Graph reads it (null means not role-assignable), or true for a group that holds a directory role */
+    isAssignableToRole?: boolean | null;
 }
 
 /**

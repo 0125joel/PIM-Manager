@@ -87,6 +87,8 @@ export interface ReportHeader {
     detail: ExportDetail;
     audience: ExportAudience;
     isAnonymised: boolean;
+    /** The line after the tenant in the PDF subtitle; "Microsoft Entra ID" when absent */
+    environment?: string;
 }
 
 export interface ReportNumber {

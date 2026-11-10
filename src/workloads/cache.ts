@@ -19,10 +19,19 @@ export interface SessionCacheOptions<T, X> {
     storage?: () => Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
     /** For the log lines */
     label: string;
+    /**
+     * Binds the cache to one account: `current` gives the account's short hash (never a readable id), written to `key`
+     * next to the data. A cache written for another account, or without an owner, is not shown and is removed; with no
+     * account (`current` null) nothing is read or written.
+     */
+    owner?: {
+        key: string;
+        current: () => string | null;
+    };
 }
 
 export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, initialExtras: X): WorkloadCache<T, X> {
-    const { dataKey, timestampKey, extras, minimal, label } = options;
+    const { dataKey, timestampKey, extras, minimal, label, owner } = options;
     const storage = options.storage ?? (() => (typeof sessionStorage === "undefined" ? null : sessionStorage));
 
     const clear = () => {
@@ -31,6 +40,13 @@ export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, ini
         s.removeItem(dataKey);
         s.removeItem(timestampKey);
         if (extras) s.removeItem(extras.key);
+        if (owner) s.removeItem(owner.key);
+    };
+
+    /** Whether what is stored belongs to the signed-in account; always true without an owner binding */
+    const ownedBy = (s: Pick<Storage, "getItem">, account: string | null): boolean => {
+        if (!owner) return true;
+        return account !== null && s.getItem(owner.key) === account;
     };
 
     return {
@@ -40,6 +56,14 @@ export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, ini
             const raw = s.getItem(dataKey);
             const timestamp = s.getItem(timestampKey);
             if (!raw || !timestamp) return null;
+            const account = owner ? owner.current() : null;
+            if (owner && account === null) return null;
+            if (!ownedBy(s, account)) {
+                // Another account's data (or a cache from before the binding): never shown, and gone from this tab
+                Logger.info("Workload", `${label}: the cache belongs to another account and was removed`);
+                clear();
+                return null;
+            }
             const data = JSON.parse(raw) as T[];
             let decoded: X = initialExtras;
             if (extras) {
@@ -58,7 +82,10 @@ export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, ini
         write(content: WorkloadContent<T, X>, lastFetched: string) {
             const s = storage();
             if (!s) return;
+            const account = owner ? owner.current() : null;
+            if (owner && account === null) return;
             try {
+                if (owner && account !== null) s.setItem(owner.key, account);
                 s.setItem(dataKey, JSON.stringify(content.data));
                 s.setItem(timestampKey, lastFetched);
                 if (extras) {
@@ -71,6 +98,7 @@ export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, ini
                     try {
                         clear();
                         if (minimal) {
+                            if (owner && account !== null) s.setItem(owner.key, account);
                             s.setItem(dataKey, JSON.stringify(minimal(content.data)));
                             s.setItem(timestampKey, lastFetched);
                             Logger.info("Workload", `${label}: stored a minimal cache because of the quota`);
@@ -87,7 +115,11 @@ export function createSessionCache<T, X>(options: SessionCacheOptions<T, X>, ini
         clear,
 
         peekTimestamp() {
-            return storage()?.getItem(timestampKey) ?? null;
+            const s = storage();
+            if (!s) return null;
+            // A cache of another account is not "about to be shown": `load` must read this account's data
+            if (owner && !ownedBy(s, owner.current())) return null;
+            return s.getItem(timestampKey);
         },
     };
 }

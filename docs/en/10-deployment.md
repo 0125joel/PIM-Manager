@@ -89,6 +89,7 @@ The deployment form asks for:
 | **Static Web App Name** | Resource name in Azure (e.g. `pim-manager`) |
 | **Location** | Azure region, West Europe recommended |
 | **Entra Client ID** | Client ID from your App Registration |
+| **Force Update Tag** | Filled in with the current time. Leave it: that is what makes the script run again when you redeploy |
 
 Deployment takes approximately 3–5 minutes. When complete, the output shows your Static Web App URL.
 
@@ -139,3 +140,5 @@ Grant the following **Delegated** permissions (no Application permissions, no se
 Grant admin consent for your organisation after adding the permissions.
 
 > Additional permissions for PIM for Groups, Security Alerts, and Configure features are requested incrementally via consent popups when the user enables those features. They do not need to be pre-configured here.
+
+> The Azure dashboard and the Azure Report need the delegated permission **Azure Service Management** › `user_impersonation`. It is asked when a user chooses Turn on Azure. In a tenant where users cannot consent themselves, add it here and grant admin consent, so users do not need an administrator's approval.

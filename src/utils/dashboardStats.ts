@@ -382,6 +382,17 @@ export function formatNameList(names: string[]): string {
     return names.length > NAME_LIMIT ? `${shown}, +${names.length - NAME_LIMIT}` : shown;
 }
 
+/** The filter each Easy to miss row sets; `filterNeedsDetails` reads the same list (calm details spec 4) */
+export const EASY_TO_MISS_FILTERS = {
+    permanentGlobalAdmins: { assignment: "permanent", roleTemplateId: GLOBAL_ADMINISTRATOR_TEMPLATE_ID, excludeEmergency: true },
+    eligibleWithoutEnd: { noEndDate: true },
+    apps: { principalType: "servicePrincipal", privileged: true },
+    agents: { principalType: "agent" },
+    guests: { principalType: "guest" },
+    nobodyNotified: { privileged: true, activationNotification: "none" },
+    onlyPermanent: { privileged: true, assignment: "permanent", hasEligible: false },
+} as const satisfies Record<string, DashboardFilter>;
+
 /** The rows of Easy to miss (seven, six when the chip Agents is off), each from one tested definition. Counts follow the filtered roles and groups like the cards. */
 export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
     const emergency = input.emergencyAccountIds ?? new Set<string>();
@@ -444,7 +455,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Permanent Global Administrators",
             count: globalAdminCount,
             detail: globalAdminCount === 0 ? (globalAdminEmergency > 0 ? `None. ${emergencySentence}` : "None") : globalAdminDetail,
-            filter: { assignment: "permanent", roleTemplateId: GLOBAL_ADMINISTRATOR_TEMPLATE_ID, excludeEmergency: true },
+            filter: EASY_TO_MISS_FILTERS.permanentGlobalAdmins,
         },
         {
             id: "eligibleWithoutEnd",
@@ -452,7 +463,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Eligible without an end date",
             count: eligibleWithoutEnd,
             detail: detailOrNone(eligibleWithoutEnd, "Never comes up for review by itself."),
-            filter: { noEndDate: true },
+            filter: EASY_TO_MISS_FILTERS.eligibleWithoutEnd,
         },
         {
             id: "apps",
@@ -460,7 +471,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Apps with a privileged role",
             count: apps.size,
             detail: detailOrNone(apps.size, "Service principals that hold the role."),
-            filter: { principalType: "servicePrincipal", privileged: true },
+            filter: EASY_TO_MISS_FILTERS.apps,
         },
         ...(input.isAgentsCounted === false ? [] : [{
             id: "agents" as const,
@@ -468,7 +479,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Agents with a role",
             count: agents.size,
             detail: detailOrNone(agents.size, "AI agents (Microsoft Entra Agent ID) that hold a role."),
-            filter: { principalType: "agent" as const },
+            filter: EASY_TO_MISS_FILTERS.agents,
         }]),
         {
             id: "guests",
@@ -476,7 +487,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Guests with a role",
             count: guests.size,
             detail: detailOrNone(guests.size, "Accounts from another tenant."),
-            filter: { principalType: "guest" },
+            filter: EASY_TO_MISS_FILTERS.guests,
         },
         {
             id: "nobodyNotified",
@@ -484,7 +495,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Nobody is notified on activation",
             count: nobodyNotified,
             detail: detailOrNone(nobodyNotified, "Privileged roles where activation goes unnoticed."),
-            filter: { privileged: true, activationNotification: "none" },
+            filter: EASY_TO_MISS_FILTERS.nobodyNotified,
         },
         {
             id: "onlyPermanent",
@@ -492,7 +503,7 @@ export function computeEasyToMiss(input: DashboardStatsInput): EasyToMissRow[] {
             label: "Only permanent members",
             count: onlyPermanent,
             detail: detailOrNone(onlyPermanent, "Privileged roles that nobody activates, PIM is not used."),
-            filter: { privileged: true, assignment: "permanent", hasEligible: false },
+            filter: EASY_TO_MISS_FILTERS.onlyPermanent,
         },
     ];
 }

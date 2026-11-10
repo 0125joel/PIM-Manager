@@ -4,9 +4,9 @@ import type { GroupMembership, GroupMembershipPrincipal } from "@/services/group
 import type { AuthenticationContext } from "@/types/shared.types";
 
 /**
- * Contoso data of the Report design boards (docs/Assets/next-gen/report/renders): 146 roles and 12 groups. The renders of the roles
+ * Contoso data of the Report design boards: 146 roles and 12 groups. The renders of the roles
  * view show "Groups 12", the renders of the groups view show 5 groups; this fixture has 12 (5 outside PIM, 7 under PIM), so a
- * filter such as "Holds roles" lists 6 groups where the render says 5 of 5 (known, accepted difference, see blockers.md). Used by
+ * filter such as "Holds roles" lists 6 groups where the render says 5 of 5 (known, accepted difference). Used by
  * the fixture route `/dev/report` and by tests; the numbers are fictitious.
  */
 

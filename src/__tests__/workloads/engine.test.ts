@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Client } from "@microsoft/microsoft-graph-client";
 import type { WorkloadState } from "@/types/workload.types";
-import { createWorkloadEngine, WORKLOAD_TTL_MS } from "@/workloads/engine";
+import { createUnmountAbort, createWorkloadEngine, UNMOUNT_ABORT_DELAY_MS, WORKLOAD_TTL_MS } from "@/workloads/engine";
 import type { WorkloadAdapter, WorkloadCache, WorkloadOutcome, WorkloadRunContext, WorkloadStore } from "@/workloads/types";
 
 type Item = { id: string; value?: string };
@@ -274,6 +274,38 @@ describe("workload engine", () => {
         expect(cache.read()).toBeNull();
     });
 
+    it("a run that ends after clear (sign-out) writes no state and is never persisted", async () => {
+        const cache = makeCache();
+        let finish: (items: Item[]) => void = () => undefined;
+        const { engine, holder } = setup(() => new Promise((resolve) => { finish = (items) => resolve(done(items)); }), { cache });
+        const running = engine.load();
+        engine.clear();
+        finish([{ id: "a" }]);
+        await running;
+        engine.persist();
+        expect(holder.get().data).toEqual([]);
+        expect(cache.writes).toBe(0);
+        expect(cache.read()).toBeNull();
+    });
+
+    it("abort stops the run and its background phase, keeps the cache and allows a new load", async () => {
+        const cache = makeCache({ data: [{ id: "old" }], lastFetched: new Date(Date.now() - 2 * WORKLOAD_TTL_MS).toISOString() });
+        let signal: AbortSignal | undefined;
+        const { engine, holder, adapter } = setup(async (ctx) => {
+            signal = ctx.signal;
+            return done([{ id: "a" }], { background: new Promise<void>(() => undefined) });
+        }, { cache });
+        await engine.load();
+        expect(holder.get().loading.background?.running).toBe(true);
+        engine.abort();
+        expect(signal?.aborted).toBe(true);
+        expect(cache.read()?.data).toEqual([{ id: "old" }]);
+        // A new run starts on its own signal
+        await engine.refresh(false);
+        expect(adapter.run).toHaveBeenCalledTimes(2);
+        expect(signal?.aborted).toBe(false);
+    });
+
     it("a quiet refresh does not block: it runs in the background state", async () => {
         const seen: string[] = [];
         const { engine, holder } = setup(async () => {
@@ -283,5 +315,88 @@ describe("workload engine", () => {
         await engine.refresh(false);
         expect(seen).toEqual(["processing"]);
         expect(holder.get().loading.phase).toBe("complete");
+    });
+
+    it("resume runs the adapter's later round quietly, keeps lastFetched and is replaced by a refresh", async () => {
+        const { engine, holder, adapter, onSynced } = setup(async () => done([{ id: "a" }]));
+        const phases: string[] = [];
+        let resolveRest: () => void = () => undefined;
+        const resumeRun = vi.fn(async (ctx: WorkloadRunContext<Item, undefined>) => {
+            phases.push(holder.get().loading.phase);
+            const rest = new Promise<void>((resolve) => { resolveRest = resolve; }).then(() => ctx.patch((c) => ({ ...c, data: [...c.data, { id: "b" }] })));
+            return done(ctx.current().data, { background: rest, backgroundMessage: "Reading the rest" });
+        });
+        adapter.resume = { message: "Reading the rest", run: resumeRun };
+        await engine.load();
+        const lastFetched = holder.get().lastFetched;
+        vi.advanceTimersByTime(60_000);
+
+        await engine.resume();
+        expect(phases).toEqual(["processing"]);
+        expect(holder.get().data).toEqual([{ id: "a" }]);
+        // A second resume while the round reads does nothing
+        await engine.resume();
+        expect(resumeRun).toHaveBeenCalledTimes(1);
+        resolveRest();
+        await vi.runAllTimersAsync();
+        expect(holder.get().data).toEqual([{ id: "a" }, { id: "b" }]);
+        expect(holder.get().loading.phase).toBe("complete");
+        expect(holder.get().lastFetched).toBe(lastFetched);
+        expect(onSynced).toHaveBeenLastCalledWith(new Date(lastFetched!));
+
+        // Refresh reads everything again with the adapter's own run
+        await engine.refresh(false);
+        expect(adapter.run).toHaveBeenCalledTimes(2);
+        expect(resumeRun).toHaveBeenCalledTimes(1);
+    });
+
+    it("resume does nothing without the adapter's resume", async () => {
+        const { engine, adapter } = setup(async () => done([{ id: "a" }]));
+        await engine.load();
+        await engine.resume();
+        expect(adapter.run).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("createUnmountAbort", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("aborts after a real unmount", () => {
+        const abort = vi.fn();
+        const guard = createUnmountAbort(abort);
+        guard.mounted();
+        guard.unmounted();
+        expect(abort).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(UNMOUNT_ABORT_DELAY_MS);
+        expect(abort).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not abort on strict mode's unmount and immediate remount", () => {
+        const abort = vi.fn();
+        const guard = createUnmountAbort(abort);
+        guard.mounted();
+        guard.unmounted();
+        guard.mounted();
+        vi.advanceTimersByTime(UNMOUNT_ABORT_DELAY_MS * 10);
+        expect(abort).not.toHaveBeenCalled();
+    });
+
+    it("a run started under the guard survives the simulated remount and stops on the real unmount", async () => {
+        let signal: AbortSignal | undefined;
+        const { engine } = setup(async (ctx) => {
+            signal = ctx.signal;
+            return done([{ id: "a" }], { background: new Promise<void>(() => undefined) });
+        });
+        const guard = createUnmountAbort(() => engine.abort());
+        guard.mounted();
+        await engine.load();
+        guard.unmounted();
+        guard.mounted();
+        vi.advanceTimersByTime(UNMOUNT_ABORT_DELAY_MS);
+        expect(signal?.aborted).toBe(false);
+        guard.unmounted();
+        vi.advanceTimersByTime(UNMOUNT_ABORT_DELAY_MS);
+        expect(signal?.aborted).toBe(true);
     });
 });

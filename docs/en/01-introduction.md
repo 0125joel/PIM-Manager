@@ -59,6 +59,19 @@ This application is designed for:
 
 ---
 
+## Finding your way: the tours
+
+Nobody reads a manual before they start clicking, so PIM Manager explains itself while you look around. The first time you open a part of the app, a short tour starts. First one through the app itself: the switch between Entra ID and Azure, the three pages, Refresh, Help, Settings and your account. Then one for the page in front of you. On Azure it starts with the scope, because every Azure number is about the scope you chose.
+
+- Every part gets its own tour the first time you open it: the Dashboard in Basic and in Advanced, the Report, Configure and each of its modes, and the same on Azure.
+- A tour is a handful of steps: what you see, what it means and what you can do with it. The last step tells you where to look next.
+- **Skip tour** ends that tour. **Turn off tours** stops every tour from starting by itself; switch them back on under **Settings > Display > Tours**.
+- **Start the tour** in Help, in the panel and in the full guide, lets you pick: per product and per page, or **All of Entra** and **All of Azure** in one go.
+- In the live demo PIM Manager first asks **Do you want to start the tour?**. **Start the tour** shows the tour of the app and of that page; every other page shows its own the first time you open it; **No thanks** skips the tour of that page, and the next parts still show their own.
+- What the tours remember, which ones you saw and whether they are on, stays in this browser. No tenant data.
+
+---
+
 ## Prerequisites
 
 ### Microsoft Entra App Registration
@@ -87,6 +100,7 @@ The application requires a Microsoft Entra app registration with the following *
 | `RoleManagementPolicy.Read.AzureADGroup` | PIM for Groups policies | Groups data incomplete without this |
 | `PrivilegedAccess-CustomExt.Read.All` | List of PIM custom extensions (Preview) | Picker and orphan check hidden; which extension a policy links still shows |
 | `Policy.Read.All` | Configure's Conditional Access check (asked on demand) | The check shows "Not checked"; the rest of the review runs |
+| `user_impersonation` (Azure Resource Manager) | The Azure environment: Azure dashboard and Azure Report (PIM for Azure resources), asked with a consent popup when you turn Azure on | Every Azure page shows the consent screen |
 
 **Configure Write Permissions** (requested via incremental consent when you choose Grant permission in Configure):
 
@@ -123,7 +137,7 @@ Any modern browser (Chrome, Edge, Firefox, Safari) with JavaScript enabled.
 ├─────────────────────────────────────────────────────────┤
 │  State Management Layer                                 │
 │  ├── UnifiedPimContext (Workload Orchestration)         │
-│  ├── DirectoryRoleContext (Directory Roles)             │
+│  ├── AzureContext (Azure resources)                     │
 │  └── ViewModeContext (UI Preferences)                   │
 ├─────────────────────────────────────────────────────────┤
 │  Data Services                                          │

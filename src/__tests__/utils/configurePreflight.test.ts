@@ -306,6 +306,13 @@ describe("buildPreflight: every check of spec 12.4", () => {
         expect(outcome([remove(GROUP_MEMBER, ANNA, { start: ago(6) })], "recentRemoval").outcome).toBe("pass");
     });
 
+    it("a group as role principal that is not role-assignable blocks; a user keeps prevented", () => {
+        const notAssignable: PrincipalRef = { id: "g-plain", kind: "group", displayName: "Plain", isAssignableToRole: null };
+        expect(outcome([add(ROLE, notAssignable)], "groupPrincipal")).toMatchObject({ outcome: "block", items: [{ target: ROLE, text: expect.stringContaining("Plain") }] });
+        expect(outcome([add(ROLE, { ...notAssignable, isAssignableToRole: false })], "groupPrincipal").outcome).toBe("block");
+        expect(outcome([add(ROLE, ANNA)], "groupPrincipal").outcome).toBe("prevented");
+    });
+
     it("prevented by the editors: removals through a group, ends beyond the maximum, a group principal that is not role-assignable", () => {
         const checks = buildPreflight(input([]));
         expect(["removalViaGroup", "endBeyondMax", "groupPrincipal"].map((id) => find(checks, id as PreflightCheckId).outcome)).toEqual(["prevented", "prevented", "prevented"]);

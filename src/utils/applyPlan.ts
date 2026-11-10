@@ -35,6 +35,8 @@ export interface SettingsItem {
      * half way reports the changes that landed as done. A change with no rule to write (W-08) is skipped, never done
      */
     rulesByChange?: Record<string, string[]>;
+    /** Each written rule as read before the apply: `runApply` reads it again just before the PATCH and stops when it moved */
+    readRules?: Record<string, unknown>;
 }
 
 export interface AssignmentItem {
@@ -90,7 +92,8 @@ export function planApply(basket: Basket, targets: Readonly<Record<string, Apply
             const without = new Map(buildRuleUpdates(workload, rules, list.filter((o) => o !== c).map((o) => ({ field: o.field, to: o.to }))).map((u) => [u.ruleId, JSON.stringify(u.body)]));
             return [changeId(c), [...bodies].filter(([id, body]) => without.get(id) !== body).map(([id]) => id)];
         }));
-        settingsItems.push({ kind: "settings", target, policyId: state.policyId, updates, changeIds: list.map(changeId), rulesByChange });
+        const readRules = Object.fromEntries(updates.map((u) => [u.ruleId, rules.find((r) => (r as { id?: string }).id === u.ruleId) ?? null]));
+        settingsItems.push({ kind: "settings", target, policyId: state.policyId, updates, changeIds: list.map(changeId), rulesByChange, readRules });
     }
 
     const assignmentItem = (change: BasketAdd | BasketUpdate | BasketRemove): AssignmentItem => {
@@ -115,6 +118,26 @@ export function planApply(basket: Basket, targets: Readonly<Record<string, Apply
         ...[...adds, ...updates, ...removals].map((i) => i.changeId),
     ];
     return { steps, problems, changeIds };
+}
+
+/**
+ * The fields of a rule PATCH body whose value now differs from the rule as read before the apply: another writer changed
+ * the rule since the review, and writing the body would undo that. `@odata.type`, `id` and `target` are left out.
+ */
+export function ruleMovedFields(asRead: unknown, now: unknown, body: Readonly<Record<string, unknown>>): string[] {
+    const read = (asRead ?? {}) as Record<string, unknown>;
+    const fresh = (now ?? {}) as Record<string, unknown>;
+    return Object.keys(body).filter((key) => !["@odata.type", "id", "target"].includes(key) && stableJson(read[key]) !== stableJson(fresh[key]));
+}
+
+/** JSON with object keys in a fixed order: the same rule read in two calls can list its keys in another order */
+function stableJson(value: unknown): string {
+    if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+    if (value && typeof value === "object") {
+        const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(",")}}`;
+    }
+    return JSON.stringify(value) ?? "undefined";
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

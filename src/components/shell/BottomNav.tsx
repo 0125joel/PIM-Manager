@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
-import { NAV_ITEMS, isNavActive } from "@/utils/shellNavigation";
+import { environmentFromPath, isNavItemActive, navItemsFor } from "@/utils/shellNavigation";
 import { AccountMenu, type AccountMenuContent } from "./AccountMenu";
 
 interface BottomNavProps {
@@ -25,9 +25,9 @@ export function BottomNav({ currentPath, account, isMenuOpen, onMenuOpenChange }
 
     return (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden">
-            <nav aria-label="Main" className="grid h-[72px] grid-cols-4">
-                {NAV_ITEMS.map((item) => {
-                    const isActive = isNavActive(currentPath, item.path);
+            <nav aria-label="Main" data-tour="main-nav" className="grid h-[72px] grid-cols-4">
+                {navItemsFor(environmentFromPath(currentPath)).map((item) => {
+                    const isActive = isNavItemActive(currentPath, item);
                     return (
                         <Link
                             key={item.path}
@@ -44,6 +44,7 @@ export function BottomNav({ currentPath, account, isMenuOpen, onMenuOpenChange }
                 <div className="relative">
                     <button
                         ref={accountRef}
+                        data-tour="account-menu"
                         type="button"
                         aria-haspopup="menu"
                         aria-expanded={isMenuOpen}
@@ -53,7 +54,7 @@ export function BottomNav({ currentPath, account, isMenuOpen, onMenuOpenChange }
                         <span className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full bg-band text-[10px] font-semibold text-accent">{user.initials}</span>
                         Account
                     </button>
-                    <AccountMenu {...account} isOpen={isMenuOpen} onClose={() => onMenuOpenChange(false)} anchorRef={accountRef} />
+                    <AccountMenu {...account} currentPath={currentPath} isOpen={isMenuOpen} onClose={() => onMenuOpenChange(false)} anchorRef={accountRef} />
                 </div>
             </nav>
         </div>

@@ -6,7 +6,7 @@ export const REPORT_HELP: HelpPage = {
     title: "Report",
     intro: "The Report lists every role and group as it is now: who holds it, how, until when, and how PIM is set up for it. Use it to look into a number from the dashboard.",
     blocks: [
-        { title: "Head", text: "Refresh reads the data again. The sync time says how old the data is." },
+        { title: "Head", text: "Refresh reads the data again; the sync time next to it says how old the data is. Show more details next to the title adds every tag, the warnings in the lists and the count of the list. Without it, a row shows only what deviates: Permanent, Always on, Via group, Owner, Emergency access or a scope other than tenant-wide. The Report remembers your choice in this browser." },
         { title: "Roles and groups", text: "Switch between Roles and Groups. The list is on the left, the selected item on the right; on a narrow screen the item opens as its own view with a back button. Search finds a role, a group or a person. Role-assignable groups outside PIM are a section of Groups: their members hold the group's roles all the time and are read when you open the group." },
         { title: "Filters", text: "Open Filters for three groups of controls per view. Active filters show as chips with names; a chip marked roles only or groups only waits for the other view. The dashboard opens here with the same filter." },
         { title: "Detail", text: "Assignments are listed as Eligible and Active with a tag for the type, how the access is held, the scope, the end and where it came from. Hover or focus a tag for what it means. A filter on assignments marks the rows that match." },

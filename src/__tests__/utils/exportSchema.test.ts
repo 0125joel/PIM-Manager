@@ -382,6 +382,24 @@ describe("cell escaping", () => {
         const csv = writeCsv(FILE_SCHEMAS.overviewAssignments, rowsByType().overviewAssignments);
         expect(csv).not.toMatch(/(^|,)=HYPERLINK/m);
     });
+    it("defuses a formula after a semicolon, where nl-NL Excel starts a new cell, and reads the name back", () => {
+        const name = "Finance;=1+1;-2;@x";
+        const rows = rowsByType().bulkGroupPolicies.map((row, i) => (i === 0 ? { ...row, groupName: name } : row));
+        const csv = writeCsv(FILE_SCHEMAS.bulkGroupPolicies, rows);
+        expect(csv).toContain("Finance;'=1+1;'-2;'@x");
+        // Split the way Excel does with a ";" list separator: no cell may start a formula
+        const cells = csv.split(/\r\n/).flatMap((line) => line.split(";"));
+        expect(cells.filter((cell) => /^[=+\-@]/.test(cell))).toEqual([]);
+        expect(readCsv(FILE_SCHEMAS.bulkGroupPolicies, csv).rows[0].groupName).toBe(name);
+    });
+    it("defuses a formula after a line break, where a semicolon reader starts a new row, and reads the name back", () => {
+        const name = "Finance\n=1+1;x\r@y\r\n-2";
+        const rows = rowsByType().bulkGroupPolicies.map((row, i) => (i === 0 ? { ...row, groupName: name } : row));
+        const csv = writeCsv(FILE_SCHEMAS.bulkGroupPolicies, rows);
+        const cells = csv.split(/\r\n|\n|\r/).flatMap((line) => line.split(";")).map((cell) => cell.replace(/^"/, ""));
+        expect(cells.filter((cell) => /^[=+\-@]/.test(cell))).toEqual([]);
+        expect(readCsv(FILE_SCHEMAS.bulkGroupPolicies, csv).rows[0].groupName).toBe(name);
+    });
 });
 
 describe("overview files", () => {

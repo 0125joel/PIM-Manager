@@ -16,6 +16,7 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 | [Report Page](./08-report-page.md) | Detailed role configuration view |
 | [Configure Page](./09-configure-page.md) | Edit, Guided, Import and Access model, with review and Undo |
 | [Settings](./11-settings.md) | Workloads and consent framework |
+| [Azure Dashboard](./12-azure-dashboard.md) | Privileged access on Azure resources |
 
 ---
 

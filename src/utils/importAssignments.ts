@@ -54,9 +54,10 @@ export interface PrincipalIndex {
 
 export const EMPTY_PRINCIPALS: PrincipalIndex = { byId: new Map(), byUpn: new Map() };
 
-type Principalish = { id?: string; "@odata.type"?: string; displayName?: string; userPrincipalName?: string } | null | undefined;
+type Principalish = { id?: string; "@odata.type"?: string; displayName?: string; userPrincipalName?: string; isAssignableToRole?: boolean | null } | null | undefined;
 
-function addPrincipal(index: { byId: Map<string, PrincipalRef>; byUpn: Map<string, PrincipalRef> }, id: string, principal: Principalish): void {
+/** `holdsRole`: the group is read as the holder of a directory role, which only a role-assignable group can be */
+function addPrincipal(index: { byId: Map<string, PrincipalRef>; byUpn: Map<string, PrincipalRef> }, id: string, principal: Principalish, holdsRole: boolean): void {
     if (!id || index.byId.has(id.toLowerCase()) || !principal?.displayName) return;
     const kind = toBasicKind(getPrincipalKind(principal));
     const ref: PrincipalRef = {
@@ -64,6 +65,7 @@ function addPrincipal(index: { byId: Map<string, PrincipalRef>; byUpn: Map<strin
         kind: kind === "group" ? "group" : kind === "servicePrincipal" ? "servicePrincipal" : "user",
         displayName: principal.displayName,
         ...(principal.userPrincipalName ? { userPrincipalName: principal.userPrincipalName } : {}),
+        ...(kind === "group" && holdsRole ? { isAssignableToRole: true } : kind === "group" && "isAssignableToRole" in principal ? { isAssignableToRole: principal.isAssignableToRole ?? null } : {}),
     };
     index.byId.set(id.toLowerCase(), ref);
     if (ref.userPrincipalName) index.byUpn.set(ref.userPrincipalName.toLowerCase(), ref);
@@ -73,22 +75,37 @@ function addPrincipal(index: { byId: Map<string, PrincipalRef>; byUpn: Map<strin
 export function knownPrincipals(roles: readonly RoleDetailData[], groups: readonly PimGroupData[]): PrincipalIndex {
     const index = { byId: new Map<string, PrincipalRef>(), byUpn: new Map<string, PrincipalRef>() };
     for (const role of roles) {
-        for (const a of [...role.assignments.eligible, ...role.assignments.active]) addPrincipal(index, a.principalId, a.principal as Principalish);
-        for (const a of role.assignments.permanent) addPrincipal(index, a.principalId, (a as { principal?: unknown }).principal as Principalish);
+        for (const a of [...role.assignments.eligible, ...role.assignments.active]) addPrincipal(index, a.principalId, a.principal as Principalish, true);
+        for (const a of role.assignments.permanent) addPrincipal(index, a.principalId, (a as { principal?: unknown }).principal as Principalish, true);
     }
-    for (const g of groups) for (const a of g.assignments) addPrincipal(index, a.principalId, a.principal as Principalish);
+    for (const g of groups) for (const a of g.assignments) addPrincipal(index, a.principalId, a.principal as Principalish, false);
     return index;
 }
 
-/** Merges two indexes; the second wins nothing, the first is kept */
+/** A group read for its role-assignability later than the first ref: the first ref keeps everything, the flag comes from the later read */
+function withAssignability(first: PrincipalRef, later: PrincipalRef | undefined): PrincipalRef {
+    return later && later.id === first.id && first.kind === "group" && first.isAssignableToRole === undefined && later.isAssignableToRole !== undefined
+        ? { ...first, isAssignableToRole: later.isAssignableToRole }
+        : first;
+}
+
+/** Merges two indexes; the first is kept, except that a role-assignability read later fills in one the first did not know */
 export function mergePrincipals(a: PrincipalIndex, b: PrincipalIndex): PrincipalIndex {
-    return { byId: new Map([...b.byId, ...a.byId]), byUpn: new Map([...b.byUpn, ...a.byUpn]) };
+    const merge = (first: ReadonlyMap<string, PrincipalRef>, later: ReadonlyMap<string, PrincipalRef>): Map<string, PrincipalRef> => {
+        const out = new Map([...later, ...first]);
+        for (const [key, ref] of first) out.set(key, withAssignability(ref, later.get(key)));
+        return out;
+    };
+    return { byId: merge(a.byId, b.byId), byUpn: merge(a.byUpn, b.byUpn) };
 }
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The ids and UPNs of the rows that no loaded assignment names: what the caller asks Graph for */
-export function neededLookups(rows: readonly ExportRow[], known: PrincipalIndex): { ids: string[]; upns: string[] } {
+/**
+ * The ids and UPNs of the rows that no loaded assignment names: what the caller asks Graph for. `forRoles`: a group
+ * known without its role-assignability is asked for too, since a role needs a role-assignable group (the dry run does not check it)
+ */
+export function neededLookups(rows: readonly ExportRow[], known: PrincipalIndex, forRoles = false): { ids: string[]; upns: string[] } {
     const ids = new Set<string>();
     const upns = new Set<string>();
     for (const row of rows) {
@@ -96,7 +113,9 @@ export function neededLookups(rows: readonly ExportRow[], known: PrincipalIndex)
         const upn = typeof row.principalUpn === "string" ? row.principalUpn.trim() : "";
         if (id) {
             // Graph refuses a whole chunk for one value that is no id: only GUIDs are asked for, the rest stays unknown
-            if (GUID.test(id) && !known.byId.has(id.toLowerCase())) ids.add(id);
+            const ref = known.byId.get(id.toLowerCase());
+            const unread = !ref || (forRoles && ref.kind === "group" && ref.isAssignableToRole === undefined);
+            if (GUID.test(id) && unread) ids.add(id);
         } else if (upn && !known.byUpn.has(upn.toLowerCase())) upns.add(upn);
     }
     return { ids: [...ids], upns: [...upns] };
@@ -346,6 +365,12 @@ export function checkAssignmentRows(input: AssignmentCheckInput): CheckedRow[] {
         if (!principalKnown) return fail(principalId ? `Nobody with this ID in ${input.tenantName}.` : `Nobody with this UPN in ${input.tenantName}.`);
         const principal = principalKnown;
         base.who = principal.displayName;
+        // A group can hold a directory role only when it is role-assignable; the dry run does not check this (lessons/entra.md)
+        if (action === "add" && kind === "role" && principal.kind === "group" && principal.isAssignableToRole !== true) {
+            return fail(principal.isAssignableToRole === undefined
+                ? "Could not confirm that this group is role-assignable. Only a role-assignable group can hold a directory role."
+                : "This group is not role-assignable. Only a role-assignable group can hold a directory role.");
+        }
 
         // Scope (roles): the shape here, whether the role supports it only for a row that adds (what is there proves it)
         let scope = "/";

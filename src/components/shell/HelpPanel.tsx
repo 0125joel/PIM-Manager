@@ -4,7 +4,8 @@ import { useEffect, useRef, useSyncExternalStore, type KeyboardEvent } from "rea
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { getHelpForPath } from "@/config/help";
-import { WHATS_NEW, WHATS_NEW_TITLE } from "@/config/whatsNew";
+import { WHATS_NEW_RELEASES } from "@/config/whatsNew";
+import { formatDate } from "@/utils/dateFormat";
 
 export type HelpView = "help" | "whatsNew";
 
@@ -130,15 +131,25 @@ export function HelpPanel({ pathname, view, onViewChange, onClose, onOpenGuide, 
                         </>
                     ) : (
                         <>
-                            <p className="mt-2 text-[13px] leading-5 text-body">{WHATS_NEW_TITLE}.</p>
-                            <ul className="mt-5">
-                                {WHATS_NEW.map((entry) => (
-                                    <li key={entry.title} className="border-t border-line py-3">
-                                        <h3 className="text-[13px] leading-5 font-semibold text-ink">{entry.title}</h3>
-                                        <p className="text-[13px] leading-5 text-body">{entry.text}</p>
-                                    </li>
-                                ))}
-                            </ul>
+                            {WHATS_NEW_RELEASES.map((release, index) => (
+                                <section key={release.version} aria-labelledby={`whats-new-${release.version}`} className={index === 0 ? "mt-2" : "mt-6"}>
+                                    {/* A line with the version and date in the middle separates the releases; the date is noon local, so no time zone moves it a day */}
+                                    <h3 id={`whats-new-${release.version}`} className="flex items-center gap-3 font-mono text-xs leading-4 text-muted">
+                                        <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                                        <span>{release.date ? `v${release.version} · ${formatDate(`${release.date}T12:00:00`)}` : `v${release.version}`}</span>
+                                        <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                                    </h3>
+                                    <p className="mt-3 text-[13px] leading-5 text-body">{release.title}.</p>
+                                    <ul className="mt-3">
+                                        {release.entries.map((entry) => (
+                                            <li key={entry.title} className="border-t border-line py-3">
+                                                <h4 className="text-[13px] leading-5 font-semibold text-ink">{entry.title}</h4>
+                                                <p className="text-[13px] leading-5 text-body">{entry.text}</p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ))}
                         </>
                     )}
                 </div>

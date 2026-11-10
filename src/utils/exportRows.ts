@@ -9,7 +9,7 @@ import { getPrincipalKind, getPrincipalKindLabel, type PrincipalKind } from "@/u
 
 /** One assignment of a role or a group, the row of the CSV export and of the PDF appendix. */
 export interface AssignmentExportRow {
-    workload: "Directory role" | "PIM for Groups";
+    workload: "Directory role" | "PIM for Groups" | "Azure resource role";
     /** Role or group name */
     resource: string;
     /** "Member" or "Owner" for groups, empty for roles */
@@ -189,7 +189,8 @@ export function buildGroupPolicyRows(groups: PimGroupData[], lists: ExportLists)
 
 // --- Overview settings rows: the tiles of the policy view as text ---
 
-function tileTexts(rawRules: readonly unknown[] | null | undefined, ctx: PolicyViewContext): ExportRow {
+/** The tiles of the policy view as text, keyed `tile.{id}`; empty without rules. Shared with the Azure export */
+export function policyTileTexts(rawRules: readonly unknown[] | null | undefined, ctx: PolicyViewContext): ExportRow {
     const view = buildPolicyView(rawRules, ctx);
     if (!view) return {};
     const row: ExportRow = {};
@@ -218,7 +219,7 @@ export function buildOverviewRoleSettingsRows(roles: RoleDetailData[], lists: Ex
             privileged: definition.isPrivileged === true,
             builtIn: definition.isBuiltIn === true,
             settings: settingsState(hasRules, !!configError, policiesForbidden === true),
-            ...tileTexts(rules, { ...lists, approvers: policy?.approvers, isPrivileged: definition.isPrivileged === true }),
+            ...policyTileTexts(rules, { ...lists, approvers: policy?.approvers, isPrivileged: definition.isPrivileged === true }),
         };
     });
 }
@@ -238,7 +239,7 @@ export function buildOverviewGroupSettingsRows(groups: PimGroupData[], lists: Ex
                 // Not readable with this admin's access (FIX-11): said in the row, never "Not configured"
                 settings: settingsState(hasRules, false, policiesForbidden === true),
                 // A group's activation tab always asks for MFA or a context: groups pass isPrivileged (spec 4.2)
-                ...tileTexts(policy?.rules, { ...lists, approvers: policy?.approvers, isPrivileged: true }),
+                ...policyTileTexts(policy?.rules, { ...lists, approvers: policy?.approvers, isPrivileged: true }),
             };
         }));
 }

@@ -35,7 +35,7 @@ export function WhoBlock({ who, filter, isFiltered, notice, onSetFilter }: WhoBl
     const ariaLabel = who ? `Has access: ${ROWS.map((row) => `${who[row.key]} ${row.label.toLowerCase()}`).join(", ")}, ${who.total} in total` : "Has access, loading";
 
     return (
-        <section aria-labelledby="who-heading" className={PANEL_CLASS}>
+        <section aria-labelledby="who-heading" data-tour="dashboard-who" className={PANEL_CLASS}>
             <SectionHeader eyebrow="who" title="Has access" headingId="who-heading" />
             {notice ? (
                 <p className="mt-5 text-[13px] leading-[18px] text-muted">{notice}</p>

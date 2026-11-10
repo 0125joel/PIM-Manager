@@ -177,7 +177,10 @@ describe("public/sitemap.xml", () => {
 
 describe("noindex headers", () => {
   const headers = read("_headers");
-  const swa = JSON.parse(read("staticwebapp.config.json")) as { globalHeaders: Record<string, string> };
+  const swa = JSON.parse(read("staticwebapp.config.json")) as {
+    globalHeaders: Record<string, string>;
+    routes: { route: string; headers?: Record<string, string> }[];
+  };
 
   /** The header lines of one `_headers` rule, by its path line */
   const rule = (path: string): string[] => {
@@ -212,8 +215,18 @@ describe("noindex headers", () => {
     expect(rule("/*").some((line) => line.toLowerCase().startsWith("x-robots-tag"))).toBe(false);
   });
 
-  it("keeps a self-hosted copy (Azure Static Web Apps) out of search results", () => {
-    expect(swa.globalHeaders["X-Robots-Tag"]).toBe("noindex, nofollow");
+  it("keeps every app route and its sub paths out of search results on a self-hosted copy (Azure Static Web Apps)", () => {
+    const swaRule = (path: string): string | undefined =>
+      swa.routes.find((r) => r.route === path)?.headers?.["X-Robots-Tag"];
+    for (const route of APP_ROUTES) {
+      expect(swaRule(route), route).toBe("noindex, nofollow");
+      expect(swaRule(`${route}/*`), `${route}/*`).toBe("noindex, nofollow");
+    }
+  });
+
+  it("leaves the front page indexable on a self-hosted copy: no noindex in the global headers or on `/`", () => {
+    expect(swa.globalHeaders["X-Robots-Tag"]).toBeUndefined();
+    expect(swa.routes.some((r) => ["/", "/*"].includes(r.route) && r.headers?.["X-Robots-Tag"])).toBe(false);
   });
 });
 

@@ -43,21 +43,7 @@ export function anonymisePeople(roles: RoleDetailData[], groups: PimGroupData[])
         return label;
     };
 
-    // The rule of an approval names a user approver in its description too: the same label as everywhere else
-    const scrubRules = <R,>(rules: R[] | undefined): R[] | undefined => rules?.map((rule) => {
-        // Extra notification recipients are mail addresses of people
-        const recipients = (rule as { notificationRecipients?: unknown }).notificationRecipients;
-        if (Array.isArray(recipients) && recipients.length > 0) {
-            return { ...rule, notificationRecipients: recipients.map((r) => (typeof r === "string" ? labelFor(r.toLowerCase()) : r)) } as R;
-        }
-        const stages = (rule as { setting?: { approvalStages?: Array<{ primaryApprovers?: Array<Record<string, unknown>> }> } }).setting?.approvalStages;
-        if (!stages) return rule;
-        const scrubbed = stages.map((stage) => ({
-            ...stage,
-            primaryApprovers: stage.primaryApprovers?.map((a) => (typeof a.userId === "string" && a.userId ? { ...a, description: labelFor(a.userId.toLowerCase()) } : a)),
-        }));
-        return { ...rule, setting: { ...(rule as { setting: object }).setting, approvalStages: scrubbed } } as R;
-    });
+    const scrubRules = <R,>(rules: R[] | undefined): R[] | undefined => scrubPolicyRules(rules, labelFor);
     const swapApprovers = <A extends { id: string; type?: string }>(approvers: A[] | undefined): A[] | undefined =>
         approvers?.map((a) => (a.type === "user" ? { ...a, displayName: labelFor(a.id.toLowerCase()), userPrincipalName: undefined, mail: undefined } : a));
 
@@ -79,4 +65,26 @@ export function anonymisePeople(roles: RoleDetailData[], groups: PimGroupData[])
         policies: g.policies ? { member: scrubPolicy(g.policies.member), owner: scrubPolicy(g.policies.owner) } : g.policies,
     }));
     return { roles: anonymisedRoles, groups: anonymisedGroups, ids };
+}
+
+/**
+ * Policy rules with the people in them replaced by `labelFor`: extra notification recipients (mail addresses) and a
+ * user approver's description (the rule of an approval names the approver too). Shared with the Azure export, whose
+ * rules are in the Graph shape after `graphRulesOf`. Returns copies.
+ */
+export function scrubPolicyRules<R>(rules: R[] | undefined, labelFor: (id: string) => string): R[] | undefined {
+    return rules?.map((rule) => {
+        // Extra notification recipients are mail addresses of people
+        const recipients = (rule as { notificationRecipients?: unknown }).notificationRecipients;
+        if (Array.isArray(recipients) && recipients.length > 0) {
+            return { ...rule, notificationRecipients: recipients.map((r) => (typeof r === "string" ? labelFor(r.toLowerCase()) : r)) } as R;
+        }
+        const stages = (rule as { setting?: { approvalStages?: Array<{ primaryApprovers?: Array<Record<string, unknown>> }> } }).setting?.approvalStages;
+        if (!stages) return rule;
+        const scrubbed = stages.map((stage) => ({
+            ...stage,
+            primaryApprovers: stage.primaryApprovers?.map((a) => (typeof a.userId === "string" && a.userId ? { ...a, description: labelFor(a.userId.toLowerCase()) } : a)),
+        }));
+        return { ...rule, setting: { ...(rule as { setting: object }).setting, approvalStages: scrubbed } } as R;
+    });
 }

@@ -13,6 +13,11 @@ const eslintConfig = defineConfig([
     "coverage/**",
     "build/**",
     "next-env.d.ts",
+    // Executor worktrees are full checkouts of another branch
+    ".claude/worktrees/**",
+    // Output of npm run visual, including its copy of the static build
+    "visual-output/**",
+    "visual-baseline/**",
   ]),
 ]);
 

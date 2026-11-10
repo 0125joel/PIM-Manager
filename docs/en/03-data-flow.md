@@ -418,4 +418,4 @@ flowchart TB
 ## Next Steps
 
 - [Graph API Calls](./04-graph-api-calls.md) - Detailed API reference
-- [Key Concepts](./05-key-concepts.md) - Technical concepts explained
+- [Key Concepts](./06-key-concepts.md) - Technical concepts explained

@@ -89,6 +89,7 @@ Het implementatieformulier vraagt om:
 | **Static Web App Name** | Resourcenaam in Azure (bijv. `pim-manager`) |
 | **Location** | Azure-regio, West Europe aanbevolen |
 | **Entra Client ID** | Client ID van je App-registratie |
+| **Force Update Tag** | Staat automatisch op de huidige tijd. Laat staan: zo draait het script opnieuw als je opnieuw implementeert |
 
 De implementatie duurt ongeveer 3–5 minuten. Na voltooiing toont de output je Static Web App URL.
 
@@ -139,3 +140,5 @@ Verleen de volgende **Gedelegeerde** machtigingen (geen Toepassingsmachtigingen,
 Verleen beheerderstoestemming voor je organisatie na het toevoegen van de machtigingen.
 
 > Aanvullende machtigingen voor PIM-groepen, beveiligingswaarschuwingen en configuratiefuncties worden incrementeel aangevraagd via toestemmingspop-ups wanneer de gebruiker die functies inschakelt. Ze hoeven hier niet vooraf te worden geconfigureerd.
+
+> Het Azure-dashboard en het Azure-rapport hebben de gedelegeerde machtiging **Azure Service Management** › `user_impersonation` nodig. Die wordt aangevraagd wanneer een gebruiker Turn on Azure kiest. In een tenant waar gebruikers zelf geen toestemming mogen geven, voeg je hem hier toe en verleen je beheerderstoestemming, zodat gebruikers geen goedkeuring van een beheerder nodig hebben.

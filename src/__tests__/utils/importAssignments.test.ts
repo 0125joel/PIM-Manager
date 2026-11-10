@@ -262,6 +262,31 @@ describe("round trip: the files the Report exports, imported into the same tenan
     });
 });
 
+describe("a group on a directory role", () => {
+    const GROUP_ROW = `${ROLE_HEAD}\nrole-pra,11111111-1111-1111-1111-111111111111,,eligible,add,,2027-04-01T00:00:00Z,,`;
+    const withGroup = (group: PrincipalRef): AssignmentCheckInput["principals"] => ({ byId: new Map([[group.id, group]]), byUpn: new Map() });
+
+    it("refuses a group that is read as not role-assignable", () => {
+        const plain: PrincipalRef = { id: "11111111-1111-1111-1111-111111111111", kind: "group", displayName: "Plain Group", isAssignableToRole: null };
+        const [row] = check("role", GROUP_ROW, { principals: withGroup(plain) });
+        expect(row.result).toBe("error");
+        expect(row.message).toContain("not role-assignable");
+    });
+
+    it("refuses a group whose role-assignability could not be confirmed", () => {
+        const unknown: PrincipalRef = { id: "11111111-1111-1111-1111-111111111111", kind: "group", displayName: "Unknown Group" };
+        const [row] = check("role", GROUP_ROW, { principals: withGroup(unknown) });
+        expect(row.result).toBe("error");
+        expect(row.message).toContain("Could not confirm");
+    });
+
+    it("accepts a role-assignable group", () => {
+        const assignable: PrincipalRef = { id: "11111111-1111-1111-1111-111111111111", kind: "group", displayName: "Assignable Group", isAssignableToRole: true };
+        const [row] = check("role", GROUP_ROW, { principals: withGroup(assignable) });
+        expect(row.result).toBe("new");
+    });
+});
+
 describe("what the review of the code found (gate C of NG-71)", () => {
     it("keeps what is there when End Date and Duration Days are empty, and gives a new assignment the policy maximum", () => {
         const [existing] = check("role", `${ROLE_HEAD}\nrole-pra,u-anna,,eligible,add,,,,`);

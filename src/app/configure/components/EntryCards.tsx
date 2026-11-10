@@ -21,7 +21,7 @@ const ENTRIES = (tenant: string): { mode: Exclude<ConfigureMode, "model">; text:
 export function EntryCards({ tenantName, lock, onOpen }: EntryCardsProps) {
     const isLocked = lock.kind !== "none";
     return (
-        <div className="mb-4 grid gap-4 min-[900px]:grid-cols-3">
+        <div className="mb-4 grid gap-4 min-[900px]:grid-cols-3" data-tour="configure-modes">
             {ENTRIES(tenantName).map(({ mode, text, when }) => {
                 const info = MODES[mode];
                 return (

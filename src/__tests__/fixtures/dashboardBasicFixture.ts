@@ -3,7 +3,7 @@ import type { RoleDetailData } from "@/types/directoryRole.types";
 import { app, endsLater, group, groupPrincipal, noEnd, policy, role, user } from "./dashboardFilterFixtures";
 
 /**
- * Raw data from which `dashboardStats` reproduces the numbers of `docs/Assets/next-gen/dashboard/basic-light.png`:
+ * Raw data from which `dashboardStats` reproduces the numbers of the approved Basic dashboard design:
  * 154 roles and groups (130 roles, 24 groups), 17 active now (11 and 6), 17 permanent (13 and 4), 138 eligible
  * (86 and 52), 33 privileged roles, 5 that require approval, 4 custom roles (2 with assignments), 89 percent of the
  * role-assignable groups under PIM (24 of 27). Terms: 19 Entra MFA, 7 authentication context, 7 neither, 31 with

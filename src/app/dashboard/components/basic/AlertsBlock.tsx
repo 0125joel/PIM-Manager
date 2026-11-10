@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
 import { Icon } from "@/components/icons/Icon";
@@ -39,7 +39,7 @@ export function AlertsBlock({ state, summary, errorMessage, isGranting, showDism
     };
 
     return (
-        <section ref={sectionRef} tabIndex={-1} aria-labelledby="alerts-heading" className={`${PANEL_CLASS} outline-none ${isDimmed ? "opacity-45" : ""}`}>
+        <section ref={sectionRef} tabIndex={-1} aria-labelledby="alerts-heading" className={`${PANEL_CLASS} outline-none ${isDimmed ? DIMMED_CLASS : ""}`}>
             <SectionHeader
                 eyebrow="alerts"
                 title="From Microsoft"

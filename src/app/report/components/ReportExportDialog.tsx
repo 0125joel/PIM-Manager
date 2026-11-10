@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { StatusBox } from "@/components/ui/StatusBox";
@@ -89,6 +89,9 @@ function Check({ checked, onChange, disabled, label, hint }: { checked: boolean;
 export function ReportExportDialog({ isOpen, onClose, data }: ReportExportDialogProps) {
     const [choice, setChoice] = useState<ExportChoice>(readStoredChoice);
     const [isWorking, setIsWorking] = useState(false);
+    const controllerRef = useRef<AbortController | null>(null);
+    // Leaving the page stops the downloads still to come, so no file lands on another page
+    useEffect(() => () => controllerRef.current?.abort(), []);
     const [error, setError] = useState<string | null>(null);
     const radioName = useId();
 
@@ -129,12 +132,15 @@ export function ReportExportDialog({ isOpen, onClose, data }: ReportExportDialog
     ];
 
     const handleExport = async () => {
+        const controller = new AbortController();
+        controllerRef.current = controller;
         setIsWorking(true);
         setError(null);
         try {
             // Built again at the moment of the click: the date in the names and the days left count from now
             const fresh = planExport({ ...data, meta: { ...data.meta, exportedAt: new Date() } }, choice);
             for (const file of fresh.files) {
+                if (controller.signal.aborted) return;
                 download(file.build(), file.name, file.mime);
                 // Browsers ask before they let a page download several files at once; a short pause keeps them in line
                 if (fresh.files.length > 1) await delay(250);
@@ -205,7 +211,8 @@ export function ReportExportDialog({ isOpen, onClose, data }: ReportExportDialog
                         {plan.files.length === 0 && <li className="px-3 py-2 text-sm text-muted">Nothing is chosen.</li>}
                         {plan.files.map((file) => (
                             <li key={file.id} className="flex items-center gap-2 border-b border-line px-3 py-2 last:border-b-0">
-                                <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink">{file.name}</span>
+                                {/* Below 640 a long name wraps at a hyphen instead of being cut off, as in the Azure export */}
+                                <span className="min-w-0 flex-1 font-mono text-[13px] text-ink sm:truncate">{file.name}</span>
                                 <span className="shrink-0 text-[13px] text-body">{file.count}</span>
                             </li>
                         ))}

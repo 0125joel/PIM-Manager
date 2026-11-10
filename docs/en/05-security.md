@@ -329,7 +329,7 @@ if (!isAuthenticated) {
 - No Google Analytics
 - No Mixpanel, Segment, Amplitude
 - No error tracking (Sentry, Rollbar)
-- No telemetry beacons
+- No telemetry beacons other than Cloudflare Web Analytics on the hosted site, which receives the page path but no query string or tenant data
 - Only Microsoft Graph API calls
 
 **Visitor Counter:** External badge in README (non-functional, cosmetic only)
@@ -415,7 +415,7 @@ Content-Security-Policy:
   script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
   style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -426,6 +426,8 @@ Content-Security-Policy:
 > `'unsafe-eval'` is **not** needed and is intentionally omitted. `'wasm-unsafe-eval'` in `script-src` is required by `@react-pdf/renderer` to instantiate its WebAssembly module (needed for PDF export). `'unsafe-inline'` is **not** in `script-src`: the Next.js static export injects a small, fixed set of inline hydration scripts (`self.__next_f.push`, `self.__next_s.push`), and because the HTML is generated at build time their content is known. `npm run build` runs `scripts/generate-csp-hashes.mjs` after `next build`; it hashes every inline `<script>` in `out/**/*.html` (SHA-256) and replaces the placeholder `__CSP_SCRIPT_HASHES__` in `out/_headers` and `out/staticwebapp.config.json` with the `'sha256-...'` list. The source files in `public/` keep the placeholder, so only the exported copies carry hashes and the deployment must always use the files from `out/` (the Azure test workflow reads `config_file_location: "out"`). The theme and runtime-config scripts are external files (`/theme-init.js`, `/env-config.js`) and are covered by `'self'`. `style-src` is `'self'` only as well: Tailwind ships as a stylesheet, the exported HTML has no inline `<style>` element or `style` attribute (the post-build script fails the build if one appears), and React sets the `style` prop through the CSSOM, which CSP does not block. `https://static.cloudflareinsights.com` (`script-src`) and `https://cloudflareinsights.com` (`connect-src`) allow the Cloudflare Web Analytics beacon: with automatic injection it reports to the site's own `/cdn-cgi/rum` (`'self'`), with the manual or Pages snippet to `cloudflareinsights.com`. The host has no path so that both `beacon.min.js` and the versioned `beacon.min.js/v...` URL match. On Cloudflare Pages the build command must be `npm run build`: with `next build` alone the placeholder goes live and every inline script is blocked (blank page, React error #412).
 
 > `https://pimmonitor.com` in `connect-src` lets Configure read the public PIM Monitor access model catalog (`/catalog/v1/eam-catalog.json`). The request is a plain GET without credentials and carries no tenant data; when the host is blocked, the app uses the copy that ships with it.
+
+> `https://management.azure.com` in `connect-src` is Azure Resource Manager, for the Azure environment (PIM for Azure resources). The app calls it with the signed-in user's own token (the delegated `user_impersonation` scope, asked once with a consent popup), so what comes back follows the user's Azure roles. No tenant data goes anywhere else.
 
 **Additional Headers:**
 ```
@@ -537,7 +539,7 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 If you discover a security vulnerability in PIM Manager:
 
 1. **Do NOT** open a public GitHub issue
-2. Use [GitHub Security Advisories](https://github.com/0125joel/PIM-manager-private/security/advisories) (private reporting)
+2. Follow the reporting policy in [SECURITY.md](https://github.com/0125joel/PIM-Manager/blob/main/SECURITY.md)
 3. Or email security contact: [See GitHub profile](https://github.com/0125joel)
 
 **What to Include:**

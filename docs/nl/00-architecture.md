@@ -28,6 +28,7 @@ PIM Manager is een client-side Next.js applicatie voor het beheren en visualiser
 
 - **Directory Roles** (Entra ID Roles) - Volledig geïmplementeerd
 - **PIM for Groups** - Volledig geïmplementeerd
+- **Azure** (PIM voor Azure-resources) - Report en dashboard via Azure Resource Manager (ARM), alleen lezen; Configure komt later
 - **Intune Roles** - Gepland (Fase 4)
 - **Exchange Roles** - Gepland (Fase 4)
 
@@ -372,6 +373,12 @@ Na refactoring volgen alle services een consistent patroon:
 | User Search | Gebruikers en groepen zoeken in Mensen toevoegen | `userSearchService.ts` |
 | Scope Options | Administratieve units en applicaties als scope van een nieuwe toewijzing | `scopeOptionsService.ts` |
 | Group Membership | Leden en eigenaren van een groep, op aanvraag gelezen in het Rapport | `groupMembershipService.ts` |
+| Azure Scopes | De subscriptions, resourcegroepen, resources en managementgroephiërarchie die je kunt lezen (Azure Resource Manager) | `azureScopeService.ts` |
+| Azure Assignments | Actieve en eligible PIM-roltoewijzingen op Azure-resources (Azure Resource Manager) | `azureAssignmentService.ts` |
+| Azure Role Settings | De instellingen van één rol op één scope, alleen lezen (Azure Resource Manager) | `azurePolicyService.ts` |
+| Azure Role Definitions | Azure-roldefinities, voor de beschrijving en de controle op privileged (Azure Resource Manager) | `azureRoleDefinitionService.ts` |
+| Azure Alerts | De PIM-waarschuwingen van een subscription, alleen lezen (Azure Resource Manager) | `azureAlertService.ts` |
+| Service Principal Types | Of een service principal achter een Azure-toewijzing een app of een managed identity is, en of de principal nog bestaat (Graph) | `servicePrincipalTypeService.ts` |
 | Policy Parser | PIM-beleidsregels parsen naar `PolicySettings` | `utils/policyParser.ts` |
 | Intune (gepland) | Intune RBAC roles | `intuneService.ts` |
 
@@ -482,7 +489,7 @@ interface AggregatedData {
             <ToastProvider>             ← Toast-notificaties
               <GlobalProgressBar />
               <AppShell>{children}</AppShell>   ← Top bar, compact header, bottom navigation
-              <OnboardingWrapper />     ← Eerste-bezoek tour en feature highlights
+              <OnboardingWrapper />     ← Tours bij het eerste bezoek van elk onderdeel
             </ToastProvider>
           </ErrorBoundary>
         </UnifiedPimProvider>
@@ -493,7 +500,7 @@ interface AggregatedData {
 
 De providerboom staat in `components/AppProviders.tsx` (een client component die `app/layout.tsx` rendert). De MSAL redirect-bridgepagina `/redirect` wordt buiten deze boom gerenderd: MSAL v5 levert popup- en silent-tokenantwoorden op die pagina af, die ze naar het openende venster broadcast en niet in `MsalProvider` mag zitten.
 
-> **Let op:** `ViewModeProvider` maakt geen deel uit van de globale layout. Hij wordt alleen lokaal toegepast in `app/dashboard/page.tsx`. `ConfigureBasketProvider` wordt lokaal toegepast in `app/configure/page.tsx`.
+> **Let op:** `ViewModeProvider` maakt geen deel uit van de globale layout. Hij wordt lokaal toegepast in `app/dashboard/page.tsx` en, met een eigen opslagsleutel, in `app/azure/page.tsx`. `ConfigureBasketProvider` wordt lokaal toegepast in `app/configure/page.tsx`. `AzureProvider` (`contexts/AzureContext.tsx`) houdt de Azure-data vast en wordt alleen in `app/azure/layout.tsx` gemount, dus alleen rond de Azure-pagina's.
 
 > **Let op:** De statische HTML en de hydration-pass renderen alleen de opstartspinner; de boom volgt op de client. In een demotabblad omhult `DemoModeProvider` hem en neemt `DemoAuthProvider` de plaats van `AuthProvider` in. De oude `PimDataProvider` en `DirectoryRoleContext` bestaan niet meer: Directory Roles zitten in `UnifiedPimProvider`.
 
@@ -564,9 +571,15 @@ async function runWorkerPool<TItem, TResult>({
 | PIM for Groups: beheerde groepen (slim verversen, 2 calls per groep) | 3 | 500ms | `refreshPimGroupAssignments` |
 | PIM for Groups: onbeheerde groepen | 5 | 200ms | `fetchAllPimGroupData`, `refreshPimGroupAssignments` (één lichte call per groep) |
 | PIM for Groups: ledenaantal van onbeheerde groepen | 6 | 500ms | `addMemberCounts` (`pimGroupService.ts`) |
+| Azure: toewijzingen (instances en eligibility schedules per subscription; resourcegroepen en resources van een subscription die zijn eigen niveau weigert) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`, met `armRateLimiter`; `costPerItem` 2, want elk item leest twee lijsten tegelijk |
+| Azure: rolinstellingen van de rol- en scopeparen (instellingendialoog, export) | 4 | 250ms | `readAzureRolePolicyPairs` en de policies-hook in `hooks/useAzureRolePolicy.ts`, met `armRateLimiter`, `costPerItem` 1; de rootscope stuurt geen request |
+| Azure-dashboard: custom roldefinities per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, met `armRateLimiter`, `costPerItem` 1; de lijsten op tenantniveau en de ingebouwde rollen van de eerste subscription zijn losse calls |
+| Azure-dashboard: PIM-waarschuwingen per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, met `armRateLimiter`, `costPerItem` 1 |
 | Worker pool standaard (indien niet opgegeven) | 8 | 300ms | `runWorkerPool` |
 
 De Configure-apply (`services/configureApplyService.ts`) draait zijn stappen via `runWorkerPool` met 4 workers en 500 ms vertraging. `updatePimPolicy` loopt niet via een pool: de regels worden één voor één gePATCHt met een pauze van 300 ms. Elke Graph-call, gepoold of niet, gaat bovendien door `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window van 500 resource units per 10 seconden).
+
+Azure Resource Manager heeft een eigen limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window van 200 requests per 10 seconden), los van `graphRateLimiter`. De ARM-client (`utils/armClient.ts`) boekt bij elk request dat hij verstuurt ook één eenheid af van dezelfde limiter, naast de `costPerItem` die de worker pool per item afboekt. Na een 429 pauzeert de client de limiter voor de `Retry-After` van het antwoord, zodat elke worker wacht.
 
 **Microsoft Graph API Limieten (Identity & Access):**
 
@@ -730,11 +743,11 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 |---|------------|--------|-----------|
 | ADR-001 | **Client-side only** (geen backend) | Accepted | Vermijdt server kosten, simpler deployment, data blijft bij gebruiker |
 | ADR-002 | **Static Export** via Next.js | Accepted | Cloudflare Pages hosting, geen server-side rendering nodig |
-| ADR-003 | **UnifiedPimContext** voor multi-workload | Accepted | Single source of truth, schaalt naar nieuwe workloads |
+| ADR-003 | **UnifiedPimContext** voor multi-workload | Accepted | Single source of truth, schaalt naar nieuwe workloads. Azure heeft daarnaast een eigen `AzureProvider` (`src/contexts/AzureContext.tsx`), alleen gemount rond de Azure-pagina's |
 | ADR-004 | **Worker Pool pattern** voor API throttling | Accepted | Voorkomt 429 errors, tot 8x sneller dan sequentieel |
 | ADR-005 | **Aggregated cards** i.p.v. per-workload | Accepted | Cleaner UI, schaalt beter |
 | ADR-006 | **Incremental Consent** per workload | Accepted | Least privilege, user kiest welke data |
-| ADR-007 | **Beta API** alleen waar v1.0 de data mist: `isPrivileged`, alerts, custom extensions, PIM for Groups-resources, groepsleden en ledenaantal | ⚠️ Risk Accepted | Nodig voor security insights en PIM for Groups; elke beta-aanroep heeft de reden in een codecommentaar. De `isPrivileged`-aanroep valt terug op v1.0 zonder dat veld |
+| ADR-007 | **Beta API** alleen waar v1.0 de data mist: `isPrivileged`, alerts, custom extensions, PIM for Groups-resources, groepsleden en ledenaantal | ⚠️ Risk Accepted | Nodig voor security insights en PIM for Groups; elke beta-aanroep heeft de reden in een codecommentaar. De `isPrivileged`-aanroep valt terug op v1.0 zonder dat veld. Het ARM-endpoint voor PIM-waarschuwingen (`roleManagementAlerts`, `src/services/azureAlertService.ts`) is ook een preview, `2022-08-01-preview` |
 
 > Zie `docs/adr/` voor gedetailleerde ADR documenten (indien gecreëerd).
 
@@ -817,7 +830,7 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 
 ## Deployment Architectuur
 
-Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./08-deployment.md)**
+Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./10-deployment.md)**
 
 ### Overzicht
 
@@ -901,7 +914,7 @@ src/
 │   ├── useConfigureReview.ts     # Review van Configureren (pre-flight, proefrun)
 │   ├── useConfigureApply.ts      # Apply, resultaat en ongedaan maken in Configureren
 │   ├── useLeaveGuard.ts          # Waarschuwt bij niet-opgeslagen wijzigingen in Configureren
-│   ├── useOnboarding.ts          # Eerste-bezoek tour en feature highlights
+│   ├── useOnboarding.ts          # Start the tour: opent de keuze van tours
 │   └── useUpdateCheck.ts         # GitHub release-check (alleen self-hosted)
 │
 ├── types/

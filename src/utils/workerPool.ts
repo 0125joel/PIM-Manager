@@ -11,7 +11,7 @@
  */
 
 import { Logger } from './logger';
-import { getErrorMessage, getErrorStatusCode } from './errorUtils';
+import { getErrorCode, getErrorMessage, getErrorStatusCode } from './errorUtils';
 import type { RateLimiter } from './rateLimiter';
 
 // Helper to add delay for throttling protection
@@ -93,6 +93,14 @@ export interface WorkerPoolOptions<TItem, TResult> {
      * Only used together with `rateLimiter`.
      */
     costPerItem?: number | ((item: TItem) => number);
+
+    /**
+     * What the pool logs when an item fails. `message` (default) logs the error message; `statusAndCode` logs only
+     * the HTTP status and the error code, for callers whose messages can hold tenant data (a Graph message repeats
+     * the filter with its ids or UPNs, an ARM 403 names the user, the object id and the scope).
+     * `onItemError` still gets the message.
+     */
+    errorLog?: 'message' | 'statusAndCode';
 }
 
 /**
@@ -133,7 +141,8 @@ export async function runWorkerPool<TItem, TResult>(
         signal,
         maxRetries = 3,
         rateLimiter,
-        costPerItem = 1
+        costPerItem = 1,
+        errorLog = 'message'
     } = options;
 
     const total = items.length;
@@ -209,7 +218,10 @@ export async function runWorkerPool<TItem, TResult>(
                 }
 
                 const errorMsg = getErrorMessage(error);
-                Logger.error('WorkerPool', `Worker ${workerId} failed for item: ${errorMsg}`);
+                const logged = errorLog === 'statusAndCode'
+                    ? `status ${getErrorStatusCode(error) ?? 'unknown'}, code ${getErrorCode(error) ?? 'unknown'}`
+                    : errorMsg;
+                Logger.error('WorkerPool', `Worker ${workerId} failed for item: ${logged}`);
                 failedCount++;
                 onItemError?.(item, errorMsg);
             }

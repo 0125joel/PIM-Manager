@@ -9,7 +9,7 @@ The Report page shows every role and group as it is now: who holds what, how it 
 One page with a list on the left and the detail of the selected item on the right. Below 1024 px wide the detail is a view of its own with a Back button, and the list comes back where you left it.
 
 ```
-Report                                  [Refresh] [Export]
+Report  [ ] Show more details     synced 3 min ago [Refresh] [Export]
 [Roles 146 | Groups 12] [Search a role, a group or a person] [Filters]
 chips: Privileged only x   Has assignments x   Clear all      7 of 146 roles
 +----------------------+--------------------------------------------+
@@ -26,7 +26,7 @@ The address of the page carries the state, so a link opens the same view: `view`
 
 ## Roles
 
-The list shows the name, a Privileged or Custom tag, "{n} eligible, {n} active", and only two warnings: "No MFA on activation" and "Permanent active". Sort by most assignments, name or most permanent.
+The list shows the name, a Privileged or Custom tag, "{n} eligible, {n} active", and, with Show more details, only two warnings: "No MFA on activation" and "Permanent active". Sort by most assignments, name or most permanent.
 
 The detail has two parts.
 
@@ -53,6 +53,10 @@ Hover or focus a tag (tap it on a phone) for what it means. A group that holds t
 A tab with a problem has an amber dot: a privileged role without MFA or authentication context, a policy that allows permanent active assignments, or an activation that notifies nobody.
 
 ---
+
+### Show more details
+
+Without **Show more details** the Report shows only what deviates from the usual. A row keeps Permanent, Always on, Via group, Owner, Emergency access and a scope other than tenant-wide; the type, Member, Direct, Tenant-wide, Expires, No end date, Assigned and Activated wait behind the checkbox. The lists leave out their red warnings, a group's head leaves out its type tags, the Custom extension tiles are left out, and the count of the list shows only with a filter or a search term. The Report remembers the choice in this browser; **Details** set to More in Settings shows everything.
 
 ## Groups
 
@@ -99,7 +103,7 @@ Contents and scope are checkboxes: which files, directory roles, PIM for Groups,
 
 The file names are `pim-overview-assignments-{date}.csv`, `pim-overview-role-settings-{date}.csv`, `pim-overview-group-settings-{date}.csv`, `pim-bulk-role-policies-{date}.csv`, `pim-bulk-group-policies-{date}.csv`, `pim-bulk-role-assignments-{date}.csv`, `pim-bulk-group-assignments-{date}.csv` and `pim-backup-{date}.json`.
 
-Every cell is escaped as RFC 4180 and a cell that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet shows text, not a formula. The PDF report stays on the Dashboard.
+Every cell is escaped as RFC 4180 and a cell that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet shows text, not a formula. The same goes for one of these characters right after a `;`, because Excel with a semicolon list separator starts a new cell there. The PDF report stays on the Dashboard.
 
 > [!NOTE]
 > The export and the import share one column definition per file type (`src/utils/exportSchema.ts`). The tests write every file, read it back and compare it with the source, and check that Configure Import (`detectCsvKind` in `src/utils/importDetect.ts`) still recognises each bulk file.

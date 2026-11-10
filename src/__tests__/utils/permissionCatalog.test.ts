@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loginRequest } from "@/config/authConfig";
+import { AZURE_SCOPES, loginRequest } from "@/config/authConfig";
 import { ALERTS_PERMISSION, CUSTOM_EXTENSION_SCOPES } from "@/config/constants";
 import { WORKLOAD_SCOPES, WORKLOAD_WRITE_SCOPES } from "@/hooks/useIncrementalConsent";
 import { PERMISSION_PURPOSES, buildPermissionCatalog } from "@/utils/permissionCatalog";
@@ -10,6 +10,7 @@ const sources = {
         { feature: "PIM for Groups", scopes: WORKLOAD_SCOPES.pimGroups },
         { feature: "Security alerts", scopes: [ALERTS_PERMISSION] },
         { feature: "Custom extensions", scopes: [CUSTOM_EXTENSION_SCOPES.read] },
+        { feature: "Azure resources", scopes: AZURE_SCOPES },
     ],
     write: [
         { workload: "Directory roles", scopes: WORKLOAD_WRITE_SCOPES.directoryRoles },
@@ -32,5 +33,10 @@ describe("buildPermissionCatalog", () => {
         expect(signIn.items.map((i) => i.scope)).toEqual(loginRequest.scopes);
         expect(optional.items.find((i) => i.scope === ALERTS_PERMISSION)?.purpose).toBe("Security alerts: PIM's own security alerts");
         expect(write.items.every((i) => i.scope.includes("ReadWrite"))).toBe(true);
+    });
+
+    it("lists the Azure Resource Manager scope as an optional feature", () => {
+        const [, optional] = buildPermissionCatalog(sources);
+        expect(optional.items.find((i) => i.scope === "https://management.azure.com/user_impersonation")?.purpose).toBe("Azure resources: your Azure role assignments and role settings, through Azure Resource Manager");
     });
 });

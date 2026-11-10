@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { SectionHeader, PANEL_CLASS } from "@/components/ui/SectionHeader";
+import { SectionHeader, PANEL_CLASS, DIMMED_CLASS } from "@/components/ui/SectionHeader";
 import { ListSearch, matchesQuery } from "@/components/ui/ListSearch";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
@@ -27,6 +28,8 @@ interface GroupsOutsidePimBlockProps {
     onRetry?: () => void;
     /** "Change in Configure" (spec 16): the link for a group the admin may change, else null */
     changeHrefFor?: (target: ConfigureLinkTarget) => string | null;
+    /** Details off (calm details spec 3.1): at most limit rows, no search, a link to the Report */
+    compact?: { limit: number; reportHref: string };
 }
 
 function BringUnderPim({ group }: { group: GroupOutsidePim }) {
@@ -48,16 +51,16 @@ function Holds({ group }: { group: GroupOutsidePim }) {
 }
 
 /** Role-assignable groups outside PIM: who gets a role permanently, without activation (spec 4.2 item 3). */
-export function GroupsOutsidePimBlock({ state, rows, roleAssignableCount, isDimmed, onGrant, errorMessage, onRetry, changeHrefFor }: GroupsOutsidePimBlockProps) {
+export function GroupsOutsidePimBlock({ state, rows, roleAssignableCount, isDimmed, onGrant, errorMessage, onRetry, changeHrefFor, compact }: GroupsOutsidePimBlockProps) {
     const [dismissedError, setDismissedError] = useState<string | null>(null);
     const [showAll, setShowAll] = useState(false);
     const [query, setQuery] = useState("");
-    const isSearching = query.trim() !== "";
+    const isSearching = compact ? false : query.trim() !== "";
     const matching = isSearching ? rows.filter((g) => matchesQuery(g.name, query)) : rows;
-    const visibleRows = showAll || isSearching ? matching : matching.slice(0, VISIBLE_LIMIT);
+    const visibleRows = compact ? rows.slice(0, compact.limit) : showAll || isSearching ? matching : matching.slice(0, VISIBLE_LIMIT);
     const count = state === "ready" ? rows.length : undefined;
     return (
-        <section tabIndex={-1} aria-labelledby="gaps-heading" className={`${PANEL_CLASS} outline-none ${isDimmed ? "opacity-45" : ""}`}>
+        <section tabIndex={-1} data-tour="groups-outside-pim" aria-labelledby="gaps-heading" className={`${PANEL_CLASS} outline-none ${isDimmed ? DIMMED_CLASS : ""}`}>
             <SectionHeader
                 eyebrow="gaps"
                 title="Role-assignable groups outside PIM"
@@ -97,7 +100,7 @@ export function GroupsOutsidePimBlock({ state, rows, roleAssignableCount, isDimm
 
             {state === "ready" && rows.length > 0 && (
                 <>
-                    {rows.length > VISIBLE_LIMIT && <ListSearch value={query} onChange={setQuery} label="Search role-assignable groups outside PIM" className="mt-4" />}
+                    {!compact && rows.length > VISIBLE_LIMIT && <ListSearch value={query} onChange={setQuery} label="Search role-assignable groups outside PIM" className="mt-4" />}
                     {isSearching && matching.length === 0 && <p className="mt-3 text-[13px] leading-[18px] text-muted">No group matches {`"${query.trim()}"`}.</p>}
                     <table className="mt-4 hidden w-full border-collapse text-[13px] leading-[18px] sm:table">
                         <thead>
@@ -132,10 +135,16 @@ export function GroupsOutsidePimBlock({ state, rows, roleAssignableCount, isDimm
                             </li>
                         ))}
                     </ul>
-                    {!isSearching && rows.length > VISIBLE_LIMIT && (
+                    {!compact && !isSearching && rows.length > VISIBLE_LIMIT && (
                         <button type="button" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)} className="mt-2 inline-flex min-h-6 items-center text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11">
                             {showAll ? "Show fewer" : `Show all ${rows.length} groups`}
                         </button>
+                    )}
+                    {compact && rows.length > compact.limit && (
+                        <p className="mt-3 text-[13px] leading-[18px] text-muted">
+                            {`${compact.limit} of ${rows.length} shown, groups with a role first. `}
+                            <Link href={compact.reportHref} className="text-accent underline underline-offset-2">{`Show all ${rows.length} in Report`}</Link>
+                        </p>
                     )}
                 </>
             )}

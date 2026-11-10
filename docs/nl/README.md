@@ -16,6 +16,7 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 | [Rapport Pagina](./08-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
 | [Configuratie Pagina](./09-configuratie-pagina.md) | Edit, Guided, Import en Access model, met review en Undo |
 | [Instellingen](./11-settings.md) | Workloads en consent framework |
+| [Azure Dashboard](./12-azure-dashboard-pagina.md) | Bevoorrechte toegang op Azure-resources |
 
 ---
 

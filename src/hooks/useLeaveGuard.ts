@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { LEAVE_REQUEST_EVENT, createLeaveRequestListener } from "@/utils/leaveEvents";
 
 export interface LeaveGuard {
     /** True while the leave dialog asks */
@@ -70,11 +71,18 @@ export function useLeaveGuard(changeCount: number): LeaveGuard {
             event.preventDefault();
             event.returnValue = "";
         };
+        // The shell's environment switcher is a radio group, not a link: it asks through the leave request (Azure spec 1)
+        const onLeaveRequest = createLeaveRequestListener(() => count.current > 0, (href) => {
+            pending.current = () => router.push(href);
+            setIsAsking(true);
+        });
         document.addEventListener("click", onClick, true);
         window.addEventListener("beforeunload", onBeforeUnload);
+        window.addEventListener(LEAVE_REQUEST_EVENT, onLeaveRequest);
         return () => {
             document.removeEventListener("click", onClick, true);
             window.removeEventListener("beforeunload", onBeforeUnload);
+            window.removeEventListener(LEAVE_REQUEST_EVENT, onLeaveRequest);
         };
     }, [pathname, router]);
 

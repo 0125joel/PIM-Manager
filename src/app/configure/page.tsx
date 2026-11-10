@@ -21,6 +21,7 @@ import { useNow } from "@/hooks/useNow";
 import { useRolesActions, useRolesData, useRolesLoading } from "@/hooks/usePimData";
 import { useTenantName } from "@/hooks/useTenantName";
 import { useWriteAccess } from "@/hooks/useWriteAccess";
+import { useTourPage } from "@/hooks/useTourPage";
 import { RefreshButtonView } from "@/components/ui/RefreshButton";
 import { groupsOutsideLoad } from "@/utils/writeAccess";
 import { touchedTargets } from "@/utils/configureBasket";
@@ -73,6 +74,9 @@ function ConfigureContent({ tenantId }: { tenantId: string }) {
     const writeAccess = useWriteAccess();
     const catalog = useAccessModelCatalog();
     const { basket, isReady: isBasketReady } = useConfigureBasket();
+    // The tour of the mode that is open, or of the start page; none is ready during the review, the result or the access model
+    const tourOfMode = url.state.mode === "edit" ? "entra-configure-edit" : url.state.mode === "guided" ? "entra-configure-guided" : url.state.mode === "import" ? "entra-configure-import" : "entra-configure";
+    useTourPage(tourOfMode, isBasketReady && url.state.step === null && url.state.mode !== "model");
     const { discard, replace, add: addToBasket, rebase: rebaseBasket } = useConfigureBasketActions();
     const { requestWriteConsent, requestConsent } = useIncrementalConsent();
     const { refreshAllWorkloads, enableWorkload, refreshWorkload } = useUnifiedActions();

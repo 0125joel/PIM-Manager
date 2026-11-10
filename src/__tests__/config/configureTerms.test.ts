@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { CONFIGURE_BLOCK_TITLES, CONFIGURE_HELP } from "@/config/help/configure";
 import { CONFIGURE_HELP_TERM_KEYS, CONFIGURE_TERMS } from "@/config/help/configureTerms";
 import { getHelpForPath } from "@/config/help";
-import { HIGHLIGHT_STEPS, ONBOARDING_STEPS } from "@/config/onboarding";
-import { WHATS_NEW } from "@/config/whatsNew";
+import { TOURS } from "@/config/onboarding";
+import { WHATS_NEW_RELEASES } from "@/config/whatsNew";
 import { NAV_ITEMS } from "@/utils/shellNavigation";
 import { SCHEDULED_NOTE } from "@/utils/assignmentForm";
 import { NOT_UNDER_PIM_LINE } from "@/utils/configureTargets";
@@ -22,8 +22,8 @@ function allTexts(): string[] {
         ...help.blocks.flatMap((b) => [b.title, b.text]),
         ...help.terms.flatMap((t) => [t.term, t.text]),
         ...help.guide.flatMap((g) => [g.title, ...(g.paragraphs ?? []), ...(g.items ?? []).flatMap((i) => [i.label, i.text])]),
-        ...[...ONBOARDING_STEPS, ...HIGHLIGHT_STEPS].flatMap((s) => [s.title, s.description, ...s.guides.map((x) => x.text)]),
-        ...WHATS_NEW.flatMap((w) => [w.title, w.text]),
+        ...TOURS.flatMap((t) => [t.section, t.label, ...t.steps.flatMap((s) => [s.title, s.description, ...s.guides.map((x) => x.text)])]),
+        ...WHATS_NEW_RELEASES.flatMap((r) => [r.title, ...r.entries.flatMap((w) => [w.title, w.text])]),
     ];
 }
 
@@ -87,9 +87,22 @@ function tourIdsInSources(): Set<string> {
 describe("the tour", () => {
     it("every step points at a data-tour id that exists", () => {
         const ids = tourIdsInSources();
-        for (const step of [...ONBOARDING_STEPS, ...HIGHLIGHT_STEPS]) expect(ids.has(step.target), `${step.id}: ${step.target}`).toBe(true);
+        for (const tour of TOURS) for (const step of tour.steps) {
+            expect(ids.has(step.target), `${tour.id}/${step.id}: ${step.target}`).toBe(true);
+            if (step.fallbackTarget) expect(ids.has(step.fallbackTarget), `${tour.id}/${step.id}: ${step.fallbackTarget}`).toBe(true);
+        }
     });
-    it("the Configure steps point at the navigation link, which is always there", () => {
-        for (const step of [...ONBOARDING_STEPS, ...HIGHLIGHT_STEPS].filter((s) => s.page === "/configure")) expect(step.target).toBe("nav-configure");
+    it("has unique tour ids, and unique step ids within a tour", () => {
+        expect(new Set(TOURS.map((t) => t.id)).size).toBe(TOURS.length);
+        for (const tour of TOURS) expect(new Set(tour.steps.map((s) => s.id)).size, tour.id).toBe(tour.steps.length);
+    });
+
+    it("writes names of the UI between asterisks and values between underscores, in pairs", () => {
+        for (const tour of TOURS) for (const step of tour.steps) {
+            for (const text of [step.description, ...step.guides.map((g) => g.text)]) {
+                expect((text.match(/\*/g) ?? []).length % 2, `${tour.id}/${step.id}: ${text}`).toBe(0);
+                expect((text.match(/_/g) ?? []).length % 2, `${tour.id}/${step.id}: ${text}`).toBe(0);
+            }
+        }
     });
 });

@@ -4,7 +4,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * NextGen design tokens (docs/Assets/next-gen/dashboard/implementation-spec.md section 1.1), palette B:
+ * Design tokens (meaning and use in STYLEGUIDE.md), palette B:
  * warm neutrals on the three brand colours (IntoTheCloud blue, the logo purple for changed, the PIM Monitor orange for attention).
  * Light values on :root, dark values on .dark. theme-init.js and ThemeProvider
  * always set the .light or .dark class on <html>, so no media query is needed.
@@ -142,4 +142,30 @@ label[for] {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/*
+ * A block the active dashboard filter cannot answer (DIMMED_CLASS in src/components/ui/SectionHeader.tsx, STYLEGUIDE.md Color).
+ * The box dims: the border and its accent edge turn to line, the background to page. Every text in it turns muted, which reads
+ * at 4.5:1 or more on page, surface and band in both themes; tinted surfaces inside turn to band, because muted on the dark
+ * accent and warn tints falls under 4.5:1. Never opacity: faded text fails WCAG 1.4.3. Controls keep working; only colours change.
+ * These rules are outside a layer on purpose, so they win over the Tailwind utilities on the same element.
+ */
+.pim-dimmed {
+  border-color: var(--line);
+  background-color: var(--page);
+}
+
+button.pim-dimmed:hover {
+  border-color: var(--accent);
+}
+
+.pim-dimmed,
+.pim-dimmed-text,
+:is(.pim-dimmed, .pim-dimmed-text) :is(.text-ink, .text-body, .text-accent, .text-warn-text) {
+  color: var(--muted);
+}
+
+.pim-dimmed :is(.bg-accent-tint, .bg-warn-tint) {
+  background-color: var(--band);
 }

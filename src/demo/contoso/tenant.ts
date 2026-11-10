@@ -113,6 +113,7 @@ export const SERVICE_PRINCIPALS = {
     deploy: servicePrincipal("deploy", "Contoso Deploy Pipeline"),
     hrSync: servicePrincipal("hrsync", "Contoso HR Sync"),
     sentinel: servicePrincipal("sentinel", "Sentinel Playbook Runner"),
+    aksIdentity: { ...servicePrincipal("mi-aks-corp", "mi-aks-contoso-corp"), isManagedIdentity: true as const },
     copilotBlueprint: agentBlueprintPrincipal("copilotblueprint", "Microsoft Copilot Studio agent identity blueprint", COPILOT_STUDIO_BLUEPRINT_APP_ID),
     opsBlueprint: agentBlueprintPrincipal("opsblueprint", "Contoso Ops Agent Blueprint", OPS_BLUEPRINT_APP_ID),
     hrAgent: agentIdentity(demoGuid("agent:hr"), "Contoso HR Assistant", COPILOT_STUDIO_BLUEPRINT_APP_ID),

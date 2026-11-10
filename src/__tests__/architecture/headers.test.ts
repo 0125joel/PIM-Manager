@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ARM_BASE_URL } from "@/utils/armClient";
 
 const ROOT = process.cwd();
 
@@ -43,5 +44,17 @@ describe("architecture: header parity", () => {
     const fromSwa = collectCspFromJson(swa, []);
     expect(fromHeaders.length).toBeGreaterThan(0);
     expect(cspPolicies(fromSwa)).toEqual(cspPolicies(fromHeaders));
+  });
+
+  it("connect-src allows the host of the ARM client in both files (Azure spec 11)", () => {
+    const headers = readFileSync(join(ROOT, "public/_headers"), "utf8");
+    const fromHeaders = [...headers.matchAll(/^\s*Content-Security-Policy:\s*(.+)$/gim)].map((m) => m[1] ?? "");
+    const swa = JSON.parse(readFileSync(join(ROOT, "public/staticwebapp.config.json"), "utf8")) as unknown;
+    const policies = [...fromHeaders, ...collectCspFromJson(swa, [])];
+    expect(policies.length).toBeGreaterThan(1);
+    for (const policy of policies) {
+      const connect = policy.split(";").map((part) => part.trim().split(/\s+/)).find(([directive]) => directive === "connect-src") ?? [];
+      expect(connect).toContain(ARM_BASE_URL);
+    }
   });
 });

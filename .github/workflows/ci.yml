@@ -3,8 +3,9 @@ name: CI
 on:
   pull_request:
     branches: [dev, main, NextGen]
+  # Also on a direct push, so a commit that skips a pull request is still checked (agent architecture plan, D4)
   push:
-    branches: [dev]
+    branches: [dev, main, NextGen]
 
 jobs:
   check:
@@ -13,12 +14,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history, so the dependency list can compare with the base commit
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
+
+      # A dependency is a decision: every change to package.json and the lockfile goes into the job summary
+      - name: List dependency changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            node scripts/dependency-changes.mjs "$BASE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Dependencies: no base commit to compare with" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install dependencies
         run: npm ci
