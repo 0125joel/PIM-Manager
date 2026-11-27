@@ -15,7 +15,7 @@ import {
     type PolicyLimits, type WhoRow,
 } from "@/utils/assignmentForm";
 import type { CsvReadError, ExportRow } from "@/utils/exportSchema";
-import { getPrincipalKind, toBasicKind } from "@/utils/principalUtils";
+import { getPrincipalKind, principalDetailOf, toBasicKind } from "@/utils/principalUtils";
 import type { WriteAccess } from "@/utils/writeAccess";
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -102,6 +102,17 @@ export function mergePrincipals(a: PrincipalIndex, b: PrincipalIndex): Principal
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * Whether a UPN from the file names the principal the ID resolved to. A UPN that the principal does not carry and that
+ * no lookup ties to the same id does not count as the same person (a group or an app has no UPN).
+ */
+function sameUpnPerson(principal: PrincipalRef, upn: string, index: PrincipalIndex): boolean {
+    const wanted = upn.toLowerCase();
+    if (principal.userPrincipalName) return principal.userPrincipalName.toLowerCase() === wanted;
+    const byUpn = index.byUpn.get(wanted);
+    return !!byUpn && byUpn.id.toLowerCase() === principal.id.toLowerCase();
+}
+
+/**
  * The ids and UPNs of the rows that no loaded assignment names: what the caller asks Graph for. `forRoles`: a group
  * known without its role-assignability is asked for too, since a role needs a role-assignable group (the dry run does not check it)
  */
@@ -116,7 +127,9 @@ export function neededLookups(rows: readonly ExportRow[], known: PrincipalIndex,
             const ref = known.byId.get(id.toLowerCase());
             const unread = !ref || (forRoles && ref.kind === "group" && ref.isAssignableToRole === undefined);
             if (GUID.test(id) && unread) ids.add(id);
-        } else if (upn && !known.byUpn.has(upn.toLowerCase())) upns.add(upn);
+        }
+        // A UPN next to an ID is looked up too, so the check can tell whether both name the same person
+        if (upn && !known.byUpn.has(upn.toLowerCase())) upns.add(upn);
     }
     return { ids: [...ids], upns: [...upns] };
 }
@@ -141,6 +154,8 @@ export interface CheckedRow {
     line: number;
     /** The person: the name when known, else what the file says */
     who: string;
+    /** The UPN (or the object id of a group or app) of the person the row resolved to: tells look-alike names apart */
+    whoDetail?: string;
     /** "Add eligible", "Remove active" */
     action: string;
     /** The role or group as the tenant names it, else as the file does */
@@ -365,6 +380,11 @@ export function checkAssignmentRows(input: AssignmentCheckInput): CheckedRow[] {
         if (!principalKnown) return fail(principalId ? `Nobody with this ID in ${input.tenantName}.` : `Nobody with this UPN in ${input.tenantName}.`);
         const principal = principalKnown;
         base.who = principal.displayName;
+        base.whoDetail = principalDetailOf(principal);
+        // Both cells given: they must name the same person, or the write could go to a look-alike of the one the file names
+        if (principalId && upn && !sameUpnPerson(principal, upn, input.principals)) {
+            return fail("Principal ID and Principal UPN are different people. Keep one of them.");
+        }
         // A group can hold a directory role only when it is role-assignable; the dry run does not check this (lessons/entra.md)
         if (action === "add" && kind === "role" && principal.kind === "group" && principal.isAssignableToRole !== true) {
             return fail(principal.isAssignableToRole === undefined

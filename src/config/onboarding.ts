@@ -21,6 +21,7 @@ export type TourId =
     | "entra-dashboard-basic"
     | "entra-dashboard-advanced"
     | "entra-report"
+    | "entra-audit"
     | "entra-configure"
     | "entra-configure-edit"
     | "entra-configure-guided"
@@ -28,7 +29,8 @@ export type TourId =
     | "azure-scope"
     | "azure-dashboard-basic"
     | "azure-dashboard-advanced"
-    | "azure-report";
+    | "azure-report"
+    | "azure-audit";
 
 export type TourProduct = "entra" | "azure";
 
@@ -91,13 +93,13 @@ export const TOURS: readonly TourDefinition[] = [
             {
                 id: "pages",
                 target: "main-nav",
-                title: "Three pages",
-                description: "Each side has the same three pages, each with its own question.",
+                title: "The pages",
+                description: "Each side has the same four pages, each with its own question. *Dashboard* is where you start: how are we doing, and where should I look first.",
                 icon: "dashboard",
                 guides: [
-                    { text: "*Dashboard*: how are we doing, and where should I look first" },
                     { text: "*Report*: who has which role or group, and on which terms" },
                     { text: "*Configure*: change settings and assignments, with a review before anything is written" },
+                    { text: "*Audit*: what happened, who did it and when" },
                 ],
                 tooltipPosition: "bottom",
             },
@@ -108,7 +110,7 @@ export const TOURS: readonly TourDefinition[] = [
                 description: "Every page shows what was read last. The time next to *Refresh* tells you how old that is.",
                 icon: "refresh",
                 guides: [
-                    { text: "What was read stays for this session, so a page opens without reading it all again" },
+                    { text: "What was read stays for this session, so a page opens without reading it all again. *Audit* reads its log each time you open it" },
                     { text: "Changed something in Entra or Azure? You see it here after a refresh" },
                     { text: "*Refresh* reads new and removed assignments again" },
                 ],
@@ -133,12 +135,12 @@ export const TOURS: readonly TourDefinition[] = [
                 target: "settings-link",
                 fallbackTarget: "account-menu",
                 title: "Settings",
-                description: "What the app may read and write, how it looks, and your emergency access accounts. On a phone it sits in the account menu.",
+                description: "What the app may read and write, how it looks, the workspaces Audit reads, and your emergency access accounts. On a phone it sits in the account menu.",
                 icon: "settings",
                 guides: [
-                    { text: "*Workloads and permissions*: grant PIM for Groups, security alerts or write access once you need them, not before" },
+                    { text: "*Workloads and permissions*: grant PIM for Groups, security alerts, the audit log or write access once you need them, not before" },
                     { text: "*Emergency access accounts*: mark yours, so every page counts them apart" },
-                    { text: "*Display*: the theme, the view the dashboard and the Azure Report open in, Details and Tours" },
+                    { text: "*Log Analytics workspace*: choose one or more and Audit reads further back than the audit log keeps. Each one says what it holds" },
                 ],
                 tooltipPosition: "bottom",
             },
@@ -422,7 +424,7 @@ export const TOURS: readonly TourDefinition[] = [
                 guides: [
                     { text: "Tags show what deviates, such as _Permanent_, _Via group_ or _Emergency access_" },
                     { text: "The settings sit in three tabs: *Activation*, *Assignment* and *Notification*. An amber dot needs a look" },
-                    { text: "Hover or focus a tag for what it means. *Copy link* shares this selection" },
+                    { text: "Hover or focus a tag for what it means. Click a name to open the person, group or app in the Entra admin center; *Copy link* shares this selection" },
                 ],
                 tooltipPosition: "left",
             },
@@ -436,6 +438,65 @@ export const TOURS: readonly TourDefinition[] = [
                     { text: "Make a backup before you change anything in Configure" },
                     { text: "Apply the current filter, or replace names with Person 1, 2 and so on" },
                     { text: "Next: *Change in Configure* on a role or group you want to fix" },
+                ],
+                tooltipPosition: "bottom",
+            },
+        ],
+    },
+    {
+        id: "entra-audit",
+        product: "entra",
+        section: "Audit",
+        label: "Audit",
+        page: "/audit",
+        steps: [
+            {
+                id: "timeline",
+                target: "audit-timeline",
+                title: "The period and the timeline",
+                description: "The timeline shows actions in the period: up to 30 days of the Entra audit log, or longer with a workspace chosen in Settings. The coverage line says how far back the source goes and when it was read.",
+                icon: "log",
+                guides: [
+                    { text: "Change the number of days to change the period. Each track is a kind: _Activations_, _Assignments_, _Settings_, _Outside PIM_ and, once you switch it on, _System_" },
+                    { text: "In *Events*, drag across a track to select a stretch. *No activation* ignores the selection" },
+                    { text: "In *Events*, select a point to open its action" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "views",
+                target: "audit-view",
+                title: "Events and No activation",
+                description: "*Events* lists audit actions. *No activation* shows each assignment and whether it was activated in the period.",
+                icon: "view-list",
+                guides: [
+                    { text: "An active assignment does not activate, so only an eligible one can read _None in this period_" },
+                    { text: "That is about this window, not proof that a role is unused or can be removed" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "filters",
+                target: "audit-filters",
+                title: "Search and filters",
+                description: "*Filters* holds who has the role, the environment and *Privileged only*; search finds a person, role or group. Both work in both views.",
+                icon: "filter",
+                guides: [
+                    { text: "Only in *Events* you also filter by kind, on failed or denied, and with the timeline selection" },
+                    { text: "In *Events*, *Show more details* adds fields when the log has them; a setting can have it on for every page" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "export",
+                target: "audit-export",
+                title: "Export this view",
+                description: "*Export* saves the current view as CSV, JSON or PDF. Under *Include* you choose _Entra roles_, _PIM for Groups_ or both.",
+                icon: "export",
+                guides: [
+                    { text: "The period and filters apply, and every kept field is included even when details are off" },
+                    { text: "*Replace names* also leaves out free text and ticket, but role and group names stay" },
+                    { text: "Next: use the Report to review the assignments behind an event" },
                 ],
                 tooltipPosition: "bottom",
             },
@@ -586,8 +647,8 @@ export const TOURS: readonly TourDefinition[] = [
                 icon: "scope",
                 guides: [
                     { text: "Pick a scope, and *Include inherited* also counts what is assigned above it" },
-                    { text: "Subscriptions of other tenants, through Azure Lighthouse, are counted and marked" },
-                    { text: "Pick all you can read, or one management group, subscription, resource group or resource. Switch Lighthouse off to leave those out" },
+                    { text: "Subscriptions of other tenants, through Azure Lighthouse, are counted by default" },
+                    { text: "Pick all you can read, or one management group, subscription, resource group or resource. Switch *Delegated subscriptions* off to leave those out" },
                 ],
                 tooltipPosition: "bottom",
             },
@@ -819,7 +880,7 @@ export const TOURS: readonly TourDefinition[] = [
                 icon: "filter",
                 guides: [
                     { text: "*Origin*: this scope, inherited from above, or all" },
-                    { text: "*Held by* also finds managed identities, foreign groups and deleted accounts" },
+                    { text: "*Who* also finds managed identities, foreign groups and deleted accounts" },
                     { text: "Everything is in the address. A link keeps the scope and the filters" },
                 ],
                 tooltipPosition: "bottom",
@@ -847,7 +908,7 @@ export const TOURS: readonly TourDefinition[] = [
                 guides: [
                     { text: "_Inherited_ means assigned on a scope above. Change it where it is assigned" },
                     { text: "A row on another scope has its own *Settings*, because settings do not inherit" },
-                    { text: "Hover or focus a tag for what it means" },
+                    { text: "Hover or focus a tag for what it means. Click a name to open the person, group or app in the Entra admin center" },
                 ],
                 tooltipPosition: "left",
             },
@@ -860,6 +921,80 @@ export const TOURS: readonly TourDefinition[] = [
                 guides: [
                     { text: "Apply the current scope and filter, or replace names with Person 1, 2 and so on" },
                     { text: "Next: under *Filters*, set *Ends* to _Permanent_ and *Level* to _Subscription_ or above" },
+                ],
+                tooltipPosition: "bottom",
+            },
+        ],
+    },
+    {
+        id: "azure-audit",
+        product: "azure",
+        section: "Audit",
+        label: "Audit",
+        page: "/azure/audit",
+        steps: [
+            {
+                id: "timeline",
+                target: "audit-timeline",
+                title: "The period and the timeline",
+                description: "The timeline shows what happened on the scopes you can read, from the Azure activity log and PIM requests: up to 90 days, 30 when you open the page, or longer with a workspace chosen in Settings. The coverage line says which logs were read and when.",
+                icon: "log",
+                guides: [
+                    { text: "Change the number of days to change the period. A shorter period filters what was read, so it does not read again" },
+                    { text: "Each track is a kind: _Activations_, _Assignments_, _Settings_, _Outside PIM_ and, once you switch it on, _System_" },
+                    { text: "In *Events*, drag across a track to select a stretch, or select a point to open its action. *No activation* ignores the selection" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "scope",
+                target: "azure-scope",
+                title: "The scope decides what is shown",
+                description: "Events are shown for the chosen scope and what is below it, as on the dashboard.",
+                icon: "scope",
+                guides: [
+                    { text: "Choose a scope and *Include inherited* also shows events on the scopes above it" },
+                    { text: "Subscriptions of other tenants, through Azure Lighthouse, are shown by default. Switch *Delegated subscriptions* off to leave them out" },
+                    { text: "Azure leaves out what your roles cannot see, so an empty list does not prove that nothing happened" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "filters",
+                target: "audit-filters",
+                title: "Search and filters",
+                description: "*Filters* holds who has the role, the level of the scope and *Privileged only*; search finds a person, role or scope. Both work in both views.",
+                icon: "filter",
+                guides: [
+                    { text: "*Scope level* shows only what is on a _Management group_, _Subscription_, _Resource group_ or _Resource_" },
+                    { text: "*Privileged only* keeps the roles Microsoft lists as privileged and every role that can change access" },
+                    { text: "Only in *Events* you also filter by kind, on failed or denied, and with the timeline selection" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "views",
+                target: "audit-view",
+                title: "Events and No activation",
+                description: "*Events* lists what happened. *No activation* shows each assignment and whether it was activated in the period.",
+                icon: "view-list",
+                guides: [
+                    { text: "_None in this period_ is about this window, not proof that a role is unused or can be removed" },
+                    { text: "*No activation* looks through groups: one row per member. A group that holds a role actively needs the Entra audit log; in a period longer than that log reaches, the row says _Not judged_" },
+                    { text: "In *Events*, *Show more details* adds _Used for_, _Requested duration_, _Scope level_ and _Source_ when the log has them, and does not change counts" },
+                ],
+                tooltipPosition: "bottom",
+            },
+            {
+                id: "export",
+                target: "audit-export",
+                title: "Export this view",
+                description: "*Export* saves the current view as CSV, JSON or PDF.",
+                icon: "export",
+                guides: [
+                    { text: "The period, the filters and the scope bar apply. The file adds _Scope level_ and says which subscriptions could not be read" },
+                    { text: "*Replace names* also leaves out free text, ticket, and the scope and subscription ids, but role and group names stay" },
+                    { text: "Next: use the Report to review the assignments behind an event" },
                 ],
                 tooltipPosition: "bottom",
             },

@@ -1,6 +1,6 @@
 # PIM Manager
 
-> Open-source (GPLv3) web app that shows who holds which Microsoft Entra ID admin role, and under which Privileged Identity Management (PIM) policy, and changes those policies and assignments in bulk: a dashboard, a report and a Configure page. It runs entirely in the browser and calls Microsoft Graph with the signed-in user's own token. There is no backend and no agent.
+> Admin role management for Microsoft Entra and Azure. Open-source (GPLv3) web app that shows who holds which admin role, and under which Privileged Identity Management (PIM) policy, and for Entra changes those policies and assignments in bulk: a dashboard, a report, a Configure page and an Audit page. It runs entirely in the browser and calls Microsoft Graph with the signed-in user's own token. There is no backend and no agent.
 
 PIM Manager shows every directory role and PIM group with its assignments and policy side by side, which the Entra admin center shows one role at a time. Changes are reviewed first: the review runs checks and a validation-only dry run, an apply saves a snapshot, and the last ten applies can be undone.
 
@@ -8,6 +8,11 @@ PIM Manager shows every directory role and PIM group with its assignments and po
 
 - Users, guests (accounts from another organisation), apps and managed identities (service principals), groups, and AI agents (Microsoft Entra Agent ID: agent identities, their user accounts and blueprints).
 - Each assignment is labelled by type and shown as eligible, active (time-bound) or permanent, direct or through a group, tenant-wide or scoped to an administrative unit.
+
+## Audit
+
+- Entra role and PIM for Groups activations, assignment and settings changes, and role changes outside PIM, for up to 30 days from the Entra audit log, and longer from Log Analytics workspaces the user chooses, read in the browser. One timeline, and an export to CSV, JSON or PDF. Reading needs the optional AuditLog.Read.All permission and the Reports Reader, Security Reader or Security Administrator role.
+- Azure: activations, assignments, role settings changes and changes outside PIM on the Azure scopes the user can read, from the Azure activity log and the PIM requests for up to 90 days, and up to a year from chosen Log Analytics workspaces. No extra permission: the user's Azure roles decide what shows, and the page names what it could not read.
 
 ## Admin posture it points out
 
@@ -24,12 +29,12 @@ PIM Manager shows every directory role and PIM group with its assignments and po
 - PIM for Groups: available. Member and owner assignments on PIM-onboarded groups.
 - Role-assignable groups: available. Groups that can hold Entra roles but are not under PIM yet.
 - Security alerts: available. Microsoft's PIM alerts with the accounts involved.
-- Azure resource roles: available. Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources, through Azure Resource Manager (a separate API from Microsoft Graph). Read only in this version: an Azure Report and an Azure dashboard. Configure for Azure comes in a later version.
+- Azure resource roles: available. Azure RBAC role eligibility and assignments on management groups, subscriptions, resource groups and resources, through Azure Resource Manager (a separate API from Microsoft Graph). Read only in this version: an Azure Report, an Azure dashboard and Azure Audit. Configure for Azure comes in a later version.
 
 ## Key facts
 
 - Client-side only: tenant data, tokens and Graph responses stay in the user's browser session.
-- Least privilege: sign-in asks for read permissions only; write permissions are requested per workload when the user chooses to grant them in Configure. An admin consents once per tenant. Azure asks for one extra read permission (Azure Resource Manager, `https://management.azure.com/user_impersonation`) when the user chooses Turn on Azure, not at sign-in.
+- Least privilege: sign-in asks for read permissions only; write permissions are requested per workload when the user chooses to grant them in Configure. The Audit page asks for one optional read permission, AuditLog.Read.All, when the user chooses to grant it, and one more for Log Analytics when the user chooses a workspace. An admin consents once per tenant. Azure asks for one extra read permission (Azure Resource Manager, `https://management.azure.com/user_impersonation`) when the user chooses Turn on Azure, not at sign-in.
 - Hosted at https://pimmanager.com, or self-hosted on Azure Static Web Apps (free tier) with the user's own app registration.
 - Live demo on a fictional tenant (Contoso), no sign-in and nothing sent to Microsoft: https://pimmanager.com/demo
 - Author: Joël Prins.

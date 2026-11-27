@@ -133,7 +133,8 @@ export function parseAccessModelCatalog(raw: unknown): CatalogParseResult {
         .map((a) => ({
             slug: a.slug as string,
             ...(typeof a.description === "string" ? { description: a.description } : {}),
-            ...(typeof a.requireState === "string" ? { requireState: a.requireState } : {}),
+            // Only "enabled" is kept: a match by policy must rest on a policy that is enforced, whatever the catalog says (audit run-4)
+            ...(typeof a.requireState === "string" && a.requireState.toLowerCase() === "enabled" ? { requireState: "enabled" } : {}),
             ...(typeof a.requireAuthStrengthId === "string" ? { requireAuthStrengthId: a.requireAuthStrengthId } : {}),
             ...(typeof a.requireSignInFrequencyEveryTime === "boolean" ? { requireSignInFrequencyEveryTime: a.requireSignInFrequencyEveryTime } : {}),
             ...(typeof a.requireCompliantDevice === "boolean" ? { requireCompliantDevice: a.requireCompliantDevice } : {}),
@@ -311,7 +312,8 @@ export interface ConditionalAccessPolicyLike {
 
 /** Whether one policy meets every requirement the label states; a requirement the label does not state is not checked */
 export function policyMeetsLabel(policy: ConditionalAccessPolicyLike, label: CatalogAuthContext): boolean {
-    if ((policy.state ?? "").toLowerCase() !== (label.requireState ?? "enabled").toLowerCase()) return false;
+    // Always an enabled policy: a disabled or report-only policy enforces nothing, so it never backs a label (audit run-4)
+    if ((policy.state ?? "").toLowerCase() !== "enabled") return false;
     if (label.requireAuthStrengthId && (policy.grantControls?.authenticationStrength?.id ?? "").toLowerCase() !== label.requireAuthStrengthId.toLowerCase()) return false;
     if (label.requireSignInFrequencyEveryTime === true) {
         const sif = policy.sessionControls?.signInFrequency;

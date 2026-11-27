@@ -3,6 +3,7 @@ import type { PrincipalRef } from "@/types/configure.types";
 import type { PrincipalIndex } from "@/utils/importAssignments";
 import { Logger } from "@/utils/logger";
 import { getErrorCode, getErrorStatusCode } from "@/utils/errorUtils";
+import { isEmptySingleIdAnswer } from "@/utils/graphIdFilter";
 import { escapeODataString } from "@/utils/odataUtils";
 import { runWorkerPool } from "@/utils/workerPool";
 import { graphRateLimiter } from "@/utils/rateLimiter";
@@ -122,6 +123,8 @@ export async function lookupPrincipals(client: Client, { ids, upns }: { ids: rea
                 try {
                     return { kind: "found", items: await readChunk(client, path, filter, path === "/users" ? SELECT : path === "/groups" ? "id,displayName,isAssignableToRole" : "id,displayName") };
                 } catch (error: unknown) {
+                    // One id that this collection does not have answers 404 (measured 2026-11-24): nobody here, not a failure
+                    if (isEmptySingleIdAnswer(error, chunk.length)) return { kind: "found", items: [] };
                     // A group or application read can be refused without the permission (403): those people stay unknown; anything else failed
                     if (path !== "/users" && getErrorStatusCode(error) === 403) {
                         Logger.warn("principalLookup", `The read of ${path} was refused; ${chunk.length} id(s) stay unknown: ${describeError(error)}`);

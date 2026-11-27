@@ -52,8 +52,11 @@ const loginRequest = {
 - `PrivilegedAccess.Read.AzureADGroup` - PIM for Groups
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
+- `AuditLog.Read.All` - Audit-pagina, gevraagd wanneer je ervoor kiest; een beheerder moet hem eenmalig voor je tenant goedkeuren. Het log lezen vraagt ook Reports Reader, Security Reader of Security Administrator
 - `PrivilegedAccess-CustomExt.Read.All` - Lijst van PIM custom extensions (Preview); lezen welke extension een beleid koppelt vraagt geen extra scope
 - `Policy.Read.All` - De optionele Conditional Access-check van Configureren, op verzoek gevraagd (vraagt ook een rol die Conditional Access mag lezen)
+- `https://api.loganalytics.io/Data.Read` - Audit-pagina, uit Log Analytics-workspaces die je in Settings kiest; alleen gevraagd wanneer je er een kiest (vraagt ook leesrecht op elke workspace)
+- `https://management.azure.com/user_impersonation` (Azure Resource Manager) - de Azure-omgeving, gevraagd met een consentpopup wanneer je Azure aanzet
 
 **Standaard Read-Only:** Geen write scopes in de core inlogaanvraag. Schrijfmachtigingen worden via incremental consent aangevraagd wanneer de gebruiker in Configure kiest voor Grant permission, per workload:
 - Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
@@ -104,7 +107,7 @@ cache: {
 
 **Wat wordt Opgeslagen:**
 - **sessionStorage**: Access tokens, refresh tokens, ID tokens, de geladen Graph-data (cache van 60 minuten)
-- **localStorage**: Alleen UI voorkeuren (theme, log level, workload zichtbaarheid)
+- **localStorage**: Alleen UI voorkeuren (theme, log level, workload zichtbaarheid, en op de Audit-pagina je exportkeuze en of je de banner per tenant hebt weggeklikt: de sleutel bevat de tenant-ID, de waarde is alleen `1`, en niets uit het auditlog)
 - **De ene uitzondering, begrensd door de sessie**: Last applies van Configure (de laatste tien applies met hun snapshot, met weergavenamen) staan in localStorage zodat Undo een herlaad overleeft; uitloggen wist ze samen met het mandje en de undo-status (besluit van 2026-10-08)
 
 ### Token Levenscyclus
@@ -413,7 +416,7 @@ Content-Security-Policy:
   script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
   style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.loganalytics.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -426,6 +429,8 @@ Content-Security-Policy:
 > `https://pimmonitor.com` in `connect-src` laat Configure de openbare access model-catalogus van PIM Monitor lezen (`/catalog/v1/eam-catalog.json`). Het verzoek is een gewone GET zonder credentials en bevat geen tenantgegevens; als de host geblokkeerd is, gebruikt de app de kopie die met de app wordt meegeleverd.
 
 > `https://management.azure.com` in `connect-src` is Azure Resource Manager, voor de Azure-omgeving (PIM voor Azure-resources). De app roept het aan met het eigen token van de aangemelde gebruiker (de gedelegeerde scope `user_impersonation`, één keer gevraagd met een consent-popup), dus wat terugkomt volgt de Azure-rollen van de gebruiker. Er gaat geen tenantdata ergens anders heen.
+
+> `https://api.loganalytics.azure.com` in `connect-src` is de Log Analytics query-API, voor de optionele Log Analytics workspace-bron van de Audit-pagina. De app roept het aan met het eigen token van de aangemelde gebruiker (de gedelegeerde scope `https://api.loganalytics.io/Data.Read`, alleen gevraagd wanneer je in Instellingen workspaces kiest) en stuurt een vaste query voor het auditlog; er gaat niets naar anderen.
 
 **Aanvullende Headers:**
 ```

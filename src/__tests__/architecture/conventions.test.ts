@@ -84,11 +84,33 @@ describe("conventions: code patterns", () => {
 
   it("C2: worker pool delays are at least 200 ms", () => {
     const violations: string[] = [];
-    for (const { full, rel } of FILES) {
-      codeLines(readFileSync(full, "utf8")).forEach((line, i) => {
-        const match = line.match(/\bdelayMs\s*[:=]\s*(\d+)\b/);
-        if (match && Number(match[1]) < 200 && rel !== "utils/workerPool.ts") {
-          violations.push(`C2 ${rel}:${i + 1} (delayMs ${match[1]})`);
+    const CONSTANT = /\b(export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*(?::\s*number\s*)?=\s*(\d[\d_]*)\s*;/;
+    const numberOf = (text: string) => Number(text.replace(/_/g, ""));
+    // A delay named by a constant (`const DELAY_MS = 100`) is checked by its value: one of the same file first, else an
+    // exported one of another file (`POLICY_DELAY_MS`, passed on as an argument)
+    const exported = new Map<string, number>();
+    const parsed = FILES.map(({ full, rel }) => ({ rel, lines: codeLines(readFileSync(full, "utf8")) }));
+    for (const { lines } of parsed) {
+      for (const line of lines) {
+        const c = line.match(CONSTANT);
+        if (c?.[1]) exported.set(c[2], numberOf(c[3]));
+      }
+    }
+    for (const { rel, lines } of parsed) {
+      const local = new Map<string, number>();
+      for (const line of lines) {
+        const c = line.match(CONSTANT);
+        if (c) local.set(c[2], numberOf(c[3]));
+      }
+      lines.forEach((line, i) => {
+        if (rel === "utils/workerPool.ts") return;
+        // `delayMs: 100`, `delayMs = 100` (a default parameter), `delayMs: DELAY_MS` and `delayMs ?? 100`
+        const named = line.match(/\bdelayMs\s*[:=]\s*(\d[\d_]*|[A-Z][A-Z0-9_]*)\b/);
+        const fallback = line.match(/\bdelayMs\s*\?\?\s*(\d[\d_]*|[A-Z][A-Z0-9_]*)\b/);
+        for (const match of [named, fallback]) {
+          if (!match) continue;
+          const value = /^\d/.test(match[1]) ? numberOf(match[1]) : (local.get(match[1]) ?? exported.get(match[1]));
+          if (value !== undefined && value < 200) violations.push(`C2 ${rel}:${i + 1} (delayMs ${match[1]} = ${value})`);
         }
       });
     }

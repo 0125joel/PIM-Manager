@@ -19,7 +19,7 @@ function scopesByLowerId(scopes: readonly AzureScope[]): Map<string, AzureScope>
 }
 
 /** True when the scope is the chosen scope or below it (the chosen scope is on its `parentId` chain) */
-function isAtOrBelow(scopeId: string, chosenKey: string, byId: ReadonlyMap<string, AzureScope>): boolean {
+export function isAtOrBelow(scopeId: string, chosenKey: string, byId: ReadonlyMap<string, AzureScope>): boolean {
     let key = scopeId.toLowerCase();
     const seen = new Set<string>();
     while (!seen.has(key)) {
@@ -90,18 +90,23 @@ export function azureScopePath(scopes: readonly AzureScope[], chosenScopeId: str
 }
 
 /**
- * True when a subscription in view is read only in part (`access` "partial"): the chosen scope is that subscription, lies
- * below it or holds it, and a delegated subscription counts only while delegated subscriptions are on.
+ * The subscriptions in view: the chosen scope is that subscription, lies below it or holds it, and a delegated
+ * subscription counts only while delegated subscriptions are on.
  */
-export function hasPartialInView(scopes: readonly AzureScope[], chosenScopeId: string | null, includeDelegated: boolean, homeTenantId: string | undefined): boolean {
+export function subscriptionsInView(scopes: readonly AzureScope[], chosenScopeId: string | null, includeDelegated: boolean, homeTenantId: string | undefined): AzureScope[] {
     const byId = scopesByLowerId(scopes);
     const chosenKey = chosenScopeId === null ? null : chosenScopeId.toLowerCase();
-    return scopes.some((s) => {
-        if (s.level !== "subscription" || s.access !== "partial") return false;
+    return scopes.filter((s) => {
+        if (s.level !== "subscription") return false;
         if (!includeDelegated && isDelegatedScope(s, homeTenantId)) return false;
         if (chosenKey === null) return true;
         return isAtOrBelow(s.id, chosenKey, byId) || isAtOrBelow(chosenKey, s.id.toLowerCase(), byId);
     });
+}
+
+/** True when a subscription in view is read only in part (`access` "partial") */
+export function hasPartialInView(scopes: readonly AzureScope[], chosenScopeId: string | null, includeDelegated: boolean, homeTenantId: string | undefined): boolean {
+    return subscriptionsInView(scopes, chosenScopeId, includeDelegated, homeTenantId).some((s) => s.access === "partial");
 }
 
 export interface AzureScopeCounts {

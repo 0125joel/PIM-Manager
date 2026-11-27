@@ -1,12 +1,16 @@
 import { isIsoDuration } from "@/utils/durationUtils";
 
-/** Spreadsheets run a cell that starts with these as a formula (CSV injection); a leading apostrophe makes it text. */
-const FORMULA_START = /^[=+\-@\t\r]/;
+/**
+ * Spreadsheets run a cell that starts with these as a formula (CSV injection); a leading apostrophe makes it text. Quotes and
+ * spaces before them are skipped, as after a boundary below: a reader can drop them.
+ */
+const FORMULA_START = /^[" ]*[=+\-@\t\r]/;
 /**
  * Excel with a semicolon list separator (nl-NL) starts a cell after ";", and a line break in a cell that does not start
- * the field starts a new row there, so the text after either one can start a formula of its own
+ * the field starts a new row there, so the text after either one can start a formula of its own. Quotes and spaces in
+ * between are skipped: a reader can take a quote for the start of a quoted cell, and some trim the spaces.
  */
-const FORMULA_AFTER_BOUNDARY = /([;\r\n])(?=[=+\-@\t\r])/g;
+const FORMULA_AFTER_BOUNDARY = /([;\r\n][" ]*)(?=[=+\-@\t\r])/g;
 
 /** One CSV cell: formula defused (also after a ";" or a line break), quoted when it holds a comma, quote or line break (RFC 4180). */
 export function escapeCsvCell(value: string): string {
@@ -484,8 +488,8 @@ export function parseCsvText(text: string, delimiter: CsvDelimiter = ","): strin
     return parseCsvRecords(text, delimiter).map((r) => r.cells);
 }
 
-/** `escapeCsvCell` puts an apostrophe before = + - @ tab and CR at the start and after a ";"; reading takes it off again */
-const unescapeCell = (cell: string): string => (/^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell).replace(/([;\r\n])'(?=[=+\-@\t\r])/g, "$1");
+/** `escapeCsvCell` puts an apostrophe before = + - @ tab and CR at the start (also behind quotes and spaces) and after a ";" or a line break, also behind quotes and spaces; reading takes it off again */
+const unescapeCell = (cell: string): string => (/^'[" ]*[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell).replace(/([;\r\n][" ]*)'(?=[=+\-@\t\r])/g, "$1");
 
 export interface CsvReadError {
     /** 1 is the header row */

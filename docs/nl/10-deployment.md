@@ -139,6 +139,8 @@ Verleen de volgende **Gedelegeerde** machtigingen (geen Toepassingsmachtigingen,
 
 Verleen beheerderstoestemming voor je organisatie na het toevoegen van de machtigingen.
 
-> Aanvullende machtigingen voor PIM-groepen, beveiligingswaarschuwingen en configuratiefuncties worden incrementeel aangevraagd via toestemmingspop-ups wanneer de gebruiker die functies inschakelt. Ze hoeven hier niet vooraf te worden geconfigureerd.
+> Aanvullende machtigingen voor PIM-groepen, beveiligingswaarschuwingen, Audit en configuratiefuncties worden incrementeel aangevraagd via toestemmingspop-ups wanneer de gebruiker die functies inschakelt. Ze hoeven hier niet vooraf te worden geconfigureerd.
 
 > Het Azure-dashboard en het Azure-rapport hebben de gedelegeerde machtiging **Azure Service Management** › `user_impersonation` nodig. Die wordt aangevraagd wanneer een gebruiker Turn on Azure kiest. In een tenant waar gebruikers zelf geen toestemming mogen geven, voeg je hem hier toe en verleen je beheerderstoestemming, zodat gebruikers geen goedkeuring van een beheerder nodig hebben.
+
+> Audit op Entra heeft de gedelegeerde Microsoft Graph-machtiging `AuditLog.Read.All` nodig, die altijd beheerderstoestemming vraagt: voeg hem hier toe en verleen beheerderstoestemming, of laat een beheerder hem de eerste keer toestaan vanaf de Audit-pagina. Log Analytics-workspaces voor Audit hebben de gedelegeerde machtiging **Log Analytics API** › `Data.Read` nodig, die wordt aangevraagd wanneer een gebruiker een workspace kiest in Settings. In een tenant waar gebruikers zelf geen toestemming mogen geven, voeg je hem hier toe (APIs my organization uses) en verleen je beheerderstoestemming.

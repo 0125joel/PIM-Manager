@@ -1,5 +1,6 @@
 "use client";
 
+import { PortalLink } from "@/components/ui/PortalLink";
 import { Tag } from "@/components/ui/Tag";
 import { AZURE_TERMS } from "@/config/help/azureReportTerms";
 import { useIsDetailed } from "@/contexts/DetailsContext";
@@ -8,6 +9,7 @@ import { cardFactLine, type AzureAssignmentRow } from "@/utils/azureReport";
 import { azureAssignmentTags } from "@/utils/azureAssignmentTags";
 import { isAzureTagShown } from "@/utils/calmTags";
 import { formatDate } from "@/utils/dateFormat";
+import { getAzurePrincipalUrl } from "@/utils/portalLinks";
 
 interface AssignmentCardsProps {
     rows: AzureAssignmentRow[];
@@ -17,10 +19,12 @@ interface AssignmentCardsProps {
     onOpenRole?: (assignment: AzureAssignment) => void;
     /** Graph servicePrincipalType by lowercase object id, for the managed identity tag */
     spTypes?: ReadonlyMap<string, string> | null;
+    /** Graph appId by lowercase object id, for the Entra link of an app */
+    spAppIds?: ReadonlyMap<string, string> | null;
 }
 
 /** The assignments as cards, below 640 px. */
-export function AssignmentCards({ rows, emergencyAccountIds, onOpenRole, spTypes }: AssignmentCardsProps) {
+export function AssignmentCards({ rows, emergencyAccountIds, onOpenRole, spTypes, spAppIds }: AssignmentCardsProps) {
     const isDetailed = useIsDetailed();
     return (
         <ul className="flex flex-col gap-3 sm:hidden">
@@ -33,7 +37,10 @@ export function AssignmentCards({ rows, emergencyAccountIds, onOpenRole, spTypes
                             <span className="flex-1 text-[15px] font-semibold text-ink">{row.assignment.roleName}</span>
                         )}
                     </div>
-                    <p className="mt-1 text-[13px] text-body">{`${row.assignment.principalName} (${row.assignment.principalUpn ?? row.principalTypeLabel})`}</p>
+                    <p className="mt-1 text-[13px] text-body">
+                        <PortalLink portal="Entra admin center" className="text-body" isInline href={getAzurePrincipalUrl(row.assignment.principalType, row.assignment.principalId, spTypes, spAppIds)}>{row.assignment.principalName}</PortalLink>
+                        {` (${row.assignment.principalUpn ?? row.principalTypeLabel})`}
+                    </p>
                     <div className="mt-2 flex flex-wrap gap-1">
                         {azureAssignmentTags(row.assignment, emergencyAccountIds, formatDate, spTypes).filter((tag) => isAzureTagShown(tag.term, isDetailed, { keepAssignmentState: true })).map((tag) => (
                             <Tag key={tag.label} tip={tag.term ? AZURE_TERMS[tag.term].text : undefined} variant={tag.variant} icon={tag.icon}>{tag.label}</Tag>

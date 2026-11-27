@@ -35,7 +35,7 @@ export function AssignmentRows({ rows, unchecked, filter, onFilter, onToggle, on
     const changeCount = rows.filter((r) => isSelectable(r) && !unchecked.has(r.line)).length;
 
     return (
-        <section aria-labelledby={`${id}-title`} className="rounded border border-line bg-surface">
+        <section aria-labelledby={`${id}-title`} data-visual-section="import-rows" className="rounded border border-line bg-surface">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-3 p-4 sm:px-5">
                 <h2 id={`${id}-title`} className="text-sm font-semibold text-ink">Check the rows</h2>
                 <p className="text-xs text-body">{`${plural(rows.length, "row", "rows")} read · line numbers as in the file`}</p>
@@ -98,6 +98,7 @@ export function AssignmentRows({ rows, unchecked, filter, onFilter, onToggle, on
                                     <td className="py-3 pr-3 text-body tabular-nums">{row.line}</td>
                                     <td className="py-3 pr-3">
                                         <span className="block font-semibold text-ink">{row.who}</span>
+                                        {row.whoDetail && <span className={`block break-all text-body ${row.whoDetail.includes("@") ? "text-xs" : "font-mono text-[11px]"}`}>{row.whoDetail}</span>}
                                         <span className="block text-body">{row.action}</span>
                                     </td>
                                     <td className="py-3 pr-3">

@@ -19,10 +19,12 @@ interface AzureRoleDetailContainerProps {
     emergencyAccountIds: ReadonlySet<string>;
     /** Graph servicePrincipalType by lowercase object id, for the managed identity tag */
     spTypes?: ReadonlyMap<string, string> | null;
+    /** Graph appId by lowercase object id, for the Entra link of an app */
+    spAppIds?: ReadonlyMap<string, string> | null;
 }
 
 /** Reads the description and the role settings at the selected scope, then renders the role detail (Azure spec 15.2). */
-export function AzureRoleDetailContainer({ detail, scope, isHiddenByFilter, getShareUrl, tab, onTabChange, onOpenSettings, emergencyAccountIds, spTypes }: AzureRoleDetailContainerProps) {
+export function AzureRoleDetailContainer({ detail, scope, isHiddenByFilter, getShareUrl, tab, onTabChange, onOpenSettings, emergencyAccountIds, spTypes, spAppIds }: AzureRoleDetailContainerProps) {
     const { description } = useAzureRoleDefinition({ scopeId: scope.id, roleDefinitionId: detail.id });
     const { state: policyState, retry } = useAzureRolePolicy({ scopeId: scope.id, roleDefinitionId: detail.id });
     return (
@@ -39,6 +41,7 @@ export function AzureRoleDetailContainer({ detail, scope, isHiddenByFilter, getS
             getShareUrl={getShareUrl}
             onOpenSettings={onOpenSettings}
             spTypes={spTypes}
+            spAppIds={spAppIds}
         />
     );
 }

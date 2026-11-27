@@ -4,7 +4,7 @@
 
 Please do not open a public GitHub issue for a security problem.
 
-Send the report by email to **joel@prins.in** with the subject `PIM Manager security`. Include:
+Send the report as a private message on LinkedIn to [Joël Prins](https://www.linkedin.com/in/jo%C3%ABl-prins/), starting the message with `PIM Manager security`. Include:
 
 - a description of the problem and its impact
 - the steps to reproduce it, and the version you use

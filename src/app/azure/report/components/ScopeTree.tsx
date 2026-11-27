@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Tag } from "@/components/ui/Tag";
 import { getNextIndex } from "@/utils/rovingFocus";
-import { scopeIconFor } from "@/utils/azureResourceIcons";
+import { scopeIconFor, scopeLevelLabel } from "@/utils/azureResourceIcons";
 import type { ScopeTreeRow } from "@/utils/azureReport";
 import { isDelegatedScope } from "@/utils/azureReportStates";
 import { AZURE_TERMS } from "@/config/help/azureReportTerms";
@@ -55,7 +55,10 @@ export function ScopeTree({ rows, selectedId, onSelect, homeTenantId }: ScopeTre
                                 onClick={() => onSelect(row.scope.id)}
                                 className={classes}
                             >
-                                <Icon name={scopeIconFor(row.scope)} size={16} />
+                                <span title={scopeLevelLabel(row.scope)} className="inline-flex">
+                                    <Icon name={scopeIconFor(row.scope)} size={16} />
+                                    <span className="sr-only">{scopeLevelLabel(row.scope)}</span>
+                                </span>
                                 {/* The tags wrap to a second line when the name needs the room, so a scope name is not cut for a tag */}
                                 <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                                     <span className="min-w-0 truncate">{row.scope.name}</span>

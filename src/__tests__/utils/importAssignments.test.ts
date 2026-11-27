@@ -262,6 +262,62 @@ describe("round trip: the files the Report exports, imported into the same tenan
     });
 });
 
+describe("a row with both Principal ID and Principal UPN (audit run-4: look-alike principal)", () => {
+    // Two users with the same display name: the file names Alice's UPN next to Mallory's object id
+    const alice: PrincipalRef = { id: "aaaaaaaa-0000-4000-8000-00000000000a", kind: "user", displayName: "Alice Admin", userPrincipalName: "alice@contoso.test" };
+    const mallory: PrincipalRef = { id: "bbbbbbbb-0000-4000-8000-00000000000b", kind: "user", displayName: "Alice Admin", userPrincipalName: "mallory@contoso.test" };
+    const both: AssignmentCheckInput["principals"] = {
+        byId: new Map([[alice.id, alice], [mallory.id, mallory]]),
+        byUpn: new Map([["alice@contoso.test", alice], ["mallory@contoso.test", mallory]]),
+    };
+    const row = (id: string, upn: string) => `${ROLE_HEAD}\nrole-pra,${id},${upn},eligible,add,,2027-04-01T00:00:00Z,,`;
+
+    it("refuses a row whose UPN names another person than its ID", () => {
+        const [r] = check("role", row(mallory.id, "alice@contoso.test"), { principals: both });
+        expect(r.result).toBe("error");
+        expect(r.message).toBe("Principal ID and Principal UPN are different people. Keep one of them.");
+        expect(r.change).toBeNull();
+    });
+
+    it("accepts both cells when they name the same person, whatever the case of the UPN", () => {
+        const [r] = check("role", row(alice.id, "ALICE@Contoso.test"), { principals: both });
+        expect(r.result).toBe("new");
+        expect(r.change).toMatchObject({ principal: { id: alice.id } });
+    });
+
+    it("ties a UPN to an ID through the lookup when the principal was read without its UPN", () => {
+        const bare: PrincipalRef = { id: alice.id, kind: "user", displayName: "Alice Admin" };
+        const index = { byId: new Map([[alice.id, bare]]), byUpn: new Map([["alice@contoso.test", alice]]) };
+        expect(check("role", row(alice.id, "alice@contoso.test"), { principals: index })[0].result).toBe("new");
+        const other = { byId: new Map([[alice.id, bare]]), byUpn: new Map([["alice@contoso.test", mallory]]) };
+        expect(check("role", row(alice.id, "alice@contoso.test"), { principals: other })[0].result).toBe("error");
+        // Nobody found for the UPN: the two cells cannot be shown to be one person
+        const noUpn = { byId: new Map([[alice.id, bare]]), byUpn: new Map<string, PrincipalRef>() };
+        expect(check("role", row(alice.id, "alice@contoso.test"), { principals: noUpn })[0].result).toBe("error");
+    });
+
+    it("refuses a UPN next to the ID of a group, which has no UPN", () => {
+        const group: PrincipalRef = { id: "cccccccc-0000-4000-8000-00000000000c", kind: "group", displayName: "Alice Admin", isAssignableToRole: true };
+        const index = { byId: new Map([[group.id, group]]), byUpn: new Map([["alice@contoso.test", alice]]) };
+        expect(check("role", row(group.id, "alice@contoso.test"), { principals: index })[0].result).toBe("error");
+    });
+
+    it("keeps one cell working as before, and names the resolved person by UPN or object id", () => {
+        const [byId] = check("role", row(mallory.id, ""), { principals: both });
+        expect(byId).toMatchObject({ result: "new", who: "Alice Admin", whoDetail: "mallory@contoso.test" });
+        const [byUpn] = check("role", row("", "alice@contoso.test"), { principals: both });
+        expect(byUpn).toMatchObject({ result: "new", whoDetail: "alice@contoso.test" });
+        const group: PrincipalRef = { id: "cccccccc-0000-4000-8000-00000000000c", kind: "group", displayName: "Ops", isAssignableToRole: true };
+        const [g] = check("role", row(group.id, ""), { principals: { byId: new Map([[group.id, group]]), byUpn: new Map() } });
+        expect(g.whoDetail).toBe(group.id);
+    });
+
+    it("asks Graph for a UPN that stands next to an ID, so the check can compare them", () => {
+        const file = readImportFile(row("3f2a91c4-7d1e-4b6a-9e0f-5c8d2a1b7e63", "someone@contoso.test"), "x.csv");
+        expect(neededLookups(file.csv!.rows, EMPTY_PRINCIPALS)).toEqual({ ids: ["3f2a91c4-7d1e-4b6a-9e0f-5c8d2a1b7e63"], upns: ["someone@contoso.test"] });
+    });
+});
+
 describe("a group on a directory role", () => {
     const GROUP_ROW = `${ROLE_HEAD}\nrole-pra,11111111-1111-1111-1111-111111111111,,eligible,add,,2027-04-01T00:00:00Z,,`;
     const withGroup = (group: PrincipalRef): AssignmentCheckInput["principals"] => ({ byId: new Map([[group.id, group]]), byUpn: new Map() });

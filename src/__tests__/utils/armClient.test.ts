@@ -167,3 +167,35 @@ describe("armClient: 429", () => {
         expect(graphBackOff).not.toHaveBeenCalled();
     });
 });
+
+describe("armClient: list options", () => {
+    const next = (token: string) => `https://management.azure.com${INSTANCES}?api-version=2020-10-01&$skipToken=${token}`;
+    const endless = () => ({ match: () => true, respond: () => ({ body: { value: [1], nextLink: next("more") } }) });
+
+    it("goes on past 50 pages with a higher maxPages, and throws past that one", async () => {
+        const arm = createRecordingArmClient([endless()]);
+        await expect(arm.client.getAll(INSTANCES, "2020-10-01", undefined, { maxPages: 80 })).rejects.toThrow(/more than 80 pages/);
+        expect(arm.requests).toHaveLength(80);
+    });
+
+    it("gets each page through onPage and returns an empty list", async () => {
+        const pages: Record<string, { value: string[]; nextLink?: string }> = { "": { value: ["a", "b"], nextLink: next("p2") }, p2: { value: ["c"] } };
+        const arm = createRecordingArmClient([{ match: () => true, respond: (r) => ({ body: pages[r.query.$skipToken ?? ""] }) }]);
+        const seen: string[][] = [];
+        await expect(arm.client.getAll<string>(INSTANCES, "2020-10-01", undefined, { onPage: (items) => seen.push(items) })).resolves.toEqual([]);
+        expect(seen).toEqual([["a", "b"], ["c"]]);
+    });
+
+    it("goes on after an empty page that has a nextLink", async () => {
+        const pages: Record<string, { value: string[]; nextLink?: string }> = { "": { value: [], nextLink: next("p2") }, p2: { value: ["c"] } };
+        const arm = createRecordingArmClient([{ match: () => true, respond: (r) => ({ body: pages[r.query.$skipToken ?? ""] }) }]);
+        await expect(arm.client.getAll<string>(INSTANCES, "2020-10-01")).resolves.toEqual(["c"]);
+        expect(arm.requests).toHaveLength(2);
+    });
+
+    it("keeps the behaviour and the 50 pages without options", async () => {
+        const arm = createRecordingArmClient([endless()]);
+        await expect(arm.client.getAll(INSTANCES, "2020-10-01", undefined, {})).rejects.toThrow(/more than 50 pages/);
+        expect(arm.requests).toHaveLength(ARM_MAX_PAGES);
+    });
+});

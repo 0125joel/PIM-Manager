@@ -32,12 +32,16 @@ Features zijn sub-functionaliteiten die extra permissies vereisen bovenop de bas
 | Feature | Parent Workload | Vereiste Permissie |
 |---------|-----------------|---------------------|
 | **Security Alerts** | Directory Roles | `RoleManagementAlert.Read.Directory` |
+| **Audit log** | Geen, een eigen rij | `AuditLog.Read.All`, plus een leesrol om het log te lezen |
+| **Log Analytics** | Geen, een eigen rij | `https://api.loganalytics.io/Data.Read`, gevraagd wanneer je een workspace kiest |
 
 **Feature Kenmerken:**
-- Sub-items onder workloads op de Settings-pagina
+- Sub-items onder workloads op de Settings-pagina; het auditlog is een eigen rij
 - Onafhankelijke Enable/Hide/Show controls
 - Afzonderlijke localStorage persistentie (`pim_feature_enabled_[featureId]`)
 - Graceful degradation bij permission denied (403)
+
+**Log Analytics-workspace.** Eén keuze dient beide Audit-pagina's. Heb je workspaces gekozen, dan zegt elke workspace per log wat erin staat: het Entra audit log (`AuditLogs`) en het Azure activity log (`AzureActivity`), van wanneer tot wanneer, en bij Azure van hoeveel van de subscriptions die je kunt lezen. Een workspace zonder een van de logs waarschuwt alleen als geen enkele gekozen workspace dat log heeft, want de andere kunnen het opvangen. De merkjes **Receives Entra audit logs** en **Receives Azure activity logs** in de lijst helpen je alleen bij het kiezen. De controle op wat de workspace echt bevat, beslist.
 
 ## Hide vs. Disable
 
@@ -64,7 +68,7 @@ De chip bar op Dashboard biedt snelle toggles:
 
 ## Settings Modal Tabs
 
-De Settings-pagina heeft deze secties: Workloads en rechten, Weergave, Noodtoegangsaccounts en Geavanceerd. Weergave bevat het thema, de weergave waarin het dashboard en het Azure Report openen, en **Details**: met Fewer onthoudt elke pagina en weergave zijn eigen Show more details; met More toont elke pagina alles. Details wijzigen wist de onthouden keuzes. **Tours**: met On start de eerste keer dat je een onderdeel opent een korte tour; met Off start er geen vanzelf, en Start the tour in Help blijft werken. (De tabs van de vroegere modal waren:)
+De Settings-pagina heeft deze secties: Workloads en rechten, Log Analytics-workspace, Weergave, Noodtoegangsaccounts en Geavanceerd. Weergave bevat het thema, de weergave waarin het dashboard en het Azure Report openen, en **Details**: met Fewer onthoudt elke pagina en weergave zijn eigen Show more details; met More toont elke pagina alles. Details wijzigen wist de onthouden keuzes. **Tours**: met On start de eerste keer dat je een onderdeel opent een korte tour; met Off start er geen vanzelf, en Start the tour in Help blijft werken. (De tabs van de vroegere modal waren:)
 
 ### Workloads Tab
 

@@ -2,6 +2,7 @@
  * Derived fields of the Azure dashboard: what kind of principal an assignment has, whether a role is privileged, the
  * level of a scope and whether a subscription is delegated. Pure logic, no React, no service.
  */
+import { isGuestUpn } from "@/utils/holderKinds";
 import type { ArmRoleDefinition, ArmRolePermission, AzureAssignment, AzureScope } from "@/types/azureResource.types";
 import { isDelegatedScope, levelFromScopeId } from "@/utils/azureScopes";
 
@@ -23,7 +24,7 @@ export type AzurePrincipalKind = "user" | "guest" | "group" | "app" | "managedId
 export const DELETED_PRINCIPAL = "Deleted";
 
 export function isGuestAssignment(a: AzureAssignment): boolean {
-    return a.principalType === "User" && (a.principalUpn ?? "").toLowerCase().includes("#ext#");
+    return a.principalType === "User" && isGuestUpn(a.principalUpn);
 }
 
 /** The principal ids to look up in Graph, lowercase and distinct, by the collection that holds them */
@@ -137,7 +138,7 @@ export function isDelegatedAssignment(a: AzureAssignment, scopesById: ReadonlyMa
  * its scope is a strict ancestor found by walking `parentId` from the chosen scope. False without a chosen scope.
  * `scopesById` is keyed by lowercase scope id. `memberType` is not used: ARM reports it from the listing subscription.
  */
-export function isAboveChosenScope(a: AzureAssignment, chosenScopeId: string | null, scopesById: ReadonlyMap<string, AzureScope>): boolean {
+export function isAboveChosenScope(a: Pick<AzureAssignment, "scopeId">, chosenScopeId: string | null, scopesById: ReadonlyMap<string, AzureScope>): boolean {
     if (chosenScopeId === null) return false;
     const chosenKey = chosenScopeId.toLowerCase();
     const target = a.scopeId.toLowerCase();

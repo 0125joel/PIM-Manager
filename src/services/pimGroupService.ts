@@ -17,7 +17,7 @@ const COST_FULL_GROUP = 5;
 const COST_GROUP_REFRESH = 4;
 const COST_GROUP_MEMBER_COUNT = 3;
 import { Logger } from "@/utils/logger";
-import { getErrorStatusCode } from "@/utils/errorUtils";
+import { getErrorStatusCode, isAbortError } from "@/utils/errorUtils";
 import { isForbiddenRead } from "@/utils/policyReadAccess";
 
 /**
@@ -109,7 +109,7 @@ function detectGroupType(group: { groupTypes?: string[]; mailEnabled?: boolean; 
  * Fetch all PIM-onboarded groups using the privilegedAccess resources endpoint
  *
  * This is the CORRECT way to get PIM-enabled groups:
- * - Uses /beta/identityGovernance/privilegedAccess/group/resources
+ * - Uses /v1.0/identityGovernance/privilegedAccess/group/resources
  * - Returns ONLY groups that are actually configured in PIM (matches Entra portal)
  * - Matches exactly what the Entra admin center shows
  *
@@ -123,7 +123,8 @@ async function fetchPimOnboardedResources(client: Client): Promise<{ id: string;
     try {
         Logger.debug("PimGroupDataService", "Fetching PIM-onboarded groups via resources endpoint...");
 
-        // Use the beta endpoint that returns only PIM-onboarded groups
+        // v1.0 returns only PIM-onboarded groups. Measured 2026-11-14 (dev tenant, read only): v1.0 and beta give the
+        // same ids in the same order, and each object holds only `id`
         // NOTE: Don't use $select - groupResource type has limited properties
         const resources = await fetchAllPages<{
             id: string;           // Resource ID (same as group ID)
@@ -133,7 +134,7 @@ async function fetchPimOnboardedResources(client: Client): Promise<{ id: string;
             client,
             "/identityGovernance/privilegedAccess/group/resources",
             {
-                version: "beta"
+                version: "v1.0"
                 // No select - let API return all available properties
             }
         );
@@ -150,7 +151,7 @@ async function fetchPimOnboardedResources(client: Client): Promise<{ id: string;
         // Only an endpoint that does not exist falls back to the old method; a throttled or failed read must not
         // quietly change what "onboarded" means, so it fails the load (the pools above retry before it gets here)
         if (getErrorStatusCode(error) === 404) {
-            Logger.warn("PimGroupDataService", "Beta resources endpoint not found, falling back to role-assignable filter");
+            Logger.warn("PimGroupDataService", "Resources endpoint not found, falling back to role-assignable filter");
             return fetchRoleAssignableGroupsFallback(client);
         }
         throw error;
@@ -159,7 +160,7 @@ async function fetchPimOnboardedResources(client: Client): Promise<{ id: string;
 
 /**
  * Fallback: Fetch role-assignable groups (older method)
- * Used only if the beta resources endpoint is not available
+ * Used only if the resources endpoint is not available
  */
 async function fetchRoleAssignableGroupsFallback(client: Client): Promise<{ id: string; displayName: string }[]> {
     try {
@@ -548,8 +549,8 @@ async function fetchGroupInventory(client: Client): Promise<{ onboardedIds: stri
  * Main function: Fetch all PIM for Groups data
  * Returns aggregated data per group with all assignments
  *
- * Strategy (Using Beta Resources Endpoint):
- * 1. Get all PIM-onboarded groups via /beta/identityGovernance/privilegedAccess/group/resources
+ * Strategy (using the resources endpoint):
+ * 1. Get all PIM-onboarded groups via /v1.0/identityGovernance/privilegedAccess/group/resources
  *    - This returns ONLY groups that are actually configured in PIM (matches Entra portal)
  * 2. Use runWorkerPool to fetch eligibility + assignments in parallel
  * 3. Aggregate into PimGroupData objects
@@ -676,11 +677,33 @@ export async function refreshPimGroupAssignments(
                     }
 
                     // Graph has no delta for policies either: a setting changed in Entra only shows when it is read again
-                    const [eligibilityInstances, assignmentInstances, policyRead] = await Promise.all([
-                        fetchEligibilityInstancesForGroup(client, groupId),
-                        fetchAssignmentInstancesForGroup(client, groupId),
-                        fetchGroupPolicies(client, groupId)
-                    ]);
+                    let eligibilityInstances: GroupEligibilityScheduleInstance[];
+                    let assignmentInstances: GroupAssignmentScheduleInstance[];
+                    let policyRead: GroupPolicyRead;
+                    try {
+                        [eligibilityInstances, assignmentInstances, policyRead] = await Promise.all([
+                            fetchEligibilityInstancesForGroup(client, groupId),
+                            fetchAssignmentInstancesForGroup(client, groupId),
+                            fetchGroupPolicies(client, groupId)
+                        ]);
+                    } catch (error: unknown) {
+                        if (signal?.aborted || isAbortError(error)) throw error;
+                        // A group deleted moments ago is still listed in group/resources, and a user without an admin role
+                        // gets a 403 on its instances (measured 2026-11-24). Only a group that is gone (404) drops out;
+                        // any other failure stays a failure.
+                        // The details read is outside COST_GROUP_REFRESH, so it takes its own unit
+                        let gone = false;
+                        try {
+                            await graphRateLimiter.acquire(1, signal);
+                            gone = (await fetchGroupDetails(client, groupId)) === null;
+                        } catch (detailsError: unknown) {
+                            if (signal?.aborted || isAbortError(detailsError)) throw detailsError;
+                            gone = false;
+                        }
+                        if (!gone) throw error;
+                        Logger.info("pimGroup", `Group ${groupId} no longer exists, left out of the refresh`);
+                        return null;
+                    }
                     const assignments = buildGroupAssignments(eligibilityInstances, assignmentInstances);
 
                     return {
@@ -795,7 +818,7 @@ export async function fetchGroupPolicies(
     groupId: string
 ): Promise<GroupPolicyRead> {
     try {
-        // Use same endpoint structure as Directory Roles (pimApi.ts)
+        // The same endpoint as the Directory Roles policy read (directoryRoleService.ts), scoped to the group
         // v1.0 answers the query for scopeType 'Group' too (Learn, list roleManagementPolicyAssignments; tenant test T6 and 2026-10-16: same assignments and rules as beta)
         const response = await withRetry(
             () => client

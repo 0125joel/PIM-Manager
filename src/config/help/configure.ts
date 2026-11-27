@@ -51,7 +51,7 @@ export const CONFIGURE_HELP: HelpPage = {
             title: "Import",
             paragraphs: ["What can I import? lists every column of every file type, generated from the same definition the Report export uses, with a template to download. Excel files saved as CSV with semicolons are recognised too."],
             items: [
-                { label: "Assignments", text: "each row is New, Changes the end date, Will be removed, Already there, Not there any more or needs a fix. Activations and schedules through a group never count as already there." },
+                { label: "Assignments", text: "each row is New, Changes the end date, Will be removed, Already there, Not there any more or needs a fix. Activations and schedules through a group never count as already there. With both a Principal ID and a Principal UPN, they must be the same person." },
                 { label: "Settings", text: "each filled cell that differs from the tenant is one change; an empty cell keeps the current value. Require On Activation wins over the older MFA Required column." },
                 { label: "Access model file", text: "its expectedConfig per role or group becomes the same kind of changes, with a note where a label has no authentication context yet or the file takes the activation requirement down to None (Weaker than now)." },
                 { label: "Left alone", text: "values already in your changes from Edit or Guided are not replaced." },

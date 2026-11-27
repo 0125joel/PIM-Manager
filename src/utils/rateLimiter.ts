@@ -137,3 +137,10 @@ export const graphRateLimiter = new RateLimiter(DEFAULT_RU_BUDGET);
  * leaves room for the portal.
  */
 export const armRateLimiter = new RateLimiter(200, WINDOW_MS);
+
+/**
+ * Limiter for the Azure Activity Log reads of the Azure Audit page. The Activity Log documents 50 queries per 30 seconds,
+ * a budget of its own next to `armRateLimiter`: the log routes use a client made with `createArmClient(getToken, { limiter:
+ * activityLogRateLimiter })`, the other reads stay on the session client.
+ */
+export const activityLogRateLimiter = new RateLimiter(50, 30_000);

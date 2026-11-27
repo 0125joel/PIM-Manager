@@ -60,7 +60,7 @@ export function applyPolicyResult(
     }
 
     if (error) {
-        roles[index] = { ...roles[index], policy: null, configError: error };
+        roles[index] = { ...roles[index], policy: null, configError: error, policiesForbidden: undefined };
         return {
             data: roles,
             extras: { ...content.extras, failedRoleIds: failed.includes(roleId) ? failed : [...failed, roleId] },

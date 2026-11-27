@@ -9,7 +9,9 @@ import { AUTHOR, OG_IMAGE_ALT, OG_IMAGE_PATH, SITE_DESCRIPTION, SITE_KEYWORDS, S
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600"],
+  // Variable, not 400, 500 and 600: for single weights Google Fonts sometimes answers with /l/font?kit=…&skey=… URLs,
+  // which break next dev under Turbopack (2026-11-14). It is the same file, so nothing renders differently.
+  weight: "variable",
 });
 
 const plexMono = IBM_Plex_Mono({

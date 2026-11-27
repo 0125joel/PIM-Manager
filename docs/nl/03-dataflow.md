@@ -145,11 +145,11 @@ sequenceDiagram
 
 Voor **PIM voor Groepen** wordt een andere, geoptimaliseerde strategie gebruikt omdat de standaard API's traag kunnen zijn voor groepen.
 
-### 1. Discovery (Beta Endpoint)
+### 1. Discovery
 
 We gebruiken eerst een speciaal endpoints om _alleen_ groepen te vinden die daadwerkelijk PIM aan hebben staan:
 
-- **Endpoint**: `/beta/identityGovernance/privilegedAccess/group/resources`
+- **Endpoint**: `/v1.0/identityGovernance/privilegedAccess/group/resources`
 - **Doel**: Voorkomt het scannen van duizenden groepen die geen PIM gebruiken.
 - **Permission**: `PrivilegedAccess.Read.AzureADGroup`
 
@@ -412,6 +412,20 @@ flowchart TB
 
 1. Klik de Vernieuwen knop
 2. Of wacht 60 minuten voor automatische cache-vervaldatum
+
+---
+
+## Audit-dataflow
+
+De Audit-pagina leest apart van de workloads. Ze leest als je de pagina opent en als je op **Refresh** drukt, en houdt het resultaat alleen in het geheugen: niet in `localStorage`, niet in `sessionStorage` en niet na herladen.
+
+- **Endpoint**: `/auditLogs/directoryAudits`, twee keer: PIM-events (`loggedByService eq 'PIM'`) en directe rolwijzigingen (`loggedByService eq 'Core Directory' and category eq 'RoleManagement'`)
+- **Permission**: `AuditLog.Read.All` (optioneel), plus Reports Reader, Security Reader of Security Administrator
+- **Workspaces**: met Log Analytics-workspaces die je in Settings kiest, één query per workspace op `api.loganalytics.azure.com` plus de laatste 30 dagen uit het Entra-auditlog, samengevoegd op het event-id. Een workspace kan events missen, dus de twee vullen elkaar aan
+- **Periode**: tot 30 dagen, of zo lang als de gekozen workspaces hun logs bewaren. Een kortere periode filtert wat er gelezen is. Bij meer dan 50.000 events stopt de lezing: de pagina toont geen halve lijst en vraagt om een kortere periode, die ze dan leest
+- **Bewaarde velden**: IP-adressen, user agents en token-claims vallen weg zodra een rij wordt vertaald, dus die komen nooit op de pagina of in een export
+
+Een ontbrekende rol, een ontbrekend recht, te veel events en een mislukte lezing hebben elk een eigen toestand op de pagina, zodat geen ervan op een leeg log lijkt.
 
 ---
 

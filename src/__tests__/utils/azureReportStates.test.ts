@@ -82,6 +82,36 @@ describe("toMyRoleRow", () => {
             }),
         ).toEqual({ id: "/subscriptions/s1/providers/Microsoft.Authorization/roleEligibilityScheduleInstances/e1", roleName: "b24988ac-6180-42a0-ab88-20f7382dd24c", scopeName: "/subscriptions/s1", endText: "not a date", isPermanent: false });
     });
+
+    const viaInstance = (memberType: "Direct" | "Group", principal?: { displayName: string; type: string }): ArmRoleScheduleInstance => ({
+        id: "/subscriptions/s1/providers/Microsoft.Authorization/roleAssignmentScheduleInstances/a1",
+        name: "a1",
+        type: "Microsoft.Authorization/roleAssignmentScheduleInstances",
+        properties: {
+            scope: "/subscriptions/s1",
+            roleDefinitionId: "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+            principalId: "g1",
+            principalType: memberType === "Group" ? "Group" : "User",
+            memberType,
+            status: "Provisioned",
+            endDateTime: null,
+            ...(principal ? { expandedProperties: { principal: { id: "g1", ...principal } } } : {}),
+        },
+    });
+
+    it("names the group of a role held through a group", () => {
+        expect(toMyRoleRow(viaInstance("Group", { displayName: "Azure Storage Readers", type: "Group" })).viaGroup).toBe("Azure Storage Readers");
+    });
+
+    it("has no group for a direct role", () => {
+        expect(toMyRoleRow(viaInstance("Direct", { displayName: "Azure Storage Readers", type: "Group" }))).not.toHaveProperty("viaGroup");
+    });
+
+    it("has no group when the group has no name", () => {
+        expect(toMyRoleRow(viaInstance("Group"))).not.toHaveProperty("viaGroup");
+        expect(toMyRoleRow(viaInstance("Group", { displayName: "", type: "Group" }))).not.toHaveProperty("viaGroup");
+        expect(toMyRoleRow(viaInstance("Group", { displayName: "Someone", type: "User" }))).not.toHaveProperty("viaGroup");
+    });
 });
 
 describe("azureSyncedText", () => {

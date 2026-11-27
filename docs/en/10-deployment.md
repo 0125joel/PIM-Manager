@@ -139,6 +139,8 @@ Grant the following **Delegated** permissions (no Application permissions, no se
 
 Grant admin consent for your organisation after adding the permissions.
 
-> Additional permissions for PIM for Groups, Security Alerts, and Configure features are requested incrementally via consent popups when the user enables those features. They do not need to be pre-configured here.
+> Additional permissions for PIM for Groups, Security Alerts, Audit and Configure features are requested incrementally via consent popups when the user enables those features. They do not need to be pre-configured here.
 
 > The Azure dashboard and the Azure Report need the delegated permission **Azure Service Management** › `user_impersonation`. It is asked when a user chooses Turn on Azure. In a tenant where users cannot consent themselves, add it here and grant admin consent, so users do not need an administrator's approval.
+
+> Audit on Entra needs the delegated Microsoft Graph permission `AuditLog.Read.All`, which always needs admin consent: add it here and grant admin consent, or have an admin grant it the first time from the Audit page. Log Analytics workspaces for Audit need the delegated permission **Log Analytics API** › `Data.Read`, asked when a user chooses a workspace in Settings. In a tenant where users cannot consent themselves, add it here (APIs my organization uses) and grant admin consent.

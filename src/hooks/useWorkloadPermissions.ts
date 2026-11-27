@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMsal } from "@azure/msal-react";
-import { ALERTS_PERMISSION, CONDITIONAL_ACCESS_PERMISSION } from "@/config/constants";
+import { ALERTS_PERMISSION, AUDIT_LOG_PERMISSION, CONDITIONAL_ACCESS_PERMISSION, LOG_ANALYTICS_PERMISSION } from "@/config/constants";
 import { useUnifiedActions } from "@/contexts/UnifiedPimContext";
 import { useCustomExtensions } from "@/hooks/useCustomExtensions";
 import { useIncrementalConsent, WORKLOAD_SCOPES, WORKLOAD_WRITE_SCOPES, isWriteConsentGranted, setWriteConsentGranted } from "@/hooks/useIncrementalConsent";
 import { Logger } from "@/utils/logger";
-import { classifyProbeError, customExtensionCell, readCell, rowAction, writeCell, type CellStatus, type ProbeResult, type RowAction } from "@/utils/permissionStatus";
+import { askedLaterCell, classifyProbeError, customExtensionCell, readCell, rowAction, writeCell, type CellStatus, type ProbeResult, type RowAction } from "@/utils/permissionStatus";
 import { setFeatureEnabled, setWorkloadVisible } from "@/utils/workloadPreferences";
 
-export type PermissionRowId = "directoryRoles" | "pimGroups" | "securityAlerts" | "customExtensions" | "conditionalAccess";
+export type PermissionRowId = "directoryRoles" | "pimGroups" | "securityAlerts" | "customExtensions" | "conditionalAccess" | "auditLog" | "logAnalytics";
 
 export interface PermissionRow {
     id: PermissionRowId;
@@ -18,11 +18,13 @@ export interface PermissionRow {
     read: CellStatus;
     write: CellStatus;
     action: RowAction;
+    /** Text in the action column instead of a button: where the permission is asked for */
+    note?: string;
 }
 
-type Probes = { pimGroupsRead: ProbeResult | "checking"; pimGroupsWrite: ProbeResult | "checking"; directoryWrite: ProbeResult | "checking"; alertsRead: ProbeResult | "checking"; conditionalAccessRead: ProbeResult | "checking" };
+type Probes = { pimGroupsRead: ProbeResult | "checking"; pimGroupsWrite: ProbeResult | "checking"; directoryWrite: ProbeResult | "checking"; alertsRead: ProbeResult | "checking"; conditionalAccessRead: ProbeResult | "checking"; auditRead: ProbeResult | "checking"; logAnalyticsRead: ProbeResult | "checking" };
 
-const CHECKING: Probes = { pimGroupsRead: "checking", pimGroupsWrite: "checking", directoryWrite: "checking", alertsRead: "checking", conditionalAccessRead: "checking" };
+const CHECKING: Probes = { pimGroupsRead: "checking", pimGroupsWrite: "checking", directoryWrite: "checking", alertsRead: "checking", conditionalAccessRead: "checking", auditRead: "checking", logAnalyticsRead: "checking" };
 
 /**
  * The permission table of the settings page. Each cell is probed once per sign-in with a silent token request,
@@ -62,11 +64,13 @@ export function useWorkloadPermissions() {
         const pimGroupsWrite = await probe(WORKLOAD_WRITE_SCOPES.pimGroups);
         const alertsRead = await probe([ALERTS_PERMISSION]);
         const conditionalAccessRead = await probe([CONDITIONAL_ACCESS_PERMISSION]);
+        const auditRead = await probe([AUDIT_LOG_PERMISSION]);
+        const logAnalyticsRead = await probe([LOG_ANALYTICS_PERMISSION]);
         // A decisive write probe keeps the stored flag in step (the other pages read the flag)
         if (directoryWrite === "granted") setWriteConsentGranted("directoryRoles", true);
         if (pimGroupsWrite === "granted") setWriteConsentGranted("pimGroups", true);
         if (alertsRead === "granted") setFeatureEnabled("securityAlerts", true);
-        setProbes({ directoryWrite, pimGroupsRead, pimGroupsWrite, alertsRead, conditionalAccessRead });
+        setProbes({ directoryWrite, pimGroupsRead, pimGroupsWrite, alertsRead, conditionalAccessRead, auditRead, logAnalyticsRead });
     }, [probe]);
 
     useEffect(() => {
@@ -99,6 +103,15 @@ export function useWorkloadPermissions() {
         const read = readCell(probes.conditionalAccessRead);
         rows.push({ id: "conditionalAccess", label: "Conditional Access check", read, write: "readOnly", action: rowAction(read, "readOnly") });
     }
+    {
+        const read = readCell(probes.auditRead);
+        rows.push({ id: "auditLog", label: "Audit log", read, write: "readOnly", action: rowAction(read, "readOnly") });
+    }
+    {
+        // Asked when workspaces are chosen in the Log Analytics section, never from this table
+        const read = askedLaterCell(probes.logAnalyticsRead);
+        rows.push({ id: "logAnalytics", label: "Log Analytics", read, write: "readOnly", action: read === "unknown" ? "retry" : null, note: read === "granted" ? undefined : "Asked when you choose a workspace" });
+    }
 
     const grant = useCallback(
         async (rowId: PermissionRowId, kind: "read" | "write") => {
@@ -114,13 +127,24 @@ export function useWorkloadPermissions() {
                         setWorkloadVisible("pimGroups", true);
                     }
                 } else if (rowId === "securityAlerts") {
-                    await instance.acquireTokenPopup({ scopes: [ALERTS_PERMISSION], account });
-                    setFeatureEnabled("securityAlerts", true);
-                    setWorkloadVisible("securityAlerts", true);
-                    ok = true;
+                    const result = await instance.acquireTokenPopup({ scopes: [ALERTS_PERMISSION], account });
+                    // Consent given by another account says nothing about this one
+                    if (result.account?.homeAccountId === account.homeAccountId) {
+                        setFeatureEnabled("securityAlerts", true);
+                        setWorkloadVisible("securityAlerts", true);
+                        ok = true;
+                    } else Logger.warn("Settings", "The security alerts consent popup was finished with another account; not granted.");
                 } else if (rowId === "conditionalAccess") {
-                    await instance.acquireTokenPopup({ scopes: [CONDITIONAL_ACCESS_PERMISSION], account });
-                    ok = true;
+                    const result = await instance.acquireTokenPopup({ scopes: [CONDITIONAL_ACCESS_PERMISSION], account });
+                    // Consent given by another account says nothing about this one
+                    if (result.account?.homeAccountId === account.homeAccountId) ok = true;
+                    else Logger.warn("Settings", "The conditional access consent popup was finished with another account; not granted.");
+                } else if (rowId === "auditLog") {
+                    // Read only: the Audit page asks for the permission itself; this row does not switch a feature on
+                    const result = await instance.acquireTokenPopup({ scopes: [AUDIT_LOG_PERMISSION], account });
+                    // Consent given by another account says nothing about this one
+                    if (result.account?.homeAccountId === account.homeAccountId) ok = true;
+                    else Logger.warn("Settings", "The audit log consent popup was finished with another account; not granted.");
                 } else if (rowId === "customExtensions") {
                     await customExtensions.requestPermission();
                     ok = true;

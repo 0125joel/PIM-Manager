@@ -40,7 +40,7 @@ src/
 
 ## Detailed Breakdown
 
-### 📁 `src/app/` - Pages
+### `src/app/` - Pages
 
 Each subfolder represents a page in the application.
 
@@ -50,6 +50,12 @@ Each subfolder represents a page in the application.
 | `app/dashboard/` | Dashboard overview |
 | `app/report/` | Main report page with all role data |
 | `app/configure/` | PIM configuration page (Edit, Guided, Import, Access model) |
+| `app/audit/` | Audit: activations and changes in Entra roles and groups, with the No activation view and export |
+| `app/azure/` | The Azure pages: the dashboard, `report/`, `audit/` and `configure/` (a placeholder for now); the layout asks for the Azure consent first |
+| `app/settings/` | Settings: workload permissions, display, emergency access accounts, access model labels, Log Analytics workspace, advanced |
+| `app/help/` | The full guide, one panel per page |
+| `app/demo/` | Starts the live demo on a made-up tenant (hosted version only) |
+| `app/redirect/` | Sign-in bridge for MSAL popups and silent sign-in, without navigation |
 | `app/layout.tsx` | Shared layout (navigation, providers) |
 | `app/globals.css` | Global styles |
 
@@ -59,19 +65,31 @@ Each subfolder represents a page in the application.
 
 ---
 
-### 📁 `src/components/` - UI Components
+### `src/components/` - UI Components
 
 Reusable building blocks used across pages.
 
 | Component | Purpose |
 |-----------|---------|
-| `LoadingStatus.tsx` | Inline loading indicator for background policy fetch |
-| `RoleFilters.tsx` | Filter UI component for Report page |
-| `RoleList.tsx` | List of selectable roles (used in Configure) |
+| `ui/` | Shared primitives: Button, Chip, Dialog, Menu, SegmentedControl, StatCard, Tag, Toast, Skeleton, the DurationSlider of Configure and the filter panel of Report, Azure and Audit |
+| `shell/` | The frame around every page: top bar, compact header and bottom navigation on a phone, account menu, Help panel and the Entra ID / Azure switch |
+| `charts/` | The dashboard's own SVG charts: Donut, StackedBar, BarList |
+| `icons/` | The app's own icon set (`Icon.tsx`) |
+| `pdf/` | The PDF exports: the report, the audit report and the No activation export |
+| `AppProviders.tsx` | The provider tree, rendered by `app/layout.tsx` |
+| `AuthProvider.tsx`, `ProtectedRoute.tsx` | MSAL sign-in, and the guard that keeps signed-out visitors off the pages |
+| `ExportDialog.tsx` | The export menu (PDF and CSV) |
+| `WorkloadChips.tsx` | Chips that turn a workload on or off, with incremental consent |
+| `LoadingStatus.tsx`, `SyncStatus.tsx`, `GlobalProgressBar.tsx` | Background loading: the status sentence next to Refresh, "synced ... ago", and one progress line across the workloads |
+| `DataWarningBanner.tsx` | Warning with a retry when the policies of some roles could not be read |
+| `OnboardingTour.tsx`, `OnboardingWrapper.tsx`, `TourChoiceDialog.tsx`, `DemoTourDialog.tsx` | The tours: the dialog itself, when a tour starts, the choice of tour, and the question in the demo |
+| `ErrorBoundary.tsx`, `ThemeProvider.tsx` | Fallback screen on a render error, and dark or light theme |
+
+Components that belong to one page live next to that page, in `app/<page>/components/` (for example the Configure modes in `app/configure/components/`).
 
 ---
 
-### 📁 `src/services/` - Data Fetching
+### `src/services/` - Data Fetching
 
 Core logic for interacting with Microsoft Graph API.
 
@@ -79,7 +97,6 @@ Core logic for interacting with Microsoft Graph API.
 |------|---------|
 | `directoryRoleService.ts` | **Directory Roles**: Fetch role definitions, assignments, policies |
 | `pimGroupService.ts` | **PIM for Groups**: Fetch PIM-onboarded groups and policies |
-| `pimConfigurationService.ts` | **Policy Read/Write**: Parse rules, update PIM policies and assignments |
 
 **directoryRoleService.ts** contains:
 - `getRoleDefinitions()` - Fetch all Entra ID role definitions
@@ -98,7 +115,7 @@ Core logic for interacting with Microsoft Graph API.
 
 ---
 
-### 📁 `src/types/` - Type Definitions
+### `src/types/` - Type Definitions
 
 TypeScript interfaces describing data structures.
 
@@ -125,7 +142,7 @@ TypeScript interfaces describing data structures.
 
 ---
 
-### 📁 `src/utils/` - Helper Functions
+### `src/utils/` - Helper Functions
 
 Utility functions and API helpers.
 
@@ -144,7 +161,7 @@ Utility functions and API helpers.
 
 ---
 
-### 📁 `src/config/` - Configuration
+### `src/config/` - Configuration
 
 Application configuration constants.
 
@@ -162,7 +179,7 @@ Application configuration constants.
 
 ---
 
-### 📁 `src/hooks/` - Custom Hooks
+### `src/hooks/` - Custom Hooks
 
 Reusable React hooks.
 
@@ -176,7 +193,7 @@ Reusable React hooks.
 | `useIncrementalConsent.ts` | **Consent Flow**: Handles incremental permission requests |
 | `useNavigationGuard.ts` | **Navigation Guard**: Warns on unsaved changes when navigating away |
 
-### 📁 `src/contexts/` - React Context Providers
+### `src/contexts/` - React Context Providers
 
 Global state management with React Context API.
 

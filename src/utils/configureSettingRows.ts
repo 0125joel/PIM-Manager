@@ -132,13 +132,18 @@ function describeApprovers(list: readonly ApproverRef[]): string {
     return list.map((a) => (a.type === "manager" ? "Manager" : a.displayName && a.displayName !== a.id ? a.displayName : a.id)).join(", ");
 }
 
+/**
+ * The extension's name, " (off)" when the slot is linked but switched off, and its attributes. Every part the PATCH
+ * writes is in the words, so Review never shows "A -> A" for a change that turns an extension on or off (audit run-4)
+ */
 function describeExtension(link: CustomExtensionLink | undefined, extensions: ValueWords["extensions"]): string {
     if (!link || !link.customExtensionId) return "None";
     const known = extensions?.find((e) => e.id === link.customExtensionId);
-    if (known) return known.displayName;
     // The list says it is gone; without the list the rule's own name is all there is
-    if (extensions) return MISSING_EXTENSION;
-    return link.displayName || link.customExtensionId;
+    const name = known ? known.displayName : extensions ? MISSING_EXTENSION : link.displayName || link.customExtensionId;
+    const state = link.isEnabled ? "" : " (off)";
+    const attributes = link.customAttributes.length > 0 ? ` · ${link.customAttributes.join(", ")}` : "";
+    return `${name}${state}${attributes}`;
 }
 
 /** The words of a value in the Now column and the review */

@@ -3,6 +3,7 @@ import type { PimGroupData } from "@/types/pimGroup.types";
 import { getAuthContextDisplayName, type AuthenticationContext } from "@/utils/authContextApi";
 import { parseTotalHours } from "@/utils/durationUtils";
 import { getAssignmentMemberType } from "@/utils/principalUtils";
+import { isPolicyFailed } from "@/utils/policyReadAccess";
 
 /**
  * The seven datasets of the PDF export (tables and chart images), moved unchanged in meaning from the old
@@ -63,8 +64,9 @@ export function buildExportChartData({ rolesData, groupsData, isDirectoryRolesCo
     ];
 
     // A role whose policy is not readable (FIX-12) is not "no MFA" or "no approval" either: the same as a group below
-    const rolesWithSettings = roles.filter((r) => !r.policiesForbidden);
-    const roleSettingsNotReadable = roles.length - rolesWithSettings.length;
+    // Nor is a role whose policy failed to load
+    const rolesWithSettings = roles.filter((r) => !r.policiesForbidden && !isPolicyFailed(r));
+    const roleSettingsNotReadable = roles.filter((r) => r.policiesForbidden).length;
 
     let pimNativeMfa = 0;
     let conditionalAccess = 0;

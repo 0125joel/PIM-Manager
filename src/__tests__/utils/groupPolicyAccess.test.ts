@@ -77,6 +77,18 @@ describe("the dashboard's policy filter and a group whose policy is not readable
         expect(roleView(privilegedMfa).notReadableRoleCount).toBe(1);
         expect(buildViewFilterSentence(roleView({ mfa: "neither" } as DashboardFilter), rolesData, { mfa: "neither" } as DashboardFilter, true, false)).toContain("2 roles with settings not readable with your access are not counted.");
     });
+
+    it("counts the roles whose settings failed to load, only with a policy filter", () => {
+        const base = buildReportRoles()[0];
+        const roleOf = (id: string, isPrivileged: boolean) => ({ ...base, definition: { ...base.definition, id, isPrivileged }, policy: null, configError: "Too many requests" });
+        const rolesData = [roleOf("r-priv", true), roleOf("r-other", false)];
+        const roleView = (effective: DashboardFilter) => buildStatsView({ rolesData, groupsData: [], counting: { ...counting, directoryRoles: true }, effective, policiesLoading: false, emergencyAccountIds: new Set(), scope: "all" });
+        const mfa = { mfa: "neither" } as DashboardFilter;
+        expect(roleView(mfa)).toMatchObject({ failedRoleCount: 2, notReadableRoleCount: 0 });
+        expect(roleView({ ...mfa, privileged: true }).failedRoleCount).toBe(1);
+        expect(roleView({ privileged: true } as DashboardFilter).failedRoleCount).toBe(0);
+        expect(buildViewFilterSentence(roleView(mfa), rolesData, mfa, true, false)).toContain("2 roles with settings that failed to load are not counted.");
+    });
 });
 
 describe("isForbiddenRead", () => {

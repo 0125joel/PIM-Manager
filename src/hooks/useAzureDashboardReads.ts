@@ -6,7 +6,7 @@ import { useAzureActions, useAzureData, useAzureLoading } from "@/contexts/Azure
 import { readAzureRolePolicyPairs, resetAzureRolePolicies, type AzureRolePolicyOutcome, type AzureRolePolicyPair } from "@/hooks/useAzureRolePolicy";
 import { useGraphClient } from "@/hooks/usePimSelectors";
 import { listRoleManagementAlerts } from "@/services/azureAlertService";
-import { readExistingDirectoryIds, readServicePrincipalTypes } from "@/services/servicePrincipalTypeService";
+import { readExistingDirectoryIds, readServicePrincipalInfo } from "@/services/servicePrincipalTypeService";
 import { listRoleDefinitions } from "@/services/azureRoleDefinitionService";
 import type { ArmRoleDefinition, ArmRoleManagementAlert, AzureAssignment, AzureScope } from "@/types/azureResource.types";
 import { ArmError, type ArmClient } from "@/utils/armClient";
@@ -14,7 +14,6 @@ import { DELETED_PRINCIPAL, directoryLookupIds, isPrivilegedRole, type Directory
 import { azurePolicyKey, isRootScope } from "@/utils/azureScopes";
 import type { DashboardScope } from "@/utils/dashboardAdvanced";
 import { Logger } from "@/utils/logger";
-import { armRateLimiter } from "@/utils/rateLimiter";
 import { runWorkerPool } from "@/utils/workerPool";
 
 /**
@@ -39,7 +38,7 @@ export function definitionsOf(state: AzureDefinitionsState): ReadonlyMap<string,
  * `byId`: the servicePrincipalType per lowercase id, and `DELETED_PRINCIPAL` for a principal Graph does not find.
  * `isDeletedChecked` is false when the users and groups could not be read: then a deleted one cannot be told.
  */
-export type AzureSpTypesState = { status: "none" } | { status: "loading" } | { status: "loaded"; byId: ReadonlyMap<string, string>; isDeletedChecked: boolean } | { status: "failed" };
+export type AzureSpTypesState = { status: "none" } | { status: "loading" } | { status: "loaded"; byId: ReadonlyMap<string, string>; appIds?: ReadonlyMap<string, string>; isDeletedChecked: boolean } | { status: "failed" };
 export type AzureAlertOutcome = { status: "loaded"; alerts: ArmRoleManagementAlert[] } | { status: "noAccess" } | { status: "failed" };
 
 export interface AzureDashboardReads {
@@ -171,8 +170,7 @@ async function readDefinitions(arm: ArmClient, subscriptionIds: string[], signal
         workerCount: 4,
         delayMs: 250,
         signal,
-        rateLimiter: armRateLimiter,
-        costPerItem: 1,
+        // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
         // An ARM message can hold the UPN, object id and scope: log status and code only
         errorLog: "statusAndCode",
         processor: (id) => listRoleDefinitions(arm, `/subscriptions/${id}`, "CustomRole", signal),
@@ -217,7 +215,9 @@ export async function loadAzureServicePrincipalTypes(getGraph: () => Promise<Cli
     else {
         try {
             const graph = await getGraph();
-            const byId = ids.length > 0 ? await readServicePrincipalTypes(graph, ids, signal) : new Map<string, string>();
+            const info = ids.length > 0 ? await readServicePrincipalInfo(graph, ids, signal) : { types: new Map<string, string>(), appIds: new Map<string, string>() };
+            const byId = new Map(info.types);
+            const appIds = info.appIds;
             if (signal?.aborted) return { status: "loading" };
             let isDeletedChecked = lookup !== undefined;
             if (lookup) {
@@ -235,7 +235,7 @@ export async function loadAzureServicePrincipalTypes(getGraph: () => Promise<Cli
                     isDeletedChecked = false;
                 }
             }
-            spTypes = { status: "loaded", byId, isDeletedChecked };
+            spTypes = { status: "loaded", byId, appIds, isDeletedChecked };
         } catch {
             if (signal?.aborted) return { status: "loading" };
             spTypes = { status: "failed" };
@@ -319,8 +319,7 @@ export async function runAzureDashboardReads(
         workerCount: 4,
         delayMs: 250,
         signal,
-        rateLimiter: armRateLimiter,
-        costPerItem: 1,
+        // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
         // An ARM message can hold the UPN, object id and scope: log status and code only
         errorLog: "statusAndCode",
         processor: async (subscriptionId) => {

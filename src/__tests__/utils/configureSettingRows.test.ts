@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildReportRules, REPORT_AUTH_CONTEXTS } from "@/__tests__/fixtures/reportFixture";
 import { EMPTY_BASKET, addChange, type Basket } from "@/utils/configureBasket";
+import { customExtensionLinksEqual } from "@/utils/customExtensionUtils";
 import {
     ACTIVATION_CATEGORIES,
     ASSIGNMENT_CATEGORIES,
@@ -62,6 +63,22 @@ describe("words of the values", () => {
         expect(describeSettingValue("customExtensions.preApproval", { isEnabled: true, customExtensionId: "ext-gone", displayName: "Old", customAttributes: [] }, words)).toBe(MISSING_EXTENSION);
         expect(describeSettingValue("customExtensions.preApproval", { isEnabled: true, customExtensionId: "ext-gone", displayName: "Old", customAttributes: [] }, { ...words, extensions: null })).toBe("Old");
         expect(describeSettingValue("customExtensions.postApproval", { isEnabled: false, customExtensionId: "", customAttributes: [] }, words)).toBe("None");
+    });
+
+    it("names the on/off state and the attributes of an extension, so Review never reads 'A -> A' for a real change (audit run-4)", () => {
+        const on = { isEnabled: true, customExtensionId: "ext-servicenow", customAttributes: [] };
+        const off = { ...on, isEnabled: false };
+        expect(describeSettingValue("customExtensions.preApproval", off, words)).toBe("ServiceNow ticket check (off)");
+        expect(describeSettingValue("customExtensions.preApproval", { ...on, customAttributes: ["ticket", "reason"] }, words)).toBe("ServiceNow ticket check · ticket, reason");
+        expect(describeSettingValue("customExtensions.preApproval", { ...off, displayName: "Old" }, { ...words, extensions: null })).toBe("Old (off)");
+        // Every pair of links the basket keeps as a change reads differently
+        const links = [on, off, { ...on, customAttributes: ["a"] }, { ...on, customAttributes: ["b"] }, { ...off, customAttributes: ["a"] }, { ...on, customExtensionId: "" }];
+        for (const a of links) {
+            for (const b of links) {
+                if (customExtensionLinksEqual(a, b)) continue;
+                expect(describeSettingValue("customExtensions.preApproval", a, words)).not.toBe(describeSettingValue("customExtensions.preApproval", b, words));
+            }
+        }
     });
 
     it("end-after values as the choices, others in days", () => {

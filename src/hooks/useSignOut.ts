@@ -8,11 +8,12 @@ import { clearPimSessionCaches } from "@/utils/cacheUtils";
 import { clearCustomExtensionsCache } from "@/hooks/useCustomExtensions";
 import { clearStoredBaskets } from "@/utils/configureBasket";
 import { clearConfigureHistory } from "@/utils/configureHistory";
+import { clearWorkspaceChoices } from "@/utils/auditWorkspaceChoice";
 
 /**
  * Stops and clears the Azure data first (its provider lives under /azure, outside the shell, so through
  * `clearAzureSession`; a run that ends later can then not write its cache back), then the cached Graph data (see
- * utils/cacheUtils.ts), the Configure basket and history and the loaded data, then signs out of Microsoft Entra ID.
+ * utils/cacheUtils.ts), the Configure basket and history, the chosen Log Analytics workspaces and the loaded data, then signs out of Microsoft Entra ID.
  */
 export function useSignOut(): () => void {
     const { instance } = useMsal();
@@ -27,6 +28,8 @@ export function useSignOut(): () => void {
         try { local = typeof localStorage === "undefined" ? null : localStorage; } catch { /* blocked: nothing stored */ }
         clearConfigureHistory(local, typeof sessionStorage === "undefined" ? null : sessionStorage);
         clearCustomExtensionsCache();
+        // The Log Analytics workspaces chosen for the Audit page: only their ids are stored, and they go with the session
+        clearWorkspaceChoices(local);
         clearWorkload("directoryRoles");
         clearWorkload("pimGroups");
         instance.logoutRedirect({ postLogoutRedirectUri: window.location.origin });

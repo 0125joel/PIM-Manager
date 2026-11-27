@@ -1,3 +1,4 @@
+import { buildDemoAuditRows } from "@/demo/contoso/audit";
 import type { DemoGroup, DemoGroupSchedule, DemoPolicy, DemoRoleSchedule, DemoServicePrincipal, DemoTenant, DemoUser } from "@/demo/contoso/model";
 import { applySelect, parseExpand, parseFilter, parseSearch } from "./odata";
 
@@ -260,6 +261,17 @@ export function createFakeGraph(tenant: DemoTenant, options: FakeGraphOptions = 
         return result.map((item) => applySelect(item, select, expanded));
     };
 
+    /**
+     * Like Graph on /users, /groups and /servicePrincipals: a filter that is exactly one `id in ('<x>')` or `id eq '<x>'`
+     * and finds nothing answers 404 `Request_ResourceNotFound`. Any other filter answers a list.
+     */
+    const directoryList = (items: Item[], params: URLSearchParams): GraphResponse => {
+        const found = query(items, params);
+        const single = /^\s*id\s+(?:in\s*\(\s*'([^']*)'\s*\)|eq\s+'([^']*)')\s*$/i.exec(params.get("$filter") ?? "");
+        if (single && found.length === 0) throw notFound(single[1] ?? single[2]);
+        return list(found);
+    };
+
     type Route = [RegExp, (match: RegExpMatchArray, params: URLSearchParams) => GraphResponse];
     const one = (item: Item | null | undefined, what: string, params: URLSearchParams): GraphResponse => {
         if (!item) throw notFound(what);
@@ -363,7 +375,8 @@ export function createFakeGraph(tenant: DemoTenant, options: FakeGraphOptions = 
         })))],
 
         // PIM for Groups
-        [/^\/identityGovernance\/privilegedAccess\/group\/resources$/, (_m, params) => list(query(tenant.groups.filter((g) => g.isPimManaged).map((g) => ({ id: g.id, displayName: g.displayName, type: "Security", externalId: g.id })), params))],
+        // The real v1.0 endpoint returns only `id` per group (measured 2026-11-14); the name comes from the group read
+        [/^\/identityGovernance\/privilegedAccess\/group\/resources$/, (_m, params) => list(query(tenant.groups.filter((g) => g.isPimManaged).map((g) => ({ id: g.id })), params))],
         [/^\/identityGovernance\/privilegedAccess\/group\/eligibilityScheduleInstances$/, (_m, params) => {
             const expand = parseExpand(params.get("$expand"));
             return list(query(tenant.groupSchedules.filter((s) => s.kind === "eligible" && isCurrent(s)).map((s) => withPrincipal(groupInstance(s), s.principalId, expand)), params));
@@ -382,17 +395,29 @@ export function createFakeGraph(tenant: DemoTenant, options: FakeGraphOptions = 
         }],
         [/^\/identityGovernance\/privilegedAccess\/group\/(eligibility|assignment)ScheduleRequests$/, () => list([])],
 
+        // Entra audit log: the two reads of the audit page. The app sends an unquoted ISO date, which parseFilter does not
+        // take, so the date clause is read here and the rest goes through `query`
+        [/^\/auditLogs\/directoryAudits$/, (_m, params) => {
+            const match = /^(.*) and activityDateTime ge (\S+)$/.exec(params.get("$filter") ?? "");
+            const since = match ? Date.parse(match[2]) : Number.NaN;
+            if (!match || !Number.isFinite(since)) throw new HttpError(400, "BadRequest", "The audit log filter needs activityDateTime ge with a date.");
+            const inPeriod = buildDemoAuditRows(new Date(now())).filter((row) => Date.parse(row.activityDateTime) >= since);
+            const rest = new URLSearchParams(params);
+            rest.set("$filter", match[1]);
+            return list(query(inPeriod as unknown as Item[], rest));
+        }],
+
         // Users, groups, applications, administrative units
         [/^\/users$/, (_m, params) => {
             const items = tenant.users.map(userObject).map(({ "@odata.type": _type, ...rest }) => { void _type; return rest; });
-            return list(query(items, params));
+            return directoryList(items, params);
         }],
         [/^\/users\/([^/]+)$/, (m, params) => {
             const key = decodeURIComponent(m[1]).toLowerCase();
             const user = usersById.get(key) ?? tenant.users.find((u) => u.userPrincipalName.toLowerCase() === key);
             return one(user ? userObject(user) : null, m[1], params);
         }],
-        [/^\/groups$/, (_m, params) => list(query(tenant.groups.map(groupObject), params))],
+        [/^\/groups$/, (_m, params) => directoryList(tenant.groups.map(groupObject), params)],
         [/^\/groups\/([^/]+)$/, (m, params) => one(groupsById.has(m[1].toLowerCase()) ? groupObject(groupsById.get(m[1].toLowerCase())!) : null, m[1], params)],
         [/^\/groups\/([^/]+)\/(members|owners)\/\$count$/, (m) => {
             const group = groupsById.get(m[1].toLowerCase());
@@ -405,7 +430,7 @@ export function createFakeGraph(tenant: DemoTenant, options: FakeGraphOptions = 
             const ids = groupPeople(group, m[2] === "members" ? "member" : "owner");
             return list(query(ids.map(anyObject).filter((o): o is Item => o !== null), params));
         }],
-        [/^\/servicePrincipals$/, (_m, params) => list(query(tenant.servicePrincipals.map((s) => spObject(s)), params))],
+        [/^\/servicePrincipals$/, (_m, params) => directoryList(tenant.servicePrincipals.map((s) => spObject(s)), params)],
         [/^\/servicePrincipals\/([^/]+)$/, (m, params) => {
             const sp = spsById.get(m[1].toLowerCase());
             return one(sp ? spObject(sp) : null, m[1], params);

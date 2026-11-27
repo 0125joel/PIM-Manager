@@ -108,11 +108,30 @@ export interface ArmRoleScheduleInstance {
         roleAssignmentScheduleId?: string;
         roleEligibilityScheduleId?: string;
         roleEligibilityScheduleRequestId?: string;
+        /** The role assignment behind an active instance: its full id, ending in the assignment GUID */
+        originRoleAssignmentId?: string;
         expandedProperties?: {
             principal?: ExpandedEntity & { email?: string; userPrincipalName?: string };
             roleDefinition?: ExpandedEntity;
             scope?: ExpandedEntity;
         };
+    };
+}
+
+/**
+ * One item of the classic role assignment list (`{scope}/providers/Microsoft.Authorization/roleAssignments`,
+ * `2022-04-01`), the fields the app reads. `name` is the assignment GUID.
+ */
+export interface ArmRoleAssignment {
+    id: string;
+    name: string;
+    type?: string;
+    properties: {
+        scope: string;
+        roleDefinitionId: string;
+        principalId: string;
+        principalType: string;
+        createdOn?: string;
     };
 }
 

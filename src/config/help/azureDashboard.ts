@@ -10,6 +10,7 @@ export const AZURE_DASHBOARD_HELP: HelpPage = {
         { title: "On activation", text: "What privileged roles ask for when someone activates them, per scope: MFA or an authentication context, approval, a reason, and how long. In Azure, role settings are set per role and per scope; they do not inherit." },
         { title: "From Microsoft", text: "PIM's own alerts for Azure resources, per subscription, read only. A subscription Microsoft has not scanned yet shows no alert even when there is something to find. Resolve alerts in the Azure portal." },
         { title: "Easy to miss", text: "Details that are hard to spot in the totals, grouped in three categories. A zero turns grey. Apps, managed identities and agents can hold an Azure role only as an active assignment." },
+        { title: "Your Azure roles", text: "When your account cannot read any Azure scope, the dashboard has nothing to count, so it shows your own Azure roles instead. A role you hold through a PIM group shows once you activate your membership, and Azure can take a few minutes before it appears. With read access to PIM for Groups, the page also lists the groups you are an eligible member of. Without it, the page says so and tells you where to turn it on." },
     ],
     terms: [
         { term: "Role × scope", text: "one role on one scope (a management group, subscription, resource group or resource)." },
@@ -24,7 +25,7 @@ export const AZURE_DASHBOARD_HELP: HelpPage = {
         },
         {
             title: "Scope",
-            paragraphs: ["The scope bar decides what is counted. All you can read is every scope your account can read. Choose a scope to count it and what is below it. Include inherited also counts what is assigned above it. Delegated subscriptions are counted by default and marked; switch them off to leave them out."],
+            paragraphs: ["The scope bar decides what is counted. All you can read is every scope your account can read. Choose a scope to count it and what is below it. Include inherited also counts what is assigned above it. Delegated subscriptions are counted by default; with details on, the bar marks them Lighthouse. Switch them off to leave them out."],
         },
         {
             title: "Show more details",
@@ -40,7 +41,7 @@ export const AZURE_DASHBOARD_HELP: HelpPage = {
         },
         {
             title: "Export",
-            paragraphs: ["Export opens one dialog for a PDF report or a CSV of all assignments in the chosen scope."],
+            paragraphs: ["Export opens one dialog for a PDF report or a CSV of all assignments in the chosen scope. Subscriptions that could not be read, or only in part, are named in the dialog and in the PDF."],
         },
     ],
 };

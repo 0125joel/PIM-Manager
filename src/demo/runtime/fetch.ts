@@ -1,4 +1,5 @@
 import type { FakeArm } from "@/demo/arm/server";
+import type { FakeLogAnalytics } from "@/demo/loganalytics/server";
 import type { FakeGraph } from "@/demo/graph/server";
 import { CATALOG_URL } from "@/utils/accessModelCatalog";
 
@@ -10,6 +11,7 @@ import { CATALOG_URL } from "@/utils/accessModelCatalog";
 
 const GRAPH_HOST = "graph.microsoft.com";
 const ARM_HOST = "management.azure.com";
+const LOG_ANALYTICS_HOST = "api.loganalytics.azure.com";
 const IDENTITY_HOSTS = new Set(["login.microsoftonline.com", "login.microsoft.com", "login.live.com"]);
 
 export interface DemoFetchOptions {
@@ -17,6 +19,8 @@ export interface DemoFetchOptions {
     graph: () => Promise<FakeGraph>;
     /** Resolves the fake ARM on the first ARM request (loaded on demand). Without it, ARM requests are refused */
     arm?: () => Promise<FakeArm>;
+    /** Resolves the fake Log Analytics API on the first request to it. Without it, those requests are refused */
+    logAnalytics?: () => Promise<FakeLogAnalytics>;
     realFetch: typeof fetch;
     /** Delay per Graph or ARM request in milliseconds, so loading looks and behaves like the real thing */
     latency?: () => number;
@@ -32,9 +36,9 @@ export function isGraphUrl(url: string): boolean {
     }
 }
 
-type Fake = Pick<FakeGraph, "handle"> | Pick<FakeArm, "handle">;
+type Fake = Pick<FakeGraph, "handle"> | Pick<FakeArm, "handle"> | Pick<FakeLogAnalytics, "handle">;
 
-export function createDemoFetch({ graph, arm, realFetch, latency, catalog }: DemoFetchOptions): typeof fetch {
+export function createDemoFetch({ graph, arm, logAnalytics, realFetch, latency, catalog }: DemoFetchOptions): typeof fetch {
     /** Answers a request from a fake backend, after the same delay and abort check for Graph and ARM */
     async function answer(request: Request, fake: () => Promise<Fake>, idHeaders: (request: Request) => Record<string, string>): Promise<Response> {
         const text = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
@@ -72,6 +76,11 @@ export function createDemoFetch({ graph, arm, realFetch, latency, catalog }: Dem
             // Never to the network, also when this tab has no fake ARM
             if (!arm) throw new TypeError("Azure Resource Manager is not available in the demo environment.");
             return answer(request, arm, () => ({ "x-ms-request-id": "demo" }));
+        }
+        if (url.hostname === LOG_ANALYTICS_HOST) {
+            // Never to the network, also when this tab has no fake Log Analytics
+            if (!logAnalytics) throw new TypeError("Log Analytics is not available in the demo environment.");
+            return answer(request, logAnalytics, () => ({ "x-ms-request-id": "demo" }));
         }
         if (url.hostname !== GRAPH_HOST) return realFetch(input, init);
         return answer(request, graph, (r) => ({ "request-id": "demo", "client-request-id": r.headers.get("client-request-id") ?? "demo" }));

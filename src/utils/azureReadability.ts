@@ -74,6 +74,26 @@ export function unreadSentence(r: Pick<AzureReadability, "unread" | "unlisted">)
     return null;
 }
 
+/**
+ * What an export leaves out because it was not read, one sentence each; empty when every subscription was read whole.
+ * The caller passes the subscriptions in view. An export never shows an unread subscription as one without assignments.
+ */
+export function coverageNotes(subscriptions: readonly AzureScope[]): string[] {
+    const count = (access: AzureScope["access"]) => subscriptions.filter((s) => s.access === access).length;
+    const many = (n: number) => `${n} ${n === 1 ? "subscription" : "subscriptions"}`;
+    const [failed, loading, partial] = [count("failed"), count("loading"), count("partial")];
+    const rest = unreadSentence({
+        unread: subscriptions.reduce((sum, s) => sum + (s.unreadScopeIds?.length ?? 0), 0),
+        unlisted: subscriptions.filter((s) => s.isUnlisted === true).length,
+    });
+    return [
+        failed > 0 ? `${many(failed)} could not be read, so ${failed === 1 ? "its" : "their"} assignments are missing.` : null,
+        loading > 0 ? `${many(loading)} ${loading === 1 ? "was" : "were"} still loading, so ${loading === 1 ? "its" : "their"} assignments can be missing.` : null,
+        partial > 0 ? `${many(partial)} ${partial === 1 ? "was" : "were"} read in part: only the resource groups and resources you can read are counted.` : null,
+        rest,
+    ].filter((note): note is string => note !== null);
+}
+
 /** The note of one subscription in What you can read, for one read in part */
 export function partlyNote(s: Pick<AzureReadability["subscriptions"][number], "unread" | "isUnlisted">): string {
     const base = "Only the resource groups and resources you can read are counted";

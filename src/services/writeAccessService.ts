@@ -25,8 +25,11 @@ interface Page<T> {
     "@odata.nextLink"?: string;
 }
 
-async function readAll<T>(client: Client, first: () => Promise<Page<T>>, label: string): Promise<T[]> {
+async function readAll<T>(client: Client, first: () => Promise<Page<T>>, label: string, signal?: AbortSignal): Promise<T[]> {
     const items: T[] = [];
+    // A reader that is gone (the page unmounted) sends no further page
+    const stopIfAborted = () => { if (signal?.aborted) throw new DOMException("The read was cancelled.", "AbortError"); };
+    stopIfAborted();
     let page = await withRetry(first, 3, 1000, label);
     for (let i = 0; ; i++) {
         items.push(...(page.value ?? []));
@@ -35,6 +38,7 @@ async function readAll<T>(client: Client, first: () => Promise<Page<T>>, label: 
         // Never decide on half the data
         if (i + 1 >= MAX_PAGES) throw new Error(`${label}: more than ${MAX_PAGES} pages`);
         await delay(100); // Small pause between pages, as directoryRoleService does
+        stopIfAborted();
         page = await withRetry(() => client.api(next).get() as Promise<Page<T>>, 3, 1000, label);
     }
 }
@@ -64,11 +68,11 @@ export async function fetchMyOwnedGroups(client: Client): Promise<OwnedGroupRead
 }
 
 /** Learn names no `$select` for these functions (T2b ran without one) */
-export async function fetchMyGroupInstances(client: Client, kind: "eligibility" | "assignment"): Promise<MyGroupInstance[]> {
+export async function fetchMyGroupInstances(client: Client, kind: "eligibility" | "assignment", signal?: AbortSignal): Promise<MyGroupInstance[]> {
     return readAll<MyGroupInstance>(client, () => client
         .api(`/identityGovernance/privilegedAccess/group/${kind}ScheduleInstances/filterByCurrentUser(on='principal')`)
         .version("v1.0")
-        .get(), `writeAccess group ${kind}`);
+        .get(), `writeAccess group ${kind}`, signal);
 }
 
 /** The groups of a unit with the fields of the decision (the app does not load groups outside PIM that are not role-assignable) */

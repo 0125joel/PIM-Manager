@@ -1,6 +1,6 @@
 {
   "name": "pim-manager",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,7 +17,7 @@
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@react-pdf/renderer": "^4.9.0",
     "date-fns": "^4.4.0",
-    "next": "^16.4.2",
+    "next": "^16.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

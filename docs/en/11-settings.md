@@ -32,12 +32,16 @@ Features are sub-capabilities that require additional permissions beyond the bas
 | Feature | Parent Workload | Permission Required |
 |---------|-----------------|---------------------|
 | **Security Alerts** | Directory Roles | `RoleManagementAlert.Read.Directory` |
+| **Audit log** | None, its own row | `AuditLog.Read.All`, plus a reader role to read the log |
+| **Log Analytics** | None, its own row | `https://api.loganalytics.io/Data.Read`, asked when you choose a workspace |
 
 **Feature Characteristics:**
-- Expandable sub-items under workload cards on the Settings page
+- Expandable sub-items under workload cards on the Settings page; the audit log is its own row
 - Independent Enable/Hide/Show controls
 - Separate localStorage persistence (`pim_feature_enabled_[featureId]`)
 - Graceful degradation if permission denied (403)
+
+**Log Analytics workspace.** One choice serves both Audit pages. Once you have chosen workspaces, each one says per log what it holds: the Entra audit log (`AuditLogs`) and the Azure activity log (`AzureActivity`), from when to when, and for Azure from how many of the subscriptions you can read. A workspace without one of the logs only warns when none of your chosen workspaces holds it, because the others can make up for it. The marks **Receives Entra audit logs** and **Receives Azure activity logs** in the list only help you choose. The check on what the workspace really holds decides.
 
 ## Hide vs. Disable
 
@@ -62,7 +66,7 @@ The chip bar on Dashboard provides quick toggles:
 
 ## Settings Modal Tabs
 
-The Settings page has these sections: Workloads and permissions, Display, Emergency access accounts and Advanced. Display holds the theme, the view the dashboard and the Azure Report open in, and **Details**: with Fewer, each page and view remembers its own Show more details; with More, every page shows everything. Changing Details clears the remembered choices. **Tours**: with On, a short tour starts the first time you open a part of the app; with Off, none start by themselves, while Start the tour in Help keeps working. (The former modal tabs were:)
+The Settings page has these sections: Workloads and permissions, Log Analytics workspace, Display, Emergency access accounts and Advanced. Display holds the theme, the view the dashboard and the Azure Report open in, and **Details**: with Fewer, each page and view remembers its own Show more details; with More, every page shows everything. Changing Details clears the remembered choices. **Tours**: with On, a short tour starts the first time you open a part of the app; with Off, none start by themselves, while Start the tour in Help keeps working. (The former modal tabs were:)
 
 ### Workloads Tab
 

@@ -2,6 +2,79 @@
 
 ---
 
+## v3.2.0 - 2026-11-27
+
+PIM Manager 3.2 adds Audit, on Entra and on Azure.
+
+Ask an admin whether they still need a role and the answer is always yes. Audit gives you something to go on: who activated which role, which assignments and settings changed, and who did it, in one timeline. No activation shows which assignments were not activated in the period you choose. That is not proof a role can go, but it is a good place to start the conversation.
+
+On Entra the page reads 30 days of the audit log. It needs `AuditLog.Read.All`, which an admin grants once for your tenant. On Azure it reads 90 days of the activity log and the PIM requests, with no new permission: your own Azure roles decide what you see. Choose a Log Analytics workspace in Settings and you look further back, on Azure up to a year. A role held through a group counts too: it makes no difference how someone got there.
+
+There is more besides Audit. Names in the Report open straight in the Entra admin center, exports say what they could not read instead of looking empty, and Configure Import refuses a row whose ID and UPN belong to two different people.
+
+Before you upgrade, if you host PIM Manager yourself:
+
+- Run the template again. It deploys this build with its security headers. The Content Security Policy now allows `https://api.loganalytics.azure.com`, which the Audit pages read Log Analytics workspaces from. The sign-in permissions are unchanged.
+- Audit on Entra asks for `AuditLog.Read.All` (Microsoft Graph) when a user chooses Grant permission on the Audit page. It always needs admin consent: add it to your App Registration and grant admin consent before you hand it out, or have an admin grant it the first time from the Audit page.
+- Log Analytics workspaces ask each user once for consent to the Log Analytics API (`https://api.loganalytics.io/Data.Read`) when they choose a workspace in Settings. Users in your tenant cannot consent themselves? Then add that permission to your App Registration and grant admin consent. The [deployment docs](docs/en/10-deployment.md) show where.
+
+### Audit
+
+- **A new Audit page for Entra.** Entra role and group activations, assignment and settings changes, and role changes outside PIM, in one timeline. The page reads up to 30 days of the Entra audit log in your browser, with the optional `AuditLog.Read.All` permission, which an admin grants once for the tenant. Reading also requires Reports Reader, Security Reader or Security Administrator. A request waiting for approval reads as requested, a denied one shows Denied, and the ticket and approver come from the log.
+- **No activation.** A second view that shows the activity of each assignment in the period you choose. It tells you what happened in that period, not whether a role can be removed.
+- **Filters, as on the Report.** In Events and No activation, filter on who holds the role (Users, Guests, Apps, Agents or Groups), on Entra roles or PIM for Groups, on Privileged only and, in Events, on Failed or denied. Active filters show as chips and stay in the address bar. A role the page cannot judge stays in the list and is counted, also in the export, because not knowing is not the same as not privileged. A group counts when it is eligible or active for a privileged role.
+- **A timeline that explains itself.** Hover over a point and it says what its icon and ring mean, such as the dashed red ring of a failed or denied action. Escape closes the tip. Activations, Assignments, Settings and Outside PIM show by default; System stays off until you choose it.
+- **Through a group counts too.** An activation of, or an assignment to, a group that holds a role shows like a direct one, with the group under Through. On Entra the row shows the role the group holds and search finds it by that role; on Azure each role and scope gets its own row. The CSV and JSON exports of both pages, also of No activation, have a Through group column.
+- **Audit on Azure.** The same page for the Azure scopes you can read: activations, assignments, settings changes and changes outside PIM, from the Azure activity log and the PIM requests, with a scope bar, the filters of the Entra page (Scope level in place of the environment) and No activation. It opens on the last 30 days and goes up to 90. No new permission: your Azure roles decide what you see, your own requests are included also on scopes you cannot read, and the page names what it could not read. A role nobody holds any more is shown by name instead of as an id. With `AuditLog.Read.All` already granted, it also reads the Entra audit log for the approver and for activations through a PIM group.
+- **No activation on Azure.** Each assignment gets its own row. An eligible group gets a row per member, judged on the Entra audit log, which needs `AuditLog.Read.All` and read access to PIM for Groups. A member beyond the reach of that log reads Not judged, and a group that is not in PIM for Groups reads Not applicable.
+- **Export.** Both pages export the current view, and No activation, as CSV, JSON or PDF. On Entra, Include lets you choose Entra roles, PIM for Groups or both, with the number of rows of each, and a file that leaves one out says so. The No activation PDF groups the assignments by verdict, warnings first.
+- **Easy to find.** Audit is in the navigation on Entra and Azure, also in the bottom navigation on a phone, with its own Help page and tour.
+- **In the live demo.** Both Audit pages and a Log Analytics workspace, with fictional Contoso events.
+
+### Log Analytics workspaces
+
+- **Look further back.** In Settings, choose one or more Log Analytics workspaces, in one section for both Audit pages. Each workspace says what it holds of the Entra audit log and of the Azure activity log, how far back, and from how many of the subscriptions you can read. The marks Receives Entra audit logs and Receives Azure activity logs are a convenience; the check decides. The workspaces are read with the optional `https://api.loganalytics.io/Data.Read` permission.
+- **On Entra.** With a workspace, the Audit page reads further back than 30 days and opens on 180 days. The last 30 days are still merged with the Entra audit log, because a workspace can miss events.
+- **On Azure.** With a workspace, the Audit page opens on 180 days and goes up to a year, as far as the workspaces keep their logs. The page's own reads stay on next to them, and an event found in both shows once. A workspace with an Entra `AuditLogs` table also takes the Entra audit log on this page back as far as that workspace keeps it. If no workspace can be read, the page falls back to 90 days and says so.
+- **A workspace shows what it holds.** Azure Audit shows the events in a workspace you may read, also on scopes your Azure roles do not reach.
+- **What could not be read is named.** A workspace or log that cannot be read is named on the page and in every export. A table you may not read is named as no access, and a table you may read only in part, through a condition on its rows, is named with a note that events can be missing.
+- **In Settings, Workloads and permissions.** Audit log can be granted from the table. Log Analytics shows Not asked yet until you choose a workspace.
+
+### Report and dashboard
+
+- **Open it in the admin center.** In the Report and the Azure Report, the name of a user, group or app opens it in the Entra admin center in a new tab. In the Azure Report table, the scope name opens that scope in the Azure portal. Managed identities, agents, foreign groups, devices and principals that could not be read stay plain text. No permission is added.
+- **Your Azure roles shows the way through a PIM group.** A role you hold through a PIM group reads "via" that group, and the PIM groups you are an eligible member of are listed, with a note that their Azure roles show once you activate the membership. Azure does not return a group's role before that. Without read access to PIM for Groups, the section says so and points to Grant read access under Settings, Workloads and permissions.
+- **Partial view says why.** On the Azure Report, the Partial view box explains that PIM Manager reads Azure with your own rights, so scopes you cannot read are not shown. The scope icons in the table and the scope tree name their level or resource type when you hover over them.
+
+### Changed
+
+- **Large Azure estates load faster.** Each Azure Resource Manager request now counts once against PIM Manager's own limit, where it counted up to twice before. What you see stays the same.
+- **Who, on every page.** The filter on who holds a role is called Who everywhere, also in its chips; the Azure Report called it Held by. The groups view of the Report now offers Apps under Who, as the roles view does. Existing filtered links still open the same view.
+
+### Fixed
+
+- **A removed Azure assignment no longer shows.** Below a subscription you cannot read, each resource group or resource that is read is checked against its role assignment list. An inherited assignment that was removed no longer shows, and a direct assignment the PIM list left out shows as permanently active, with the names of the person, role and scope. A scope that is not checked in this read, or whose check fails, shows what the PIM list gave.
+- **One unknown id no longer stops a lookup.** When Microsoft Graph is asked about exactly one id it does not know, it answers with an error instead of an empty list. The Azure pages, Configure Import and the check for deleted accounts now take that as nobody found and keep going.
+- **A deleted PIM group no longer breaks the refresh.** For a user without an admin role, a refresh of PIM for Groups no longer fails when a PIM group was deleted moments ago. The deleted group drops out of the list.
+- **What failed to load is named, not counted as none.** The dashboard export reports security alerts that failed to load, or were still loading, as not read instead of "No active alerts". The dashboard and its export leave roles whose settings failed to load out of the MFA, approval and duration numbers and name them, instead of counting them as roles without those settings. The export names PIM for Groups when it was not loaded, instead of counting zero groups. The Azure dashboard export and the Azure Report CSV name the subscriptions that failed, were read in part or were not read yet.
+- **Tours.** When the card of a step fits neither above nor below its target, but both fit on the screen together, the page scrolls the target to the top and puts the card below it, instead of over it.
+- **Help says what the app does.** Help and the tours describe Refresh as it works: it reads new or removed assignments and, in the background, the settings of every role and group again. On the Azure dashboard, Help says the Lighthouse mark shows with details on, and Help and the tours call the Delegated subscriptions toggle by its name. The Report card on the front page no longer promises a PDF export: the Report exports CSV and JSON.
+- **Dark mode.** Checkboxes, radio buttons and scrollbars are drawn dark instead of bright white. Grey text on a selected row now meets the contrast norm.
+- **Reduced motion.** The spinner in Configure Review stands still when reduced motion is on, like the other spinners in the app.
+- **Front page on a laptop screen.** The data flow block no longer runs over the edge of the page between 1024 and 1280 pixels; it stacks until 1280.
+
+### Security
+
+- **Next.js 16.4.6.** Next.js goes from 16.4.2 to 16.4.6 for the advisories of November 2026 (GHSA-f3mh-rxg3-f5g2, GHSA-7qx7-33qx-rqx2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf, GHSA-vc7v-qv4w-wrv8, GHSA-mfr8-8qww-v76h), about Edge runtime routes, image optimization, self-hosted servers and `use cache`. PIM Manager is a static export without those features, so the hosted app was not exposed.
+- **Configure Import checks who a row is about.** A row that has both Principal ID and Principal UPN is refused when they name different people. Before, the ID alone decided, so a file could pair one admin's UPN with the object id of a look-alike account. The import table and Review now show the UPN (or the object id of a group or app) under the name, so two people with the same name can be told apart before anything is written.
+- **Configure Review shows when a custom extension goes on or off.** A linked extension that is switched off reads "(off)" and its attributes are shown, so turning a pre- or post-approval extension on or off no longer looks like no change. Choosing the same extension again, or editing its attributes in Edit, keeps its on or off state.
+- **Access model counts only enabled policies.** An authentication context only matches a label by policy when an enabled Conditional Access policy meets it, whatever the downloaded catalog says. A disabled or report-only policy no longer counts.
+- **CSV formulas.** Text that could start a formula is written as text, now also when a quote or space comes before it at the start of a cell or after a semicolon or line break. Import takes the apostrophe off again.
+- **Sign out clears your workspace choice.** Signing out also clears the Log Analytics workspaces chosen for Audit. Only their ids are stored in the browser.
+- **Consent with the wrong account no longer counts.** In Settings, Workloads and permissions, a consent popup finished with another account no longer reads as granted, for Security alerts, Conditional Access and Audit log.
+
+---
+
 ## v3.1.1 - 2026-11-10
 
 A fix release. If you host PIM Manager yourself on Azure Static Web Apps, 3.1.0 could not be deployed: Azure refused part of the configuration. This version deploys.

@@ -84,8 +84,9 @@ describe("writeDetailsPreference", () => {
 });
 
 describe("detailsPageKey and DETAILS_PAGES", () => {
-    it("has six pages and prefixes each key with details-", () => {
-        expect(DETAILS_PAGES).toHaveLength(6);
+    it("has eight pages and prefixes each key with details-", () => {
+        expect(DETAILS_PAGES).toHaveLength(8);
+        expect(DETAILS_PAGES).toContain("azure-audit");
         for (const page of DETAILS_PAGES) {
             expect(detailsPageKey(page)).toBe("details-" + page);
         }
@@ -128,7 +129,7 @@ describe("writePageDetails", () => {
 });
 
 describe("clearPageDetails", () => {
-    it("removes the six page keys and keeps the setting and unrelated keys", () => {
+    it("removes the page keys and keeps the setting and unrelated keys", () => {
         const storage = fakeStorage();
         writeDetailsPreference("more", storage);
         for (const page of DETAILS_PAGES) writePageDetails(page, true, storage);

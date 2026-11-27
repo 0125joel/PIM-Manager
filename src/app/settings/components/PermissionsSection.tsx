@@ -75,6 +75,7 @@ export function PermissionsSection({ rows, busyRow, message, onAction, onDismiss
                                     <Cell status={row.write} />
                                 </td>
                                 <td className="py-2 text-right max-sm:block max-sm:pt-2 max-sm:text-left">
+                                    {row.note && !label && <span className="text-xs leading-[17px] text-muted">{row.note}</span>}
                                     {label && (
                                         <Button size="sm" isLoading={isBusy} disabled={busyRow !== null} onClick={() => onAction(row)}>
                                             {label}

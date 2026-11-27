@@ -17,7 +17,7 @@ export function VisibilityLine({ className, readability, onReadRest, isReadingRe
     const hasUnread = readability !== undefined && unreadSentence(readability) !== null;
     const box = (
         <StatusBox variant="warn" title="Partial view." className={hasUnread ? "" : className}>
-            You see the scopes you can read. Assignments on other scopes are not shown.
+            PIM Manager reads Azure with your own rights, so scopes you cannot read are not shown.
             {readability && <ReadRest readability={readability} onReadRest={onReadRest} isReading={isReadingRest} />}
         </StatusBox>
     );

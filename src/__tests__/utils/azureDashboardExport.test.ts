@@ -146,6 +146,30 @@ function options(over: Partial<AzureExportOptions> = {}): AzureExportOptions {
     return { detail: "full", audience: "admin", chartStyle: "bars", anonymise: false, applyFilter: true, blocks: defaultAzureBlocks("full"), ...over };
 }
 
+describe("subscriptions that were not read in the export", () => {
+    const withAccess = (id: string, over: Partial<AzureScope>) => (list: AzureAssignment[]): AzureDashboardInput => ({ ...stats(list), scopes: scopes.map((s) => (s.id === id ? { ...s, ...over } : s)) });
+    const notesOf = (build: (list: AzureAssignment[]) => AzureDashboardInput, over: Partial<AzureDashboardExportInput> = {}) =>
+        buildAzureDashboardExportReport(exportInput({ stats: build(assignments), statsWithoutFilter: build(assignments), ...over }), options()).notes;
+
+    it("names a failed and a partly read subscription", () => {
+        expect(notesOf(withAccess(S1, { access: "failed" }))).toContain("1 subscription could not be read, so its assignments are missing.");
+        expect(notesOf(withAccess(S1, { access: "partial", unreadScopeIds: ["x"] }))).toContain("1 resource group or resource is not read yet.");
+        expect(notesOf(stats).some((n) => n.includes("so its assignments are missing") || n.includes("read in part"))).toBe(false);
+    });
+
+    it("leaves out what is outside the chosen scope", () => {
+        const chosen = (list: AzureAssignment[]): AzureDashboardInput => ({ ...withAccess(S1, { access: "failed" })(list), chosenScopeId: S2 });
+        expect(notesOf(chosen).some((n) => n.includes("assignments are missing"))).toBe(false);
+    });
+
+    it("counts a subscription whose alerts were never asked with the alerts that could not be read", () => {
+        const asked = new Map([...alerts].filter(([id]) => id !== "s1"));
+        const count = (notes: string[]) => notes.find((n) => n.startsWith("The alerts of"));
+        expect(count(notesOf(stats))).toBe("The alerts of 1 subscription could not be read, so they are not in this report.");
+        expect(count(notesOf(withAccess(S1, { access: "partial" }), { reads: { alerts: asked } }))).toBe("The alerts of 2 subscriptions could not be read, so they are not in this report.");
+    });
+});
+
 describe("a failed settings read in the export", () => {
     it("is named as could not be read, not as still loading, and is not counted as not required", () => {
         const failed = new Map(settings);

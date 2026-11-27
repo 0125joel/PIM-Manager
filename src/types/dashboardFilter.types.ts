@@ -12,7 +12,7 @@ export interface DashboardFilter {
     /** A bucket, or `over8h` (more than 8 hours: the "over 8 h" figure of the Terms block) */
     maxDuration?: MaxDurationBucket | "over8h";
     /** "agent" is any of the three Agent ID kinds; "user" is a person only, never an agent's user account */
-    principalType?: "user" | "guest" | "servicePrincipal" | "group" | "agent";
+    principalType?: "user" | "guest" | "app" | "group" | "agent";
     /** How a role is held: directly (a user or an app) or through a group that is the principal ("Direct or through a group") */
     via?: "direct" | "group";
     /** Only the positive form exists: eligible without an end date. */
@@ -98,7 +98,7 @@ export const DASHBOARD_FILTER_VALUES = {
     mfa: ["entraMfa", "authContext", "neither"],
     justification: ["required", "notRequired"],
     maxDuration: ["upTo1h", "upTo4h", "upTo8h", "upTo12h", "over12h", "over8h"],
-    principalType: ["user", "guest", "servicePrincipal", "group", "agent"],
+    principalType: ["user", "guest", "app", "agent", "group"],
     via: ["direct", "group"],
     activationNotification: ["none"],
     groupPim: ["under", "outside"],

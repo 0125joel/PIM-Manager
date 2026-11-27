@@ -1,4 +1,4 @@
-import type { PimAssignmentSchedule, PimEligibilitySchedule, RoleAssignment, RoleDetailData, ScopeInfo } from "@/types/directoryRole.types";
+import type { PimAssignmentSchedule, PimEligibilitySchedule, Principal, RoleAssignment, RoleDetailData, ScopeInfo } from "@/types/directoryRole.types";
 import type { GroupPimAssignment, PimGroupData } from "@/types/pimGroup.types";
 import type { GroupMembership } from "@/types/groupMembership.types";
 import { getScopeDisplayName } from "@/utils/scopeUtils";
@@ -27,6 +27,10 @@ export interface AssignmentRowModel {
     /** The schedule or assignment id; the key of row marking */
     scheduleId?: string;
     principalId: string;
+    /** An app's application id, for its Entra link */
+    principalAppId?: string;
+    /** The name is a placeholder: the principal could not be read, so it has no portal link */
+    isUnknownPrincipal?: boolean;
     name: string;
     /** UPN for a user or an agent's user account, "{n} members" for a group, "App" for a service principal, "Agent identity · {product or blueprint}" for an agent identity */
     secondary: string;
@@ -74,6 +78,9 @@ export interface RowContext {
 }
 
 const unknownName = (id: string) => `Unknown (${id.slice(0, 8)})`;
+
+/** The appId for the Entra link: only an Application object has a verified app page; a managed identity gets none */
+const appIdForLink = (principal: Principal | undefined): string | undefined => (principal?.servicePrincipalType === "Application" ? (principal.appId ?? undefined) : undefined);
 
 function endOfSchedule(item: PimEligibilitySchedule | PimAssignmentSchedule, isActive: boolean): RowEnd {
     if (hasNoEnd(item)) return isActive && isAssignedActive(item) ? { type: "permanent" } : { type: "noEnd" };
@@ -124,11 +131,15 @@ function endOfGroupAssignment(a: GroupPimAssignment): RowEnd {
 /** A membership of a group under PIM as a row under its group row. */
 export function buildGroupMemberRow(a: GroupPimAssignment, ctx: Pick<RowContext, "emergencyAccountIds" | "marking" | "nameById" | "blueprintNames">, how: RowHow, isMarked: boolean, keyPrefix: string): AssignmentRowModel {
     const kind = kindOf(a);
-    const name = a.principal?.displayName ?? ctx.nameById?.get(a.principalId.toLowerCase()) ?? unknownName(a.principalId);
+    const readName = a.principal?.displayName ?? ctx.nameById?.get(a.principalId.toLowerCase());
+    const isUnknownPrincipal = readName === undefined;
+    const name = readName ?? unknownName(a.principalId);
     return {
         key: `${keyPrefix}:${a.id}`,
         scheduleId: a.id,
         principalId: a.principalId,
+        principalAppId: appIdForLink(a.principal),
+        isUnknownPrincipal,
         name,
         secondary: agentSecondary(kind, a.principal, ctx.blueprintNames) ?? secondaryOf(kind, a.principal?.userPrincipalName, undefined),
         kind,
@@ -151,7 +162,9 @@ export function buildRoleAssignmentRows(role: RoleDetailData, ctx: RowContext): 
     const toRow = (item: PimEligibilitySchedule | PimAssignmentSchedule, isActive: boolean): AssignmentRowModel => {
         const group = groupById.get(item.principalId.toLowerCase());
         const kind = group ? "group" : kindOf(item);
-        const name = item.principal?.displayName ?? group?.group.displayName ?? ctx.nameById?.get(item.principalId.toLowerCase()) ?? unknownName(item.principalId);
+        const readName = item.principal?.displayName ?? group?.group.displayName ?? ctx.nameById?.get(item.principalId.toLowerCase());
+        const isUnknownPrincipal = readName === undefined;
+        const name = readName ?? unknownName(item.principalId);
         // Distinct people: a member who activated an eligible membership has an eligible and an active instance
         const memberCount = group ? (group.isManaged === false ? group.memberCount : new Set(group.assignments.filter((a) => a.accessType === "member").map((a) => a.principalId.toLowerCase())).size) : undefined;
         const viaGroup = isActive && (item as PimAssignmentSchedule).viaGroup === true && kind !== "group";
@@ -159,6 +172,8 @@ export function buildRoleAssignmentRows(role: RoleDetailData, ctx: RowContext): 
             key: `${isActive ? "a" : "e"}:${item.id}`,
             scheduleId: item.id,
             principalId: item.principalId,
+            principalAppId: appIdForLink(item.principal),
+            isUnknownPrincipal,
             name,
             secondary: agentSecondary(kind, item.principal, ctx.blueprintNames) ?? secondaryOf(kind, item.principal?.userPrincipalName, memberCount),
             kind,

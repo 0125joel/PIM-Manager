@@ -1,7 +1,7 @@
 "use client";
 
 import { PANEL_CLASS } from "@/components/ui/SectionHeader";
-import type { MyAzureRolesState } from "@/utils/azureReportStates";
+import { hasMyRolesContent, type MyAzureRolesState } from "@/utils/azureReportStates";
 import { MyAzureRoles } from "./MyAzureRoles";
 
 interface AzureReportEmptyProps {
@@ -28,7 +28,7 @@ export function AzureReportEmpty({ myRoles }: AzureReportEmptyProps) {
             <p className="mt-1 text-sm leading-5 text-body">{text}</p>
             <p className="mt-1 text-sm leading-5 text-body">{TEXT_DELAY}</p>
             {myRoles === "failed" && <p className="mt-5 border-t border-line pt-4 text-sm leading-5 text-body">Your own Azure roles could not be read.</p>}
-            {roles !== null && hasRows && <MyAzureRoles roles={roles} />}
+            {roles !== null && hasMyRolesContent(roles) && <MyAzureRoles roles={roles} />}
         </div>
     );
 }

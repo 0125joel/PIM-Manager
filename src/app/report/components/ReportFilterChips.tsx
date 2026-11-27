@@ -1,13 +1,9 @@
 "use client";
 
 import { Chip } from "@/components/ui/Chip";
+import type { FilterChip } from "@/utils/filterControls";
 
-/** One chip: the filter key it removes and its text; a key of the other view carries a muted suffix */
-export interface FilterChip<K extends string> {
-    key: K;
-    label: string;
-    suffix?: string;
-}
+export type { FilterChip };
 
 interface ReportFilterChipsProps<K extends string> {
     chips: readonly FilterChip<K>[];

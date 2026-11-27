@@ -14,14 +14,3 @@ export interface PimCustomExtension {
     resourceId?: string;
     customAttributes: string[];
 }
-
-export interface CreateCustomExtensionInput {
-    displayName: string;
-    description?: string;
-    targetUrl: string;
-    resourceId: string;
-    resourceType: CustomExtensionResourceType;
-    timeoutInMilliseconds?: number;
-    maximumRetries?: number;
-    customAttributes?: string[];
-}

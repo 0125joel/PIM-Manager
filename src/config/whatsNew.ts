@@ -16,6 +16,22 @@ export interface WhatsNewRelease {
 /** What the "What's new" view of the help panel shows, newest release first. Edit with the changelog. */
 export const WHATS_NEW_RELEASES: WhatsNewRelease[] = [
     {
+        version: "3.2.0",
+        date: "2026-11-27",
+        title: "Audit for Entra and Azure",
+        entries: [
+            { title: "Audit Entra role and group activity", text: "The Audit page brings activations, assignment and settings changes, and role changes outside PIM into one timeline, up to 30 days. Filter the events, open No activation for the activity in the selected period, and export the current view as CSV, JSON or PDF. No activation describes that period, not whether a role can be removed. The page asks for its own optional permission, and an admin must approve it once for your tenant." },
+            { title: "Audit on Azure", text: "The same page on Azure, with the same timeline, filters and exports. See who activated what and what changed on the scopes you can read, up to 90 days, with no new permission. What could not be read is named instead of quietly missing." },
+            { title: "Through a group counts too", text: "An activation or assignment through a group that holds a role now shows the role and the group, on Entra and on Azure. It makes no difference how someone got there." },
+            { title: "One workspace choice for both logs", text: "Settings shows for each Log Analytics workspace what it holds of the Entra audit log and the Azure activity log, and how far back. With a workspace, Audit reaches past 30 days on Entra and up to a year on Azure. Workspaces are read with their own optional permission." },
+            { title: "Your Azure roles through a group", text: "A role you hold through a PIM group now reads via that group, and the PIM groups you are an eligible member of are listed. Their Azure roles show once you activate the membership." },
+            { title: "Removed Azure assignments stay gone", text: "Below a subscription you cannot read, an inherited assignment that was removed no longer shows, and a direct assignment the PIM list left out does." },
+            { title: "Open it in the portal", text: "In the Report and the Azure Report, the name of a user, group or app opens it in the Entra admin center, and on Azure a scope name in the table opens that scope in the Azure portal. Both open in a new tab." },
+            { title: "What was not read is named", text: "Audit names a Log Analytics table you may not read, or may read only in part, and the dashboard exports name settings, groups and subscriptions that did not load. They no longer look empty." },
+            { title: "Import checks who it is about", text: "A row with an ID and a UPN of two different people is refused, and Import and Review show the UPN or ID under the name." },
+        ],
+    },
+    {
         version: "3.1.1",
         date: "2026-11-10",
         title: "Fixes for self-hosted deploys",

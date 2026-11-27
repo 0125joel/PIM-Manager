@@ -77,6 +77,7 @@ export function ReportToolbar({ view, onViewChange, roleCount, groupCount, isGro
 
     return (
         <div
+            data-visual-section="report-toolbar"
             className="rounded border border-line bg-surface p-3 sm:p-3.5"
             onKeyDown={(event) => {
                 // Escape closes the panel from anywhere in the toolbar and gives the focus back to the Filters button

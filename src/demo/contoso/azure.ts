@@ -1,3 +1,4 @@
+import { buildDemoAzureAudit, type DemoAzureAudit } from "./azureAudit";
 import { CONTOSO_TENANT_ID, demoGuid } from "./ids";
 import { GROUPS, PEOPLE, SERVICE_PRINCIPALS } from "./tenant";
 import type { DemoGroup, DemoServicePrincipal, DemoUser } from "./model";
@@ -69,6 +70,11 @@ export interface DemoAzureInstance {
     /** Active items only: `Activated` came from an eligibility (`linkedEligibilityKey`), `Assigned` is direct */
     assignmentType?: "Assigned" | "Activated";
     linkedEligibilityKey?: string;
+    /**
+     * Active items only: the role assignment was removed, but the instance list below a subscription read only below its
+     * own level still returns it as inherited, while the role assignment list does not (tenant test AU-17)
+     */
+    removed?: true;
 }
 
 export interface DemoAzurePolicyAssignee {
@@ -110,6 +116,8 @@ export interface DemoAzure {
     instances: DemoAzureInstance[];
     policies: DemoAzurePolicy[];
     alerts: DemoAzureAlertState[];
+    /** The requests and Activity Log rows of the Azure Audit page */
+    audit: DemoAzureAudit;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -314,6 +322,8 @@ export function buildContosoAzure(now: Date = new Date()): DemoAzure {
         eligible("e:rglabs-contributor-henrietta", user(P.henrietta), R.contributor, S.rgLabs, at(-9), at(81)),
         active("a:labsvault-admin-grady", user(P.grady), R.keyVaultAdministrator, S.labsVault, at(-1), at(6)),
         active("a:rgprivate-contributor-deploy", servicePrincipal(SERVICE_PRINCIPALS.deploy), R.contributor, S.rgPrivate, at(-30), null),
+        // A removed assignment, still in the instance lists of what the demo account reads: the Report leaves it out
+        active("a:labs-contributor-removed", user(P.kim), R.contributor, S.labs, at(-120), null, { removed: true }),
 
         // The Azure dashboard: a break-glass account, a deeper tree, a managed identity, an agent and a delegated subscription
         active("a:trg-owner-bg01", user(P.breakGlass1), R.owner, S.tenantRootGroup, at(-500), null),
@@ -355,5 +365,5 @@ export function buildContosoAzure(now: Date = new Date()): DemoAzure {
         { subscriptionId: FABRIKAM_PROD_ID, lastScannedDateTime: null, incidents: {} },
     ];
 
-    return { tenantId: CONTOSO_TENANT_ID, scopes: SCOPES, subscriptions: SUBSCRIPTIONS, instances, policies, alerts };
+    return { tenantId: CONTOSO_TENANT_ID, scopes: SCOPES, subscriptions: SUBSCRIPTIONS, instances, policies, alerts, audit: buildDemoAzureAudit(now, instances) };
 }

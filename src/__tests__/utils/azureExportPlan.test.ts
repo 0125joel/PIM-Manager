@@ -83,6 +83,14 @@ describe("planAzureExport", () => {
         expect(bare[5]).toBe(`# Exported ${formatDateTime(EXPORTED)}`);
     });
 
+    it("names what was not read, in the chosen scope or everywhere, only when there is something", () => {
+        const scopes = SCOPES.map((s) => (s.id === LH.id ? { ...s, access: "failed" as const } : s));
+        const line = "# 1 subscription could not be read, so its assignments are missing.";
+        expect(azurePreamble(data({ scopes }), false, false)).toContain(line);
+        expect(azurePreamble(data({ scopes }), true, false)).not.toContain(line);
+        expect(azurePreamble(data(), false, false)).toHaveLength(6);
+    });
+
     it("leaves people out when anonymising", () => {
         const text = fileOf(planAzureExport(data(), choice({ anonymise: true })), "azureAssignments").build();
         expect(text).not.toContain(" by ");

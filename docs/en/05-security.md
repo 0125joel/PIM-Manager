@@ -52,8 +52,11 @@ const loginRequest = {
 - `PrivilegedAccess.Read.AzureADGroup` - PIM for Groups
 - `RoleManagementPolicy.Read.AzureADGroup` - Group policies
 - `RoleManagementAlert.Read.Directory` - Security Alerts
+- `AuditLog.Read.All` - Audit page, asked when you choose to grant it; an admin must approve it once for your tenant. Reading the log also needs Reports Reader, Security Reader or Security Administrator
 - `PrivilegedAccess-CustomExt.Read.All` - List of PIM custom extensions (Preview); reading which extension a policy links needs no extra scope
 - `Policy.Read.All` - Configure's optional Conditional Access check, asked on demand (also needs a role that may read Conditional Access)
+- `https://api.loganalytics.io/Data.Read` - Audit page, from Log Analytics workspaces you choose in Settings; asked only when you choose one (also needs read access to each workspace)
+- `https://management.azure.com/user_impersonation` (Azure Resource Manager) - the Azure environment, asked with a consent popup when you turn Azure on
 
 **Write Scopes** (Incremental Consent, asked when you choose Grant permission in Configure):
 - Directory Roles: `RoleManagementPolicy.ReadWrite.Directory`, `RoleEligibilitySchedule.ReadWrite.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`
@@ -106,7 +109,7 @@ cache: {
 
 **What's Stored:**
 - **sessionStorage**: Access tokens, refresh tokens, ID tokens, the loaded Graph data (60 minute cache)
-- **localStorage**: UI preferences only (theme, log level, workload visibility)
+- **localStorage**: UI preferences only (theme, log level, workload visibility, and on the Audit page your export choice and whether you dismissed the banner per tenant: the key holds the tenant ID, the value is just `1`, and nothing of the audit log)
 - **The one exception, bounded by the session**: Configure's Last applies (the last ten applies with their snapshot, which hold display names) live in localStorage so Undo survives a reload, and sign-out clears them together with the basket and the undo state (decision of 2026-10-08)
 
 ### Token Lifecycle
@@ -415,7 +418,7 @@ Content-Security-Policy:
   script-src 'self' 'sha256-...' 'sha256-...' 'wasm-unsafe-eval' https://alcdn.msauth.net https://aadcdn.msauth.net https://aadcdn.msftauth.net https://static.cloudflareinsights.com;
   style-src 'self';
   img-src 'self' data: https://graph.microsoft.com;
-  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
+  connect-src 'self' https://login.microsoftonline.com https://login.microsoft.com https://graph.microsoft.com https://management.azure.com https://api.loganalytics.azure.com https://api.github.com https://cloudflareinsights.com https://pimmonitor.com;
   font-src 'self' data:;
   frame-src 'self' https://login.microsoftonline.com;
   object-src 'none';
@@ -428,6 +431,8 @@ Content-Security-Policy:
 > `https://pimmonitor.com` in `connect-src` lets Configure read the public PIM Monitor access model catalog (`/catalog/v1/eam-catalog.json`). The request is a plain GET without credentials and carries no tenant data; when the host is blocked, the app uses the copy that ships with it.
 
 > `https://management.azure.com` in `connect-src` is Azure Resource Manager, for the Azure environment (PIM for Azure resources). The app calls it with the signed-in user's own token (the delegated `user_impersonation` scope, asked once with a consent popup), so what comes back follows the user's Azure roles. No tenant data goes anywhere else.
+
+> `https://api.loganalytics.azure.com` in `connect-src` is the Log Analytics query API, for the optional Log Analytics workspace source of the Audit page. The app calls it with the signed-in user's own token (the delegated `https://api.loganalytics.io/Data.Read` scope, asked only when workspaces are chosen in Settings) and sends a fixed query for the audit log; nothing is sent to anyone else.
 
 **Additional Headers:**
 ```

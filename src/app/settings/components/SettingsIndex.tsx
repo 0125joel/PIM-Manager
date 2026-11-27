@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export const SETTINGS_SECTIONS = [
     { id: "permissions", label: "Workloads and permissions" },
+    { id: "workspace", label: "Log Analytics workspace" },
     { id: "display", label: "Display" },
     { id: "emergency", label: "Emergency access accounts" },
     { id: "access-model", label: "Access model labels" },

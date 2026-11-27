@@ -1,6 +1,6 @@
 import type { ArmRoleManagementPolicy, AzureAssignment, AzureScope, AzureScopeLevel } from "@/types/azureResource.types";
 import type { PolicySettings } from "@/types/wizard.types";
-import type { MyAzureRoleRow } from "@/utils/azureReportStates";
+import type { MyAzureRolesLoaded } from "@/utils/azureReportStates";
 import { graphRulesOf, parseArmPolicy } from "@/utils/armPolicyRules";
 import { AZURE_SCOPE_IDS as S, buildContosoAzure, type DemoAzureLevel } from "@/demo/contoso/azure";
 import ownerPolicy from "@/__tests__/fixtures/azure/subscription-owner-policy.json";
@@ -76,12 +76,23 @@ export function buildAzurePanelRules(): Record<string, unknown>[] {
 }
 
 /** The own roles of the user for the empty state with "Your Azure roles": one active, two eligible */
-export const AZURE_FIXTURE_MY_ROLES: { active: MyAzureRoleRow[]; eligible: MyAzureRoleRow[] } = {
+export const AZURE_FIXTURE_MY_ROLES: MyAzureRolesLoaded = {
     active: [
         { id: "fixture:my:3", roleName: "Key Vault Secrets User", scopeName: "kv-contoso-prod", endText: "2 Nov 2026", isPermanent: false },
+        { id: "fixture:my:4", roleName: "Storage Blob Data Reader", scopeName: "Contoso Production", endText: "Permanent", isPermanent: true, viaGroup: "Azure Storage Readers" },
     ],
     eligible: [
         { id: "fixture:my:1", roleName: "Contributor", scopeName: "Contoso Test", endText: "15 Nov 2026", isPermanent: false },
         { id: "fixture:my:2", roleName: "Reader", scopeName: "Tenant Root Group", endText: "Permanent", isPermanent: true },
     ],
+    groups: {
+        kind: "listed",
+        groups: [
+            { groupId: "fixture-group-1", groupName: "Azure Network Operators", endText: "30 Nov 2026", isPermanent: false },
+            { groupId: "fixture-group-2", groupName: "Azure Subscription Owners", endText: "Permanent", isPermanent: true },
+        ],
+    },
 };
+
+/** The same roles with PIM for Groups not turned on: one note instead of the groups */
+export const AZURE_FIXTURE_MY_ROLES_NO_CONSENT: MyAzureRolesLoaded = { ...AZURE_FIXTURE_MY_ROLES, groups: { kind: "noConsent" } };

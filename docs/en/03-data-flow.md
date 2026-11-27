@@ -145,11 +145,11 @@ sequenceDiagram
 
 For **PIM for Groups**, a different, optimized strategy is used because standard APIs can be slow for groups.
 
-### 1. Discovery (Beta Endpoint)
+### 1. Discovery
 
 We first use a special endpoint to find _only_ groups that actually have PIM enabled:
 
-- **Endpoint**: `/beta/identityGovernance/privilegedAccess/group/resources`
+- **Endpoint**: `/v1.0/identityGovernance/privilegedAccess/group/resources`
 - **Purpose**: Avoids scanning thousands of groups that don't use PIM.
 - **Permission**: `PrivilegedAccess.Read.AzureADGroup`
 
@@ -412,6 +412,20 @@ flowchart TB
 
 1. Click the Refresh button
 2. Or wait 60 minutes for automatic cache expiry
+
+---
+
+## Audit Data Flow
+
+The Audit page has its own read, separate from the workloads. It reads when you open the page and when you press **Refresh**, and keeps the result in memory only: not in `localStorage`, not in `sessionStorage`, and not after a reload.
+
+- **Endpoint**: `/auditLogs/directoryAudits`, twice: PIM events (`loggedByService eq 'PIM'`) and direct role changes (`loggedByService eq 'Core Directory' and category eq 'RoleManagement'`)
+- **Permission**: `AuditLog.Read.All` (optional), plus Reports Reader, Security Reader or Security Administrator
+- **Workspaces**: with Log Analytics workspaces chosen in Settings, one query per workspace on `api.loganalytics.azure.com` plus the last 30 days of the Entra audit log, merged on the event id. A workspace can miss events, so the two are compared rather than one replacing the other
+- **Period**: up to 30 days, or as long as the chosen workspaces keep their logs. A shorter period filters what was read. More than 50,000 events stops the read: the page shows no partial list and asks for a shorter period, which it then reads
+- **Kept fields**: IP addresses, user agents and token claims are dropped when a row is mapped, so they cannot reach the page or an export
+
+A missing role, a missing permission, too many events and a failed read each have their own state on the page, so none of them looks like an empty log.
 
 ---
 

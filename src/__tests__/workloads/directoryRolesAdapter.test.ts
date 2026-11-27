@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Approver, PimPolicyAssignment, RoleDetailData } from "@/types/directoryRole.types";
+import { keepPolicyState } from "@/services/directoryRoleService";
 import { applyApprovers, applyPolicyResult, INITIAL_ROLES_EXTRAS, type RolesContent } from "@/workloads/directoryRolesAdapter";
 
 function role(id: string): RoleDetailData {
@@ -64,6 +65,22 @@ describe("applyApprovers", () => {
         const before = content(["a"]);
         expect(applyApprovers(before, "a", approvers)).toBe(before);
         expect(applyApprovers(before, "x", approvers)).toBe(before);
+    });
+});
+
+describe("a refused policy and what comes after it", () => {
+    it("a later failure is a failure: the refusal does not stay next to it", () => {
+        const refused = applyPolicyResult(content(["a"]), "a", null, undefined, true);
+        const after = applyPolicyResult(refused, "a", null, "429");
+        expect(after.data[0]).toMatchObject({ policy: null, configError: "429", policiesForbidden: undefined });
+    });
+
+    it("a quiet refresh keeps the refusal and the failure until the policy is read again", () => {
+        const refused = applyPolicyResult(content(["a"]), "a", null, undefined, true).data[0];
+        expect(keepPolicyState(role("a"), refused)).toMatchObject({ policy: null, policiesForbidden: true });
+        const failed = applyPolicyResult(content(["a"]), "a", null, "429").data[0];
+        expect(keepPolicyState(role("a"), failed)).toMatchObject({ policy: null, configError: "429" });
+        expect(keepPolicyState(role("a"), undefined)).toEqual(role("a"));
     });
 });
 

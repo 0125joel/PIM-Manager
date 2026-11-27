@@ -87,10 +87,14 @@ De applicatie is opgebouwd uit **losjes gekoppelde modules** die onafhankelijk o
 ┌──────────┼───────────────────┼─────────────────────────────┐
 │          ▼                   ▼                              │
 │                     Service Layer                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │directoryRole │  │pimGroup      │  │pimApi        │      │
-│  │Service       │  │Service       │  │              │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│  ┌──────────────┐  ┌──────────────┐                           │
+│  │directoryRole │  │pimGroup      │                           │
+│  │Service       │  │Service       │                           │
+│  └──────────────┘  └──────────────┘                           │
+│  ┌──────────────┐  ┌──────────────┐                           │
+│  │audit         │  │configureApply│                           │
+│  │Service       │  │Service       │                           │
+│  └──────────────┘  └──────────────┘                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -169,17 +173,19 @@ De UI is ontworpen rond **gebruikersgerichte principes**:
 #### 2. Visual Hierarchy
 ```
 ┌────────────────────────────────────────┐
-│ 🔵 Primary: Actie knoppen, totalen      │
+│ accent: Actieknoppen, totalen          │
 │                                        │
-│ 🟢 Success: Positieve statussen        │
+│ success-text: Positieve statussen      │
 │                                        │
-│ 🟡 Warning: Aandachtspunten            │
+│ warn-text: Aandachtspunten             │
 │                                        │
-│ 🔴 Danger: Problemen, fouten           │
+│ danger-text: Problemen, fouten         │
 │                                        │
-│ ⚪ Neutral: Ondersteunende info        │
+│ neutral-fill: Ondersteunende info      │
 └────────────────────────────────────────┘
 ```
+
+De kleuren komen uit de tokens in `STYLEGUIDE.md`. Een waarschuwing, fout of succes heeft altijd ook een tekst- of vormsignaal naast de kleur.
 
 #### 3. Responsive Feedback
 - **Loading states** tonen altijd progress `(17/135)`
@@ -269,7 +275,7 @@ Microsoft Entra ID PIM beheert privileged access voor verschillende workloads:
 | Workload | Base Endpoint | API Version | Permissions |
 |----------|---------------|-------------|-------------|
 | Directory Roles | `/roleManagement/directory/` | v1.0/beta | RoleManagement.Read.Directory |
-| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | beta (policies en hun toewijzingen via v1.0) | PrivilegedAccess.Read.AzureADGroup |
+| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | v1.0 (alleen groepsleden en hun aantal via beta) | PrivilegedAccess.Read.AzureADGroup |
 | Intune Roles (gepland) | `/deviceManagement/roleDefinitions` | v1.0 | DeviceManagementRBAC.Read.All |
 
 ### Authentication & Consent Flow
@@ -291,7 +297,7 @@ Microsoft Entra ID PIM beheert privileged access voor verschillende workloads:
 
 **Incremental Consent Strategie:**
 1. Tien leesscopes bij login (`loginRequest` in `config/authConfig.ts`): User.Read, RoleManagement.Read.Directory, RoleAssignmentSchedule.Read.Directory, RoleEligibilitySchedule.Read.Directory, RoleManagementPolicy.Read.Directory, Policy.Read.ConditionalAccess, User.Read.All, Group.Read.All, AdministrativeUnit.Read.All, Application.Read.All
-2. Extra scopes aanvragen wanneer de gebruiker een workload activeert (PIM for Groups, Security Alerts) of Configure opent (schrijfscopes: RoleManagementPolicy / RoleEligibilitySchedule / RoleAssignmentSchedule.ReadWrite.Directory en RoleManagementPolicy / PrivilegedEligibilitySchedule / PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup)
+2. Extra scopes aanvragen wanneer de gebruiker een workload activeert (PIM for Groups, Security Alerts), de Audit-pagina opent (AuditLog.Read.All), Log Analytics-workspaces kiest in Settings (`https://api.loganalytics.io/Data.Read`) of Configure opent (schrijfscopes: RoleManagementPolicy / RoleEligibilitySchedule / RoleAssignmentSchedule.ReadWrite.Directory en RoleManagementPolicy / PrivilegedEligibilitySchedule / PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup)
 3. Consent state opgeslagen in localStorage voor sessie-persistentie
 
 ---
@@ -360,10 +366,9 @@ Na refactoring volgen alle services een consistent patroon:
 | Service | Doel | Bestandsnaam |
 |---------|------|--------------|
 | Directory Roles | Entra ID rollen + policies | `directoryRoleService.ts` |
-| PIM for Groups | PIM-onboarded groups (beta resources endpoint) | `pimGroupService.ts` |
-| PIM Configuration | Het PIM-beleid van een directoryrol lezen en schrijven (`getRolePolicy`, `updatePimPolicy`) | `pimConfigurationService.ts` |
+| PIM for Groups | PIM-onboarded groups (v1.0 resources endpoint) | `pimGroupService.ts` |
 | Configure Apply | De ene apply-engine van Configureren: eerst een snapshot, dan beleid en toewijzingen stap voor stap | `configureApplyService.ts` |
-| Custom Extensions | PIM custom extensions (Preview): de extension-objecten van de tenant lijsten en aanmaken (beta) | `customExtensionService.ts` |
+| Custom Extensions | PIM custom extensions (Preview): de extension-objecten van de tenant lijsten (beta) | `customExtensionService.ts` |
 | Write Access | De reads van de Configure-toegangscheck: je rollen, eigen groepen en PIM-groepsinstanties | `writeAccessService.ts` |
 | Dry Run | De nieuwe toewijzingen van het mandje eenmalig als alleen-validatie verstuurd | `assignmentDryRunService.ts` |
 | Conditional Access | De optionele Conditional Access-check van de review | `conditionalAccessService.ts` |
@@ -378,6 +383,10 @@ Na refactoring volgen alle services een consistent patroon:
 | Azure Role Settings | De instellingen van één rol op één scope, alleen lezen (Azure Resource Manager) | `azurePolicyService.ts` |
 | Azure Role Definitions | Azure-roldefinities, voor de beschrijving en de controle op privileged (Azure Resource Manager) | `azureRoleDefinitionService.ts` |
 | Azure Alerts | De PIM-waarschuwingen van een subscription, alleen lezen (Azure Resource Manager) | `azureAlertService.ts` |
+| Audit | PIM-gebeurtenissen uit het Entra-auditlog over een periode (Graph) | `auditService.ts` |
+| Audit Workspaces | De Log Analytics-workspaces die je kunt lezen en de PIM-gebeurtenissen erin (Azure Resource Manager, Log Analytics) | `auditWorkspaceService.ts` |
+| Azure Audit | Gebeurtenissen van roltoewijzingen uit het Azure Activity Log (geteld op `activityLogRateLimiter`) en de PIM-aanvraaglijsten per scope (Azure Resource Manager) | `azureAuditService.ts` |
+| Azure Audit Workspaces | Azure Activity-gebeurtenissen uit de gekozen Log Analytics-workspaces (Log Analytics) | `azureAuditWorkspaceService.ts` |
 | Service Principal Types | Of een service principal achter een Azure-toewijzing een app of een managed identity is, en of de principal nog bestaat (Graph) | `servicePrincipalTypeService.ts` |
 | Policy Parser | PIM-beleidsregels parsen naar `PolicySettings` | `utils/policyParser.ts` |
 | Intune (gepland) | Intune RBAC roles | `intuneService.ts` |
@@ -390,12 +399,15 @@ Na refactoring volgen alle services een consistent patroon:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 1: Fast Load (~10-15s)                                 │
+│ Phase 1: Fast Load                                          │
 │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ 1. GET /roleManagement/directory/roleDefinitions        │ │
-│ │ 2. GET /roleManagement/directory/roleAssignments        │ │
-│ │ 3. GET /roleManagement/directory/roleEligibilitySchedules│ │
-│ │ 4. GET /roleManagement/directory/roleAssignmentSchedules │ │
+│ │ Then in parallel, under /roleManagement/directory:      │ │
+│ │ 2. GET roleAssignments                                  │ │
+│ │ 3. GET roleEligibilitySchedules                         │ │
+│ │ 4. GET roleAssignmentSchedules                          │ │
+│ │ 5. GET roleAssignmentScheduleInstances                  │ │
+│ │    (marks an activation through a group)                │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                         │                                    │
 │                         ▼                                    │
@@ -404,12 +416,20 @@ Na refactoring volgen alle services een consistent patroon:
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 2: Background Policy Load (~2-3 min)                   │
+│ Phase 2: Background Policy Load                             │
 │ ┌─────────────────────────────────────────────────────────┐ │
-│ │ For each role (parallel via worker pool):               │ │
+│ │ From 10 roles: every role's policy in one paged call    │ │
 │ │   GET /policies/roleManagementPolicyAssignments         │ │
-│ │       ?$filter=roleDefinitionId eq '{id}'               │ │
+│ │       ?$filter=scopeId eq '/'                           │ │
+│ │         and scopeType eq 'Directory'                    │ │
 │ │       &$expand=policy($expand=rules)                    │ │
+│ │                                                         │ │
+│ │ Then per role, via the worker pool, only the roles      │ │
+│ │ missing from that answer:                               │ │
+│ │   same call, filter adds roleDefinitionId eq '{id}'     │ │
+│ │ Fewer than 10 roles, or the one call failed: all roles  │ │
+│ │ go this way. A 403 stops the load, since Graph would    │ │
+│ │ refuse the same per role.                               │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                         │                                    │
 │                         ▼                                    │
@@ -423,7 +443,7 @@ Na refactoring volgen alle services een consistent patroon:
 ┌─────────────────────────────────────────────────────────────┐
 │ Phase 1: Discovery (~2-5s)                                   │
 │ ┌─────────────────────────────────────────────────────────┐ │
-│ │ GET /beta/identityGovernance/privilegedAccess/          │ │
+│ │ GET /v1.0/identityGovernance/privilegedAccess/          │ │
 │ │     group/resources                                      │ │
 │ │                                                          │ │
 │ │ → Returns ONLY PIM-onboarded groups                      │ │
@@ -548,18 +568,14 @@ async function runWorkerPool<TItem, TResult>({
 ```
 
 **Voordelen:**
-- **8x sneller** dan sequentieel (geoptimaliseerd van 3x)
+- Draait meerdere requests tegelijk in plaats van na elkaar (8 workers en 300 ms vertraging, tenzij een call eigen waarden kiest)
 - Voorkomt Graph API throttling (429)
 - Consistente progress reporting
 - Herbruikbaar voor alle workloads
 
 **Performance Impact:**
-- Policy fetch tijd: ~15-20s → ~3-5s (voor 50 roles)
-- **70-80% sneller** dan originele implementatie
-- Blijft ruim binnen Microsoft Graph API throttling limieten:
-  - Large tenant (>500 gebruikers): 10% van quota gebruik
-  - Medium tenant (50-500): 16% van quota gebruik
-  - Small tenant (<50): 22% van quota gebruik
+- Vanaf 10 rollen komen de policies van de hele tenant in één gepagineerde call (`fetchAllRolePolicies`) in plaats van één call per rol: hooguit een paar pagina's, waar het oude laden voor elke rol een request deed.
+- De worker pool leest alleen wat die call mist, of elke rol als de tenant minder dan 10 rollen heeft of de call mislukt. Die reads per rol boeken elk 2 ResourceUnits af bij `graphRateLimiter` en blijven zo onder de eigen cap van de app (zie de Graph-limieten hieronder).
 
 ### Rate Limiting Strategy
 
@@ -568,18 +584,22 @@ async function runWorkerPool<TItem, TResult>({
 | Directory Roles: policy fetch per rol | 12 | 200ms | `concurrentFetchPolicies` (aangeroepen door `workloads/directoryRolesAdapter.ts`); verhoogd van 8/300ms in v2.1.0 |
 | Directory Roles: scope-verrijking | 8 | 300ms | `enrichAssignmentsWithScope` |
 | PIM for Groups: beheerde groepen (volledig laden, 4 calls per groep) | 3 | 500ms | `fetchAllPimGroupData` |
-| PIM for Groups: beheerde groepen (slim verversen, 2 calls per groep) | 3 | 500ms | `refreshPimGroupAssignments` |
+| PIM for Groups: beheerde groepen (slim verversen, 3 calls per groep, plus een detailread alleen als die falen) | 3 | 500ms | `refreshPimGroupAssignments` |
 | PIM for Groups: onbeheerde groepen | 5 | 200ms | `fetchAllPimGroupData`, `refreshPimGroupAssignments` (één lichte call per groep) |
 | PIM for Groups: ledenaantal van onbeheerde groepen | 6 | 500ms | `addMemberCounts` (`pimGroupService.ts`) |
-| Azure: toewijzingen (instances en eligibility schedules per subscription; resourcegroepen en resources van een subscription die zijn eigen niveau weigert) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`, met `armRateLimiter`; `costPerItem` 2, want elk item leest twee lijsten tegelijk |
-| Azure: rolinstellingen van de rol- en scopeparen (instellingendialoog, export) | 4 | 250ms | `readAzureRolePolicyPairs` en de policies-hook in `hooks/useAzureRolePolicy.ts`, met `armRateLimiter`, `costPerItem` 1; de rootscope stuurt geen request |
-| Azure-dashboard: custom roldefinities per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, met `armRateLimiter`, `costPerItem` 1; de lijsten op tenantniveau en de ingebouwde rollen van de eerste subscription zijn losse calls |
-| Azure-dashboard: PIM-waarschuwingen per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, met `armRateLimiter`, `costPerItem` 1 |
+| Azure: toewijzingen (instances en eligibility schedules per subscription; resourcegroepen en resources van een subscription die zijn eigen niveau weigert) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`; de pool boekt niets af, de ARM-client telt elk request |
+| Azure: rolinstellingen van de rol- en scopeparen (instellingendialoog, export) | 4 | 250ms | `readAzureRolePolicyPairs` en de policies-hook in `hooks/useAzureRolePolicy.ts`; de ARM-client telt elk request; de rootscope stuurt geen request |
+| Azure-dashboard: custom roldefinities per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`; de ARM-client telt elk request; de lijsten op tenantniveau en de ingebouwde rollen van de eerste subscription zijn losse calls |
+| Azure-dashboard: PIM-waarschuwingen per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`; de ARM-client telt elk request |
+| Audit (Entra en Azure): workspaces per subscription, en de diagnostische instellingen die naar een workspace sturen | 4 | 250ms | `listWorkspaces`, `listAuditLogWorkspaceIds`, `listActivityLogWorkspaceIds` (`auditWorkspaceService.ts`); de ARM-client telt elk request |
+| Audit (Entra en Azure): Log Analytics-queries per gekozen workspace (lezen en controleren) | 5 | 200ms | `readWorkspaces`, `checkWorkspaceLogs` (`auditWorkspaceService.ts`), `readAzureWorkspaces` (`azureAuditWorkspaceService.ts`); één gate houdt hooguit 5 queries tegelijk, onder `logAnalyticsRateLimiter` |
+| Azure Audit: Activity Log en aanvraaglijsten per scope | 4 | 250ms | `readAzureAudit` (`azureAuditService.ts`); de ARM-client telt elk request |
+| Configureren: dry run van nieuwe toewijzingen | 4 | 500ms | `dryRunAssignments` (`assignmentDryRunService.ts`), met `graphRateLimiter` |
 | Worker pool standaard (indien niet opgegeven) | 8 | 300ms | `runWorkerPool` |
 
-De Configure-apply (`services/configureApplyService.ts`) draait zijn stappen via `runWorkerPool` met 4 workers en 500 ms vertraging. `updatePimPolicy` loopt niet via een pool: de regels worden één voor één gePATCHt met een pauze van 300 ms. Elke Graph-call, gepoold of niet, gaat bovendien door `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window van 500 resource units per 10 seconden).
+De Configure-apply (`services/configureApplyService.ts`) draait zijn stappen via `runWorkerPool` met 4 workers en 500 ms vertraging. Pools die `rateLimiter: graphRateLimiter` meekrijgen, en de calls die zelf een eenheid afboeken (`acquire`, zoals de Configure-PATCHes en het lezen van groepsleden), tellen mee in `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window van 500 resource units per 10 seconden). Andere Graph-calls boeken niets af, maar wachten wel een 429 uit: `withRetry` en de throttle watcher van de Graph-client pauzeren de limiter (`backOff`).
 
-Azure Resource Manager heeft een eigen limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window van 200 requests per 10 seconden), los van `graphRateLimiter`. De ARM-client (`utils/armClient.ts`) boekt bij elk request dat hij verstuurt ook één eenheid af van dezelfde limiter, naast de `costPerItem` die de worker pool per item afboekt. Na een 429 pauzeert de client de limiter voor de `Retry-After` van het antwoord, zodat elke worker wacht.
+Azure Resource Manager heeft een eigen limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window van 200 requests per 10 seconden), los van `graphRateLimiter`. De ARM-client (`utils/armClient.ts`) boekt bij elk request dat hij verstuurt één eenheid af, elke pagina meegeteld, dus een ARM-worker pool boekt zelf niets af (hij krijgt geen `rateLimiter`; een architectuurtest bewaakt dat). Na een 429 pauzeert de client de limiter voor de `Retry-After` van het antwoord, zodat elke worker wacht. Het Activity Log van Azure Audit heeft een eigen limiet: zijn client telt op `activityLogRateLimiter` (`utils/rateLimiter.ts`, sliding window van 50 requests per 30 seconden), niet op `armRateLimiter`.
 
 **Microsoft Graph API Limieten (Identity & Access):**
 
@@ -591,16 +611,7 @@ Azure Resource Manager heeft een eigen limiter, `armRateLimiter` (`utils/rateLim
 
 **Policy fetch cost:** 2 RU per request, afgeleid uit de Graph-regels (een request kost 1, `$expand` telt 1 erbij). Microsoft publiceert geen kost voor `/policies/roleManagementPolicyAssignments`, dus dit is niet gemeten; de response header `x-ms-resource-unit` toont de echte waarde.
 
-**Eigen cap:** `graphRateLimiter` houdt alle Graph-calls samen onder 500 RU per 10 seconden, ongeveer 25 policy-requests per seconde.
-
-----------------|-------------------------|-------------------|-------------|-----------------|
-| Large (>500 users) | 8,000 RU | ~3 RU/req | ~266 req/sec | 26 req/sec (10%) |
-| Medium (50-500) | 5,000 RU | ~3 RU/req | ~166 req/sec | 26 req/sec (16%) |
-| Small (<50) | 3,500 RU | ~3 RU/req | ~116 req/sec | 26 req/sec (22%) |
-
-**Berekening huidige gebruik:**
-- 12 workers × 5 req/sec (1 request per 200ms) = ~60 req/sec totaal (policy fetch)
-- Standaard worker pool (8/300ms) gebruikt ~26 req/sec voor overige operaties
+**Eigen cap:** `graphRateLimiter` houdt de reads en writes die er een eenheid uit nemen samen onder 500 RU per 10 seconden, ongeveer 25 policy-requests per seconde.
 
 ---
 
@@ -625,12 +636,12 @@ Azure Resource Manager heeft een eigen limiter, `armRateLimiter` (`utils/rateLim
 
 ### Groups Display Strategy
 
-**Besluit:** Toon ALLE role-assignable groups, highlight PIM-enabled:
+**Besluit:** Toon alle role-assignable groepen; de Report zet de groepen Outside PIM bovenaan:
 
-| Badge | Betekenis |
-|-------|-----------|
-| 🟢 PIM Active | Groep heeft actieve/eligible assignments |
-| ⚪ No PIM | Role-assignable maar geen PIM assignments |
+| Tag | Betekenis |
+|-----|-----------|
+| Under PIM | Lidmaatschap is eligible of tijdgebonden en volgt de PIM-policy van de groep |
+| Outside PIM (danger-tag) | Een role-assignable groep die PIM niet beheert: de leden hebben de rollen van de groep altijd |
 
 **Rationale:**
 - Gebruiker ziet volledige potentieel
@@ -744,12 +755,10 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 | ADR-001 | **Client-side only** (geen backend) | Accepted | Vermijdt server kosten, simpler deployment, data blijft bij gebruiker |
 | ADR-002 | **Static Export** via Next.js | Accepted | Cloudflare Pages hosting, geen server-side rendering nodig |
 | ADR-003 | **UnifiedPimContext** voor multi-workload | Accepted | Single source of truth, schaalt naar nieuwe workloads. Azure heeft daarnaast een eigen `AzureProvider` (`src/contexts/AzureContext.tsx`), alleen gemount rond de Azure-pagina's |
-| ADR-004 | **Worker Pool pattern** voor API throttling | Accepted | Voorkomt 429 errors, tot 8x sneller dan sequentieel |
+| ADR-004 | **Worker Pool pattern** voor API throttling | Accepted | Voorkomt 429 errors, meerdere requests tegelijk in plaats van na elkaar |
 | ADR-005 | **Aggregated cards** i.p.v. per-workload | Accepted | Cleaner UI, schaalt beter |
 | ADR-006 | **Incremental Consent** per workload | Accepted | Least privilege, user kiest welke data |
-| ADR-007 | **Beta API** alleen waar v1.0 de data mist: `isPrivileged`, alerts, custom extensions, PIM for Groups-resources, groepsleden en ledenaantal | ⚠️ Risk Accepted | Nodig voor security insights en PIM for Groups; elke beta-aanroep heeft de reden in een codecommentaar. De `isPrivileged`-aanroep valt terug op v1.0 zonder dat veld. Het ARM-endpoint voor PIM-waarschuwingen (`roleManagementAlerts`, `src/services/azureAlertService.ts`) is ook een preview, `2022-08-01-preview` |
-
-> Zie `docs/adr/` voor gedetailleerde ADR documenten (indien gecreëerd).
+| ADR-007 | **Beta API** alleen waar v1.0 de data mist: `isPrivileged`, alerts, custom extensions, groepsleden en ledenaantal | Risk Accepted | Nodig voor security insights en PIM for Groups; elke beta-aanroep heeft de reden in een codecommentaar. De `isPrivileged`-aanroep valt terug op v1.0 zonder dat veld. ARM-previews, elk met de reden in een codecommentaar: PIM-waarschuwingen (`roleManagementAlerts`, `src/services/azureAlertService.ts`, `2022-08-01-preview`), het Activity Log van een managementgroep (`src/services/azureAuditService.ts`, `2017-03-01-preview`) en de diagnostische instellingen die Audit-workspaces leest (`src/services/auditWorkspaceService.ts`, `2017-04-01-preview` en `2021-05-01-preview`) |
 
 ---
 
@@ -782,8 +791,12 @@ Belangrijke architectuurbeslissingen gedocumenteerd voor toekomstige referentie:
 │  Token Scopes (cumulative):                                   │
 │  ├── Login: tien leesscopes (zie Incremental Consent Strategie) │
 │  ├── Security Alerts: RoleManagementAlert.Read.Directory       │
+│  ├── Audit: AuditLog.Read.All                                  │
+│  │     Workspaces: api.loganalytics.io/Data.Read               │
 │  ├── PIM for Groups: PrivilegedAccess.Read.AzureADGroup,      │
 │  │     RoleManagementPolicy.Read.AzureADGroup                  │
+│  ├── Custom Extensions: PrivilegedAccess-CustomExt.Read.All    │
+│  ├── Azure: management.azure.com/user_impersonation            │
 │  └── Configure: granulaire *.ReadWrite.Directory en           │
 │        *.ReadWrite.AzureADGroup scopes                         │
 │                                                                │
@@ -869,7 +882,7 @@ Voor gedetailleerde deployment instructies, zie: **[08-deployment.md](./10-deplo
 
 ```
 src/
-├── app/                          # Routes: /, dashboard, report, configure, settings, help, redirect, demo
+├── app/                          # Routes: /, dashboard, report, audit, configure, settings, help, redirect, demo, azure
 ├── components/
 │   ├── AppProviders.tsx          # De providerboom (gerenderd door app/layout.tsx)
 │   ├── ui/                       # Primitieven: Button, Chip, Dialog, Menu, SegmentedControl, StatCard, Tag, Skeleton, Toast, DurationSlider, DemoLock, ...
@@ -888,7 +901,6 @@ src/
 ├── services/
 │   ├── directoryRoleService.ts   # Entra ID Roles + Policies
 │   ├── pimGroupService.ts        # PIM for Groups
-│   ├── pimConfigurationService.ts # Lezen en schrijven van rolpolicies
 │   ├── configureApplyService.ts  # De apply-engine van Configureren
 │   ├── assignmentDryRunService.ts # Proefrun van nieuwe toewijzingen (isValidationOnly)
 │   ├── writeAccessService.ts     # Leesacties van de toegangscheck van Configureren

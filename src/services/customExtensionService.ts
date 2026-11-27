@@ -3,10 +3,10 @@
  *
  * Manages the roleManagementCustomCalloutExtension objects a tenant registered
  * for PIM. Linking an extension to a role or group policy is a policy rule
- * write and lives in pimConfigurationService and the Configure apply engine.
+ * write and lives in the Configure apply engine (`buildRuleUpdates`, `runApply`).
  *
  * Endpoint (beta only): /identityGovernance/privilegedAccess/customExtensions
- * Permissions: PrivilegedAccess-CustomExt.Read.All (list), PrivilegedAccess-CustomExt.ReadWrite.All (create)
+ * Permission: PrivilegedAccess-CustomExt.Read.All (list). The app does not create extensions.
  * Licence: Microsoft Entra ID Governance or Entra Suite, on top of P2. A tenant
  * without it answers 403, which callers treat as PERMISSION_DENIED.
  */
@@ -18,8 +18,8 @@ import { withRetry } from "@/utils/retryUtils";
 import { getErrorStatusCode } from "@/utils/errorUtils";
 
 // Types live in @/types/customExtension.types, re-exported here for existing importers
-export type { CustomExtensionResourceType, PimCustomExtension, CreateCustomExtensionInput } from "@/types/customExtension.types";
-import type { PimCustomExtension, CreateCustomExtensionInput } from "@/types/customExtension.types";
+export type { CustomExtensionResourceType, PimCustomExtension } from "@/types/customExtension.types";
+import type { PimCustomExtension } from "@/types/customExtension.types";
 
 interface GraphCustomExtension {
     id?: string;
@@ -81,45 +81,6 @@ export async function fetchCustomExtensions(client: Client): Promise<PimCustomEx
         }
         Logger.debug("customExtensionService", `Loaded ${extensions.length} custom extensions`);
         return extensions;
-    } catch (error: unknown) {
-        rethrowPermissionDenied(error);
-    }
-}
-
-/**
- * Registers an endpoint that already exists (typically a Logic App behind API
- * Management) as a PIM custom extension. Building the endpoint stays outside
- * PIM Manager.
- */
-export async function createCustomExtension(client: Client, input: CreateCustomExtensionInput): Promise<PimCustomExtension> {
-    const body = {
-        "@odata.type": "#microsoft.graph.roleManagementCustomCalloutExtension",
-        displayName: input.displayName,
-        description: input.description ?? "",
-        endpointConfiguration: {
-            "@odata.type": "#microsoft.graph.httpRequestEndpoint",
-            targetUrl: input.targetUrl,
-        },
-        clientConfiguration: {
-            "@odata.type": "#microsoft.graph.customExtensionClientConfiguration",
-            timeoutInMilliseconds: input.timeoutInMilliseconds ?? 10000,
-            maximumRetries: input.maximumRetries ?? 3,
-        },
-        authenticationConfiguration: {
-            "@odata.type": "#microsoft.graph.azureAdTokenAuthentication",
-            resourceId: input.resourceId,
-        },
-        resourceType: input.resourceType,
-        customAttributes: input.customAttributes ?? [],
-    };
-    try {
-        const created: GraphCustomExtension = await withRetry(
-            // beta: custom extension objects have no v1.0 endpoint yet (Preview)
-            () => client.api(PIM_URLS.customExtensions).version("beta").post(body),
-            3, 1000, "createCustomExtension"
-        );
-        Logger.info("customExtensionService", `Created custom extension ${created.id}`);
-        return mapCustomExtension(created);
     } catch (error: unknown) {
         rethrowPermissionDenied(error);
     }

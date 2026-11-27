@@ -31,7 +31,6 @@ export const CUSTOM_EXTENSION_RULE_IDS = {
 } as const;
 export const CUSTOM_EXTENSION_SCOPES = {
     read: 'PrivilegedAccess-CustomExt.Read.All',
-    readWrite: 'PrivilegedAccess-CustomExt.ReadWrite.All',
 } as const;
 
 // Re-export expiration options from centralized utility
@@ -46,6 +45,22 @@ export const DOCUMENTATION_URL = "https://github.com/0125joel/PIM-Manager/tree/m
 
 /** Delegated permission for the PIM security alerts of the dashboard (optional, incremental consent). */
 export const ALERTS_PERMISSION = "RoleManagementAlert.Read.Directory";
+
+/**
+ * Delegated permission for the Entra audit log of the Audit page (optional, incremental consent, never at sign-in).
+ * Reading also needs a reader role (Reports Reader, Security Reader or Security Administrator).
+ */
+export const AUDIT_LOG_PERMISSION = "AuditLog.Read.All";
+
+/**
+ * Delegated scope of the Log Analytics API (audience `https://api.loganalytics.io`) for the optional workspace source of
+ * the Audit page. Optional, incremental consent, asked only when workspaces are chosen in Settings, never at sign-in.
+ * Reading also needs read access to each workspace and its AuditLogs table, such as Log Analytics Reader.
+ */
+export const LOG_ANALYTICS_PERMISSION = "https://api.loganalytics.io/Data.Read";
+
+/** The host the workspace queries go to (documented: `POST /v1/workspaces/{customerId}/query`); it is in the CSP `connect-src` */
+export const LOG_ANALYTICS_BASE_URL = "https://api.loganalytics.azure.com";
 
 /**
  * Delegated permission for the optional Conditional Access check of Configure (spec 12.5): which policies stand behind

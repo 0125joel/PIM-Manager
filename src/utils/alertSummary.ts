@@ -51,3 +51,12 @@ export function summarizeAlerts(alerts: SecurityAlert[], dismissed: ReadonlySet<
 
     return { rows, openCount: active.filter((a) => !dismissed.has(a.id)).length, dismissedCount: active.filter((a) => dismissed.has(a.id)).length, passedCount };
 }
+
+/**
+ * The alerts an export may report on: the list only when it was read, else null so the report says the alerts could
+ * not be read. Consent alone is not enough: a read that failed or is still running leaves an empty list, which would
+ * print "No active alerts" (audit run-4)
+ */
+export function alertsForExport(state: { hasPermission: boolean | null; loading: boolean; error: string | null; alerts: SecurityAlert[] }): SecurityAlert[] | null {
+    return state.hasPermission === true && !state.loading && !state.error ? state.alerts : null;
+}

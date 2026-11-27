@@ -6,8 +6,8 @@ export const DETAILS_STORAGE_KEY = "details-preference";
 
 export type DetailsPreference = "fewer" | "more";
 
-/** The six pages and views that remember their own choice */
-export const DETAILS_PAGES = ["entra-dashboard-basic", "entra-dashboard-advanced", "entra-report", "azure-dashboard-basic", "azure-dashboard-advanced", "azure-report"] as const;
+/** The eight pages and views that remember their own choice */
+export const DETAILS_PAGES = ["entra-dashboard-basic", "entra-dashboard-advanced", "entra-report", "entra-audit", "azure-dashboard-basic", "azure-dashboard-advanced", "azure-report", "azure-audit"] as const;
 
 export type DetailsPage = (typeof DETAILS_PAGES)[number];
 
@@ -31,7 +31,7 @@ export function readDetailsPreference(storage: StorageLike | null = defaultStora
     }
 }
 
-/** Writes the setting and clears the six page choices, so every page starts again from the new setting */
+/** Writes the setting and clears the page choices, so every page starts again from the new setting */
 export function writeDetailsPreference(value: DetailsPreference, storage: StorageLike | null = defaultStorage()): boolean {
     try {
         storage?.setItem(DETAILS_STORAGE_KEY, value);

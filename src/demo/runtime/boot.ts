@@ -49,10 +49,17 @@ if (IS_DEMO) {
             }),
         );
     }
+    let logAnalytics: ReturnType<typeof loadLogAnalytics> | null = null;
+    function loadLogAnalytics() {
+        return import("@/demo/loganalytics/server").then((m) => m.createFakeLogAnalytics(() => new Date(), {
+            onUnhandled: (request) => Logger.warn("Demo", `The demo has no answer for ${request.method} ${request.url}; add it to src/demo/loganalytics/server.ts`),
+        }));
+    }
     window.fetch = createDemoFetch({
         realFetch,
         graph: () => (graph ??= loadGraph()),
         arm: () => (arm ??= loadArm()),
+        logAnalytics: () => (logAnalytics ??= loadLogAnalytics()),
         catalog: () => import("@/config/accessModel/eam-catalog.json").then((m) => m.default),
         // A Graph or ARM answer takes 60 to 220 ms, so the loading states of the real app show as they do with a tenant
         latency: () => 60 + Math.round(Math.random() * 160),

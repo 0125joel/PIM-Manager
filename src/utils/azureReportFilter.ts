@@ -16,24 +16,16 @@ import {
     type AzureStatusFilter,
     type AzureViaFilter,
 } from "@/utils/azureReport";
+import { groupFilterControls, parseFilterPairs, type FilterChip, type FilterControlBase } from "@/utils/filterControls";
+import { holderOptions } from "@/utils/holderKinds";
 import { resourceIconFor } from "@/utils/azureResourceIcons";
 import { isAzureListView, type AzureListView } from "@/utils/azureRoleView";
 
-/** Same shape as `FilterChip` of the Report chips; utils do not import components */
-export interface AzureFilterChip {
-    key: AzureFilterKey;
-    label: string;
-}
+export type AzureFilterChip = FilterChip<AzureFilterKey>;
 
 export type AzureFilterGroup = "Assignments" | "Role properties" | "Scope";
 
-export interface AzureFilterControl {
-    key: AzureFilterKey;
-    label: string;
-    group: AzureFilterGroup;
-    neutral: string;
-    options: { value: string; label: string }[];
-}
+export type AzureFilterControl = FilterControlBase<AzureFilterKey, AzureFilterGroup>;
 
 const STATUS_VALUES: readonly string[] = ["eligible", "active", "activated", "assigned"];
 const PRINCIPAL_VALUES: readonly string[] = ["user", "group", "app", "foreignGroup", "guest", "agent", "managedIdentity", "deleted"];
@@ -54,24 +46,10 @@ function withoutQuery(filters: AzureReportFilters): FilterWithoutQuery {
     return rest as FilterWithoutQuery;
 }
 
-function decodeRaw(raw: string): string {
-    if (!raw.includes("%")) return raw;
-    try {
-        return decodeURIComponent(raw);
-    } catch {
-        return raw;
-    }
-}
-
 /** Reads the `f` parameter. Unknown keys, unknown values and malformed pairs are ignored; the last valid pair of a key wins. */
 export function parseAzureFilter(raw: string | null | undefined): FilterWithoutQuery {
     const result: AzureReportFilters = { ...DEFAULT_AZURE_FILTERS };
-    if (!raw) return withoutQuery(result);
-    for (const pair of decodeRaw(raw).split(",")) {
-        const index = pair.indexOf(":");
-        if (index < 0) continue;
-        const key = pair.slice(0, index).trim();
-        const value = pair.slice(index + 1).trim();
+    for (const { key, value } of parseFilterPairs(raw)) {
         if (key === "status" && STATUS_VALUES.includes(value)) result.status = value as AzureStatusFilter;
         else if (key === "origin" && (value === "all" || value === "inherited")) result.origin = value;
         else if (key === "privileged" && value === "true") result.privileged = true;
@@ -153,8 +131,8 @@ const CHIP_LABELS: Record<Exclude<AzureFilterKey, keyof typeof BOOLEAN_CHIP_LABE
     status: { eligible: "Assignment: Eligible", active: "Assignment: Active", activated: "Assignment: Active after activation", assigned: "Assignment: Active assigned" },
     origin: { all: "Origin: All", inherited: "Origin: Inherited" },
     principalType: {
-        user: "Held by: Users", group: "Held by: Groups", app: "Held by: Apps", foreignGroup: "Held by: Foreign groups",
-        guest: "Held by: Guests", agent: "Held by: Agents", managedIdentity: "Held by: Managed identities", deleted: "Held by: Deleted",
+        user: "Who: Users", group: "Who: Groups", app: "Who: Apps", foreignGroup: "Who: Foreign groups",
+        guest: "Who: Guests", agent: "Who: Agents", managedIdentity: "Who: Managed identities", deleted: "Who: Deleted",
     },
     ends: { permanent: "Ends: Permanent", within30: "Ends: Within 30 days", timeBound: "Ends: Time-bound" },
     level: {
@@ -217,17 +195,10 @@ export function getAzureFilterControls(resourceTypes: readonly string[]): AzureF
             ],
         },
         {
-            key: "principalType", label: "Held by", group: "Assignments", neutral: "all",
+            key: "principalType", label: "Who", group: "Assignments", neutral: "all",
             options: [
                 { value: "all", label: "All" },
-                { value: "user", label: "Users" },
-                { value: "group", label: "Groups" },
-                { value: "app", label: "Apps" },
-                { value: "guest", label: "Guests" },
-                { value: "agent", label: "Agents" },
-                { value: "managedIdentity", label: "Managed identities" },
-                { value: "foreignGroup", label: "Foreign groups" },
-                { value: "deleted", label: "Deleted" },
+                ...holderOptions(["user", "group", "app", "guest", "agent", "managedIdentity", "foreignGroup", "deleted"]),
             ],
         },
         {
@@ -337,12 +308,4 @@ export function writeAzureControlValue(control: AzureFilterControl, filters: Azu
     return { ...filters, [control.key]: value };
 }
 
-export function groupAzureControls(controls: readonly AzureFilterControl[]): { group: AzureFilterGroup; controls: AzureFilterControl[] }[] {
-    const groups: { group: AzureFilterGroup; controls: AzureFilterControl[] }[] = [];
-    for (const control of controls) {
-        const existing = groups.find((g) => g.group === control.group);
-        if (existing) existing.controls.push(control);
-        else groups.push({ group: control.group, controls: [control] });
-    }
-    return groups;
-}
+export const groupAzureControls = groupFilterControls<AzureFilterControl>;

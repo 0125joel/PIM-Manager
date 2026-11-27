@@ -40,7 +40,7 @@ src/
 
 ## Gedetailleerd Overzicht
 
-### 📁 `src/app/` - Pagina's
+### `src/app/` - Pagina's
 
 Elke submap vertegenwoordigt een pagina in de applicatie.
 
@@ -50,6 +50,12 @@ Elke submap vertegenwoordigt een pagina in de applicatie.
 | `app/dashboard/` | Dashboard overzicht |
 | `app/report/` | Hoofdrapportpagina met alle roldata |
 | `app/configure/` | PIM configuratiepagina (Edit, Guided, Import, Access model) |
+| `app/audit/` | Audit: activaties en wijzigingen in Entra-rollen en -groepen, met de weergave No activation en export |
+| `app/azure/` | De Azure-pagina's: het dashboard, `report/`, `audit/` en `configure/` (voorlopig een placeholder); de layout vraagt eerst de Azure-consent |
+| `app/settings/` | Instellingen: workloadmachtigingen, weergave, noodaccounts, labels van het access model, Log Analytics-workspace, geavanceerd |
+| `app/help/` | De volledige gids, één paneel per pagina |
+| `app/demo/` | Start de live demo op een verzonnen tenant (alleen op de gehoste versie) |
+| `app/redirect/` | Aanmeldbrug voor MSAL-popups en stil aanmelden, zonder navigatie |
 | `app/layout.tsx` | Gedeelde layout (navigatie, providers) |
 | `app/globals.css` | Globale stijlen |
 
@@ -59,40 +65,31 @@ Elke submap vertegenwoordigt een pagina in de applicatie.
 
 ---
 
-### 📁 `src/components/` - UI Componenten
+### `src/components/` - UI Componenten
 
 Herbruikbare bouwstenen die op meerdere pagina's worden gebruikt.
 
 | Component | Doel |
 |-----------|------|
-| `configure/` | Configure functie (Edit, Guided, Import, Access model) |
-| `configure/shared/PrincipalSelector.tsx` | Gebruiker/groep zoeken via Graph API (gedeeld over modi) |
-| `ui/` | Primitieve UI-componenten: Toggle, Skeleton, Toast, DurationSlider |
-| `LoadingStatus.tsx` | Inline laadindicator voor achtergrond policy-ophalen |
+| `ui/` | Gedeelde bouwstenen: Button, Chip, Dialog, Menu, SegmentedControl, StatCard, Tag, Toast, Skeleton, de DurationSlider van Configureren en het filterpaneel van Rapport, Azure en Audit |
+| `shell/` | Het kader om elke pagina: bovenbalk, compacte header en navigatie onderin op een telefoon, accountmenu, Help-paneel en de wissel tussen Entra ID en Azure |
+| `charts/` | De eigen SVG-grafieken van het dashboard: Donut, StackedBar, BarList |
+| `icons/` | De eigen iconenset van de app (`Icon.tsx`) |
+| `pdf/` | De PDF-exports: het rapport, het auditrapport en de export No activation |
+| `AppProviders.tsx` | De providerboom, gerenderd door `app/layout.tsx` |
+| `AuthProvider.tsx`, `ProtectedRoute.tsx` | Aanmelden met MSAL, en de bewaking die niet-aangemelde bezoekers van de pagina's weghoudt |
+| `ExportDialog.tsx` | Het exportmenu (PDF en CSV) |
+| `WorkloadChips.tsx` | Chips die een workload aan- of uitzetten, met incremental consent |
+| `LoadingStatus.tsx`, `SyncStatus.tsx`, `GlobalProgressBar.tsx` | Laden op de achtergrond: de statuszin naast Refresh, "synced ... ago" en één voortgangslijn over de workloads |
+| `DataWarningBanner.tsx` | Waarschuwing met een nieuwe poging als de policies van een paar rollen niet te lezen waren |
+| `OnboardingTour.tsx`, `OnboardingWrapper.tsx`, `TourChoiceDialog.tsx`, `DemoTourDialog.tsx` | De tours: de dialoog zelf, wanneer een tour start, de keuze van de tour en de vraag in de demo |
+| `ErrorBoundary.tsx`, `ThemeProvider.tsx` | Terugvalscherm bij een renderfout, en het donkere of lichte thema |
+
+Componenten die bij één pagina horen staan naast die pagina, in `app/<pagina>/components/` (bijvoorbeeld de modi van Configureren in `app/configure/components/`).
 
 ---
 
-### 📁 `src/contexts/` - React Context Providers
-
-Globale state management met React Context API.
-
-| Bestand | Doel |
-|---------|------|
-| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM for Groups) met unified refresh logica |
-| `AzureContext.tsx` | **Azure State**: De Azure-toewijzingen en scopes, alleen geladen op de Azure-pagina's |
-| `ConfigureBasketContext.tsx` | **Configure Mandje**: De wijzigingen die je in Configureren verzamelt, per tenant in sessionStorage tot je ze toepast of weggooit |
-| `DemoModeContext.tsx` | **Demo**: Vertelt componenten dat ze in de live demo draaien, zodat acties die naar een tenant schrijven uit staan |
-| `ViewModeContext.tsx` | **UI Voorkeuren**: Beheert Basic/Advanced view mode toggle met localStorage persistentie |
-| `ToastContext.tsx` | **Notificaties**: Toast notificatiesysteem (succes/fout/info, automatisch sluiten na 3s) |
-
-**Belangrijke Context Relaties:**
-- `UnifiedPimContext` orkestreert meerdere workloads
-- De hooks in `hooks/usePimData.ts` (`useRolesData`, `useRolesLoading`, `useRolesActions`) geven het Directory Roles-deel ervan
-- Dashboard en Report pagina's lezen de data via die hooks
-
----
-
-### 📁 `src/services/` - Data Ophalen
+### `src/services/` - Data Ophalen
 
 Kernlogica voor interactie met Microsoft Graph API.
 
@@ -100,7 +97,6 @@ Kernlogica voor interactie met Microsoft Graph API.
 |---------|------|
 | `directoryRoleService.ts` | **Directory Roles**: Ophalen van roldefinities, toewijzingen, policies |
 | `pimGroupService.ts` | **PIM for Groups**: Ophalen van PIM-onboarded groepen en policies |
-| `pimConfigurationService.ts` | **Policy Lezen/Schrijven**: Verwerk regels, update PIM policies en toewijzingen |
 
 **directoryRoleService.ts** bevat:
 - `getRoleDefinitions()` - Ophalen van roldefinities
@@ -119,7 +115,7 @@ Kernlogica voor interactie met Microsoft Graph API.
 
 ---
 
-### 📁 `src/types/` - Type Definities
+### `src/types/` - Type Definities
 
 TypeScript interfaces die datastructuren beschrijven.
 
@@ -141,7 +137,7 @@ TypeScript interfaces die datastructuren beschrijven.
 
 ---
 
-### 📁 `src/utils/` - Hulpfuncties
+### `src/utils/` - Hulpfuncties
 
 Utility functies en API helpers.
 
@@ -160,7 +156,7 @@ Utility functies en API helpers.
 
 ---
 
-### 📁 `src/config/` - Configuratie
+### `src/config/` - Configuratie
 
 Applicatie configuratie constanten.
 
@@ -178,7 +174,7 @@ Applicatie configuratie constanten.
 
 ---
 
-### 📁 `src/hooks/` - Custom Hooks
+### `src/hooks/` - Custom Hooks
 
 Herbruikbare React hooks.
 
@@ -191,6 +187,24 @@ Herbruikbare React hooks.
 | `useConsentedWorkloads.ts` | **Workload Machtigingen**: Beheert welke workloads gebruikersconsent hebben |
 | `useIncrementalConsent.ts` | **Consent Flow**: Verwerkt incrementele toestemmingsverzoeken |
 | `useNavigationGuard.ts` | **Navigatie Guard**: Waarschuwt bij onopgeslagen wijzigingen bij wegnavigeren |
+
+### `src/contexts/` - React Context Providers
+
+Globale state management met React Context API.
+
+| Bestand | Doel |
+|---------|------|
+| `UnifiedPimContext.tsx` | **Hoofd Orchestrator**: Beheert alle workloads (Directory Roles, PIM for Groups) met unified refresh logica |
+| `AzureContext.tsx` | **Azure State**: De Azure-toewijzingen en scopes, alleen geladen op de Azure-pagina's |
+| `ConfigureBasketContext.tsx` | **Configure Mandje**: De wijzigingen die je in Configureren verzamelt, per tenant in sessionStorage tot je ze toepast of weggooit |
+| `DemoModeContext.tsx` | **Demo**: Vertelt componenten dat ze in de live demo draaien, zodat acties die naar een tenant schrijven uit staan |
+| `ViewModeContext.tsx` | **UI Voorkeuren**: Beheert Basic/Advanced view mode toggle met localStorage persistentie |
+| `ToastContext.tsx` | **Notificaties**: Toast notificatiesysteem (succes/fout/info, automatisch sluiten na 3s) |
+
+**Belangrijke Context Relaties:**
+- `UnifiedPimContext` orkestreert meerdere workloads
+- De hooks in `hooks/usePimData.ts` (`useRolesData`, `useRolesLoading`, `useRolesActions`) geven het Directory Roles-deel ervan
+- Dashboard en Report pagina's lezen de data via die hooks
 
 ---
 

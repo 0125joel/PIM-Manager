@@ -20,9 +20,10 @@ import {
     type AzureSettingsOutcome,
 } from "@/utils/azureDashboardStats";
 import { EASY_TO_MISS_PATCHES } from "@/utils/azureDashboardFilterLink";
-import { summarizeAzureAlerts, type AzureAlertsOutcome } from "@/utils/azureDashboardView";
+import { subscriptionsInView, summarizeAzureAlerts, type AzureAlertsOutcome } from "@/utils/azureDashboardView";
 import { anonymiseAzure, AZURE_WORKLOAD, buildAzureAssignmentRows, rolePairsOf, SCOPE_LEVEL_LABELS, type AzurePolicyOutcome } from "@/utils/azureExportRows";
 import { AZURE_PRIVILEGED_ROLE_IDS, EMPTY_AZURE_FILTERS, eligiblePairsOf, endTextFor, flattenScopeTree, matchesAzureFilters, principalKindLabel, type AzureAssignmentRow, type AzureFilterContext } from "@/utils/azureReport";
+import { coverageNotes } from "@/utils/azureReadability";
 import { azurePolicyKey, isDelegatedScope } from "@/utils/azureScopes";
 import { daysUntil, formatEndsIn } from "@/utils/dashboardAdvanced";
 import type { ChartItem } from "@/utils/exportChartData";
@@ -254,6 +255,11 @@ function findingTable(stats: AzureDashboardInput, id: AzureEasyToMissId): { colu
 
 const KIND_TAGS_TO_SKIP = new Set(["emergency", "delegated"]);
 
+/** What was not read in the chosen scope, one sentence each; the dialog shows it too, because the CSV has no notes */
+export function azureExportCoverage(input: Pick<AzureDashboardExportInput, "stats" | "includeDelegated">): string[] {
+    return coverageNotes(subscriptionsInView(input.stats.scopes, input.stats.chosenScopeId, input.includeDelegated, input.stats.homeTenantId));
+}
+
 /** Builds the report. Pure: same input and options, same report. */
 export function buildAzureDashboardExportReport(input: AzureDashboardExportInput, options: AzureExportOptions): ExportReport {
     const isAnonymised = options.anonymise || options.audience === "management";
@@ -282,6 +288,9 @@ export function buildAzureDashboardExportReport(input: AzureDashboardExportInput
     };
 
     if (isAnonymised) notes.push("Names of people are replaced by Person 1, Person 2 and so on. Groups, apps, managed identities and agents keep their names.");
+
+    // Subscriptions that were not read, or not whole: named, never shown as scopes without assignments
+    notes.push(...azureExportCoverage(input));
 
     // Settings that are not loaded or not readable: named, never counted as "no MFA" or "no approval"
     const activation = computeAzureActivation(stats);
@@ -383,7 +392,10 @@ export function buildAzureDashboardExportReport(input: AzureDashboardExportInput
         const summary = summarizeAzureAlerts(shown, input.subscriptionName, isDelegated);
         alerts = { openCount: summary.rows.length, passedCount: summary.clear, rows: summary.rows.map((r) => ({ title: `${r.name} (${r.subscriptionName})`, severity: r.severity, affected: r.incidentCount })) };
         if (summary.notScanned > 0) notes.push(`${plural(summary.notScanned, "subscription has", "subscriptions have")} not been scanned by Microsoft yet, so no alerts are known there.`);
-        if (summary.notReadable > 0) notes.push(`The alerts of ${plural(summary.notReadable, "subscription", "subscriptions")} could not be read, so they are not in this report.`);
+        // A subscription that was not read whole is never asked for its alerts (ARM refuses them there): not read either
+        const notAsked = subscriptionsInView(stats.scopes, null, input.includeDelegated, stats.homeTenantId).filter((s) => s.access !== undefined && !shown.has(s.id.toLowerCase().replace("/subscriptions/", ""))).length;
+        const notReadable = summary.notReadable + notAsked;
+        if (notReadable > 0) notes.push(`The alerts of ${plural(notReadable, "subscription", "subscriptions")} could not be read, so they are not in this report.`);
     }
 
     // Charts: the same colours as the Entra export (`exportChartData.ts`)

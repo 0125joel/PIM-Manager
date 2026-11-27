@@ -1,4 +1,6 @@
 import type { DashboardFilter, DashboardFilterKey, FilterView } from "@/types/dashboardFilter.types";
+import { groupFilterControls, type FilterControlBase, type FilterControlOption } from "@/utils/filterControls";
+import { holderOptions } from "@/utils/holderKinds";
 
 /**
  * The controls of the Report filter panel (spec 6.2) as data: one control writes exactly one key of `f`. The panel renders this
@@ -6,26 +8,15 @@ import type { DashboardFilter, DashboardFilterKey, FilterView } from "@/types/da
  * whose options depend on the tenant (Role, Custom extension) has no fixed options here; the panel adds them.
  */
 
-export interface FilterControlOption {
-    value: string;
-    label: string;
-}
+export type { FilterControlOption };
 
 export type FilterControlGroup = "Role properties" | "Group properties" | "Assignments" | "PIM configuration";
 
-export interface FilterControl {
-    /** The key of `f` this control writes */
-    key: DashboardFilterKey;
-    label: string;
-    group: FilterControlGroup;
-    /** The first option is the neutral one (no key) unless `neutral` says otherwise */
-    options: FilterControlOption[];
+export interface FilterControl extends FilterControlBase<DashboardFilterKey, FilterControlGroup> {
     /** Options that come from the data (roles by name, the tenant's extensions): the panel supplies them */
     dynamic?: "roleTemplates" | "customExtensions";
     /** Needs the loaded policy of the role or group: disabled while policies load (spec 7.2) */
     needsPolicy?: boolean;
-    /** Value shown when the key is not in `f` */
-    neutral: string;
 }
 
 const ALL = { value: "all", label: "All" };
@@ -52,16 +43,17 @@ const STATE: FilterControl = { key: "assignment", label: "State", group: "Assign
 const NO_END: FilterControl = { key: "noEndDate", label: "No end date", group: "Assignments", neutral: "all", options: [ALL, { value: "true", label: "Only without end date" }] };
 const EMERGENCY: FilterControl = { key: "excludeEmergency", label: "Emergency access", group: "Assignments", neutral: "include", options: [{ value: "include", label: "Include" }, { value: "exclude", label: "Exclude" }] };
 const via = (label: string): FilterControl => ({ key: "via", label, group: "Assignments", neutral: "all", options: [ALL, { value: "direct", label: "Direct" }, { value: "group", label: "Via group" }] });
-const who = (view: FilterView): FilterControl => ({
+const WHO_CHOICES = ["user", "guest", "app", "agent", "group"] as const;
+const who = (): FilterControl => ({
     key: "principalType", label: "Who", group: "Assignments", neutral: "all",
-    options: [ALL, { value: "user", label: "Users" }, { value: "guest", label: "Guests" }, ...(view === "roles" ? [{ value: "servicePrincipal", label: "Apps" }] : []), { value: "agent", label: "Agents" }, { value: "group", label: "Groups" }],
+    options: [ALL, ...holderOptions(WHO_CHOICES)],
 });
 
 /** The order of the renders: the roles view as spec 6.2 lists it, the groups view as `groups-filters-open.png` */
 const assignmentControls = (view: FilterView): FilterControl[] =>
     view === "roles"
-        ? [{ key: "hasAssignments", label: "Has assignments", group: "Assignments", neutral: "all", options: [ALL, { value: "true", label: "Yes" }] }, STATE, who("roles"), via("Direct or via group"), NO_END, EMERGENCY]
-        : [{ key: "accessType", label: "Member or owner", group: "Assignments", neutral: "all", options: [{ value: "all", label: "Both" }, { value: "member", label: "Member" }, { value: "owner", label: "Owner" }] }, via("Direct or via a group"), NO_END, STATE, who("groups"), EMERGENCY];
+        ? [{ key: "hasAssignments", label: "Has assignments", group: "Assignments", neutral: "all", options: [ALL, { value: "true", label: "Yes" }] }, STATE, who(), via("Direct or via group"), NO_END, EMERGENCY]
+        : [{ key: "accessType", label: "Member or owner", group: "Assignments", neutral: "all", options: [{ value: "all", label: "Both" }, { value: "member", label: "Member" }, { value: "owner", label: "Owner" }] }, via("Direct or via a group"), NO_END, STATE, who(), EMERGENCY];
 
 const ROLE_CONTROLS: FilterControl[] = [
     { key: "privileged", label: "Privileged", group: "Role properties", neutral: "all", options: [ALL, { value: "true", label: "Privileged only" }] },
@@ -121,12 +113,4 @@ export function writeControlValue(control: FilterControl, filter: DashboardFilte
 }
 
 /** Group the controls for the three columns of the panel, in order. */
-export function groupControls(controls: FilterControl[]): Array<{ group: FilterControlGroup; controls: FilterControl[] }> {
-    const groups: Array<{ group: FilterControlGroup; controls: FilterControl[] }> = [];
-    for (const control of controls) {
-        const existing = groups.find((g) => g.group === control.group);
-        if (existing) existing.controls.push(control);
-        else groups.push({ group: control.group, controls: [control] });
-    }
-    return groups;
-}
+export const groupControls = groupFilterControls<FilterControl>;

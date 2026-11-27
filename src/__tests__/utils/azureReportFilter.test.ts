@@ -191,9 +191,9 @@ describe("the keys of the dashboard", () => {
 
     it("labels the new values of existing keys", () => {
         const label = (x: Partial<typeof DEFAULT_AZURE_FILTERS>) => getAzureFilterChips({ ...DEFAULT_AZURE_FILTERS, ...x })[0].label;
-        expect(label({ principalType: "guest" })).toBe("Held by: Guests");
-        expect(label({ principalType: "agent" })).toBe("Held by: Agents");
-        expect(label({ principalType: "managedIdentity" })).toBe("Held by: Managed identities");
+        expect(label({ principalType: "guest" })).toBe("Who: Guests");
+        expect(label({ principalType: "agent" })).toBe("Who: Agents");
+        expect(label({ principalType: "managedIdentity" })).toBe("Who: Managed identities");
         expect(label({ level: "managementGroup" })).toBe("Level: Management groups");
         expect(label({ level: "subscriptionOrAbove" })).toBe("Level: Subscription or above");
         expect(label({ via: "direct" })).toBe("Through: Direct");

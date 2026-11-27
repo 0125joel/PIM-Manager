@@ -199,10 +199,10 @@ describe("azureAssignmentsAdapter.run", () => {
         expect(ids.filter((id) => id.endsWith("/b-sub"))).toHaveLength(1);
         expect(new Set(ids).size).toBe(ids.length);
 
-        // The vault under rg-a is not read on its own; rg-a and the vm are, both lists each
+        // The vault under rg-a is not read on its own; rg-a and the vm are, three lists each (instances, schedules, role assignments)
         const paths = arm.requests.map((r) => r.path);
         expect(paths).toEqual(expect.arrayContaining([`/subscriptions/${S2}/resourcegroups`, `/subscriptions/${S2}/resources`]));
-        expect(paths.filter((p) => p.startsWith(`${RG_A}${AUTH}/`) || p.startsWith(`${VM}${AUTH}/`))).toHaveLength(4);
+        expect(paths.filter((p) => p.startsWith(`${RG_A}${AUTH}/`) || p.startsWith(`${VM}${AUTH}/`))).toHaveLength(6);
         expect(paths.some((p) => p.startsWith(`${KV}${AUTH}/`))).toBe(false);
         expect(ctx.backgroundProgress).toHaveBeenLastCalledWith(2, 2);
     });
@@ -409,8 +409,8 @@ describe("the read budget below a refused subscription, and Read the rest", () =
     it("stops the round when the budget is spent, without an error, and keeps the rest on the subscription", async () => {
         const arm = manyBelow(5);
         const ctx = runContext(arm.client);
-        // The listing (2) and two resource groups (2 each)
-        const first = await createAzureAssignmentsAdapter(() => null, { belowBudget: 6 }).run(ctx);
+        // The listing (2) and two resource groups (2 each, and 1 each for the role assignment check)
+        const first = await createAzureAssignmentsAdapter(() => null, { belowBudget: 8 }).run(ctx);
         await expect(first.background).resolves.toBeUndefined();
         const final = latest(ctx, first);
         expect(readGroups(arm)).toEqual([rgOf(0), rgOf(1)]);
@@ -419,6 +419,21 @@ describe("the read budget below a refused subscription, and Read the rest", () =
         expect(final.extras.scopes.map((s) => s.id)).not.toContain(rgOf(2));
         expect(final.data.map((a) => a.scopeId)).not.toContain(rgOf(2));
         expect(final.data.map((a) => a.scopeId)).toContain(rgOf(1));
+    });
+
+    it("counts the role assignment check against the budget: a scope it does not pay for is read unchecked", async () => {
+        const arm = manyBelow(5);
+        const ctx = runContext(arm.client);
+        // The listing (2), rg-0 read and checked (3), rg-1 read (2) with nothing left for its check
+        const first = await createAzureAssignmentsAdapter(() => null, { belowBudget: 7 }).run(ctx);
+        await first.background;
+        expect(readGroups(arm)).toEqual([rgOf(0), rgOf(1)]);
+        expect(arm.requests.filter((r) => r.path.endsWith(`${AUTH}/roleAssignments`)).map((r) => r.path)).toEqual([`${rgOf(0)}${AUTH}/roleAssignments`]);
+        expect(arm.requests.find((r) => r.path.endsWith(`${AUTH}/roleAssignments`))?.apiVersion).toBe("2022-04-01");
+        const final = latest(ctx, first);
+        expect(s2Of(final.extras.scopes)).toMatchObject({ access: "partial", unreadScopeIds: [rgOf(2), rgOf(3), rgOf(4)] });
+        // The unanswered check (404) of rg-0 changed nothing: both groups keep what their instance lists gave
+        expect(final.data.map((a) => a.scopeId)).toEqual(expect.arrayContaining([rgOf(0), rgOf(1)]));
     });
 
     it("keeps a refused subscription whose scopes the budget did not reach at all, partial and with nothing read", async () => {
@@ -440,7 +455,7 @@ describe("the read budget below a refused subscription, and Read the rest", () =
         arm.on({ match: new RegExp(`^${rgOf(0)}${AUTH}/`), respond: () => armError(403, "AuthorizationFailed") });
         arm.on({ match: new RegExp(`^${rgOf(1)}${AUTH}/`), respond: () => armError(400, "InsufficientPermissions") });
         const ctx = runContext(arm.client);
-        const first = await createAzureAssignmentsAdapter(() => null, { belowBudget: 6 }).run(ctx);
+        const first = await createAzureAssignmentsAdapter(() => null, { belowBudget: 8 }).run(ctx);
         await first.background;
         const s2 = s2Of(latest(ctx, first).extras.scopes);
         expect(s2?.access).toBe("partial");
@@ -449,13 +464,13 @@ describe("the read budget below a refused subscription, and Read the rest", () =
 
     it("reads only the rest in each next round, with the same budget, and merges without duplicates; the data keeps its age", async () => {
         const arm = manyBelow(7);
-        const { engine, get, settled } = setup(arm, 6);
+        const { engine, get, settled } = setup(arm, 8);
         await engine.load();
         await settled();
         expect(s2Of(get().extras.scopes)?.unreadScopeIds).toHaveLength(5);
         const lastFetched = get().lastFetched;
 
-        // Round 2: no listing, three resource groups (6 requests)
+        // Round 2: no listing, three resource groups (two checked: 3 + 3 + 2 requests)
         const before = arm.requests.length;
         await engine.resume();
         await settled();
@@ -489,12 +504,12 @@ describe("the read budget below a refused subscription, and Read the rest", () =
 
     it("caches what is left, so after a reload the line and Read the rest are right, and Refresh starts from zero", async () => {
         const arm = manyBelow(5);
-        const first = setup(arm, 6);
+        const first = setup(arm, 8);
         await first.engine.load();
         await first.settled();
         first.engine.persist();
 
-        const second = setup(arm, 6, new Map(first.storage));
+        const second = setup(arm, 8, new Map(first.storage));
         expect(second.engine.hydrate()).not.toBeNull();
         expect(s2Of(second.get().extras.scopes)).toMatchObject({ access: "partial", unreadScopeIds: [rgOf(2), rgOf(3), rgOf(4)] });
         const before = arm.requests.length;
@@ -515,7 +530,7 @@ describe("the read budget below a refused subscription, and Read the rest", () =
 
     it("an abort during Read the rest leaves no half result as complete and caches nothing of it", async () => {
         const arm = manyBelow(6);
-        const { engine, get, storage, settled } = setup(arm, 6);
+        const { engine, get, storage, settled } = setup(arm, 8);
         await engine.load();
         await settled();
         engine.persist();
@@ -539,6 +554,59 @@ describe("the read budget below a refused subscription, and Read the rest", () =
         engine.persist();
         expect(storage.get("pim_azure_scopes_v1")).toBe(cached);
         vi.unstubAllGlobals();
+    });
+});
+
+describe("a removed assignment below a refused subscription (tenant test AU-17)", () => {
+    const GONE = `/subscriptions/${S2}${AUTH}/roleAssignments/gone-guid`;
+    const REAL = `${RG_A}${AUTH}/roleAssignments/real-guid`;
+    /** An inherited instance of an assignment on S2 that was removed: its origin is in no role assignment list */
+    const stale = () => {
+        const item = instance("stale", `/subscriptions/${S2}`, "Inherited", "roleAssignmentScheduleInstances", "Test", S2);
+        return { ...item, properties: { ...item.properties, originRoleAssignmentId: GONE } };
+    };
+    const real = { id: REAL, name: "real-guid", type: "Microsoft.Authorization/roleAssignments", properties: { scope: RG_A, roleDefinitionId: `/subscriptions/${S2}${AUTH}/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7`, principalId: "p-reader", principalType: "User", createdOn: "2026-10-20T08:00:00Z" } };
+
+    /** S2 refused; rg-a answers only the stale item, the vm nothing; the role assignment lists hold the real one, not the removed one */
+    function au17(): RecordingArmClient {
+        const arm = below(tenant());
+        arm.on({ match: new RegExp(`^${RG_A}${AUTH}/roleAssignmentScheduleInstances$`), respond: () => ({ body: { value: [stale()] } }) });
+        arm.on({ match: new RegExp(`^${VM}${AUTH}/roleAssignmentScheduleInstances$`), respond: () => ({ body: { value: [] } }) });
+        arm.on({ match: new RegExp(`^${VM}${AUTH}/roleEligibilitySchedules$`), respond: () => ({ body: { value: [] } }) });
+        arm.on({ match: new RegExp(`^${RG_A}${AUTH}/roleAssignments$`), respond: () => ({ body: { value: [real] } }) });
+        arm.on({ match: new RegExp(`^${VM}${AUTH}/roleAssignments$`), respond: () => ({ body: { value: [] } }) });
+        return arm;
+    }
+    const belowS2 = (data: readonly AzureAssignment[]) => data.filter((a) => a.scopeId.startsWith(`/subscriptions/${S2}`) || a.id.includes("/stale"));
+
+    it("gives one assignment, the real direct one, permanently active", async () => {
+        const ctx = runContext(au17().client);
+        const first = await azureAssignmentsAdapter.run(ctx);
+        await first.background;
+        const found = belowS2(latest(ctx, first).data);
+        expect(found).toHaveLength(1);
+        expect(found[0]).toMatchObject({ id: REAL, scopeId: RG_A, principalId: "p-reader", roleDefinitionId: "acdd72a7-3385-48ef-bd42-f606fba81ae7", state: "active", memberType: "direct", startDateTime: "2026-10-20T08:00:00Z", endDateTime: null });
+    });
+
+    it("keeps an inherited instance whose origin the role assignment list holds", async () => {
+        const arm = au17();
+        arm.on({ match: new RegExp(`^${RG_A}${AUTH}/roleAssignments$`), respond: () => ({ body: { value: [real, { ...real, id: GONE, name: "GONE-GUID", properties: { ...real.properties, scope: `/subscriptions/${S2}` } }] } }) });
+        const ctx = runContext(arm.client);
+        const first = await azureAssignmentsAdapter.run(ctx);
+        await first.background;
+        expect(belowS2(latest(ctx, first).data).map((a) => a.id).sort()).toEqual([REAL, stale().id].sort());
+    });
+
+    it("changes nothing when the role assignment read fails", async () => {
+        const arm = au17();
+        arm.on({ match: new RegExp(`^${RG_A}${AUTH}/roleAssignments$`), respond: () => armError(403, "AuthorizationFailed") });
+        const ctx = runContext(arm.client);
+        const first = await azureAssignmentsAdapter.run(ctx);
+        await first.background;
+        const final = latest(ctx, first);
+        expect(belowS2(final.data).map((a) => a.id)).toEqual([stale().id]);
+        // Not a failed subscription: the check is not one of the reads that fail it
+        expect(final.extras.scopes.find((s) => s.id === `/subscriptions/${S2}`)?.access).toBe("partial");
     });
 });
 
@@ -595,6 +663,37 @@ describe("the Azure adapter against the demo's fake ARM", () => {
         expect(outcome.data.length).toBe(new Set(outcome.data.map((a) => a.id)).size);
         expect(outcome.data.length).toBeGreaterThan(0);
         expect(outcome.data.find((a) => a.roleName === "Contoso Web Operator")).toMatchObject({ state: "eligible", isCustomRole: true, scopeId: S.rgWeb });
+        // Contoso Labs: the removed assignment the instance lists still return is left out, the inherited Owner stays
+        const removed = azure.instances.find((i) => i.key === "a:labs-contributor-removed");
+        expect(removed?.removed).toBe(true);
+        expect(outcome.data.some((a) => a.scopeId === S.labs && a.principalId === removed?.principal.id)).toBe(false);
+        expect(outcome.data.find((a) => a.scopeId === S.labs && a.roleName === "Owner")).toMatchObject({ state: "active", memberType: "inherited" });
+    });
+
+    it("counts every ARM request once on armRateLimiter, with cost 1, over a full load with its background phase", async () => {
+        // The spy lets the limiter pass at once, so the test neither waits nor leaves entries in the shared window
+        const acquire = vi.spyOn(armRateLimiter, "acquire").mockResolvedValue(undefined);
+        const sent: string[] = [];
+        try {
+            // No `limiter` option: the client counts on the real armRateLimiter, as in the app
+            const client = createArmClient(() => Promise.resolve("demo-token"), {
+                fetchImpl: (input, init) => {
+                    sent.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+                    return fetch(input, init);
+                },
+            });
+            const ctx = runContext(client);
+            const first = await azureAssignmentsAdapter.run(ctx);
+            await first.background;
+            // Contoso Labs is refused at its own level, so the below round ran, and its checked scopes read role assignments
+            expect(latest(ctx, first).extras.scopes.find((s) => s.id === AZURE_SCOPE_IDS.labs)?.access).toBe("partial");
+            expect(sent.some((url) => url.includes("/roleAssignments"))).toBe(true);
+            expect(sent.length).toBeGreaterThan(0);
+            expect(acquire).toHaveBeenCalledTimes(sent.length);
+            for (const call of acquire.mock.calls) expect(call[0]).toBe(1);
+        } finally {
+            acquire.mockRestore();
+        }
     });
 
     it("shows a spent budget below Contoso Labs, and Read the rest reads vm-labs-build", async () => {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { getCurrentTourPage, useCurrentTourPage } from "@/hooks/useTourPage";
 import { splitEmphasis } from "@/utils/emphasis";
 import { findStepTarget } from "@/utils/tourTarget";
-import { nextShownStep, shownPosition, type RunStep, type TourEnd } from "@/utils/tourProgress";
+import { nextShownStep, shouldAlignTargetToTop, shownPosition, type RunStep, type TourEnd } from "@/utils/tourProgress";
 
 interface OnboardingTourProps {
     steps: RunStep[];
@@ -127,6 +127,8 @@ export function OnboardingTour({ steps, isAuto, onEnd, onTurnOff }: OnboardingTo
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Scroll the target into view once per step, never from the scroll listener itself
     const scrolledStepRef = useRef<string | null>(null);
+    // The same once-per-step guard for moving a target to the top so its card fits beside it
+    const alignedStepRef = useRef<string | null>(null);
     // The direction of the last move, so a step without a target is passed in the same direction
     const directionRef = useRef<1 | -1>(1);
     // The steps that were on screen, for what counts as seen at the end (tour spec 4.3)
@@ -187,6 +189,25 @@ export function OnboardingTour({ steps, isAuto, onEnd, onTurnOff }: OnboardingTo
             // A block taller than half the screen scrolls to its top, so its heading stays in view; the tooltip then sits below it
             el.scrollIntoView({ block: rect.height > window.innerHeight / 2 ? "start" : "center", inline: "nearest" });
             rect = el.getBoundingClientRect();
+        }
+
+        // Neither side of the target has room for the card, but both fit together below the header: put the target at the top
+        // once, so the card goes below it instead of over it. Decided with the real card height, so only once the card has one
+        const cardHeight = tooltipRef.current?.getBoundingClientRect().height ?? 0;
+        if (alignedStepRef.current !== step.key && cardHeight > 0) {
+            alignedStepRef.current = step.key;
+            const headerHeight = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+            if (shouldAlignTargetToTop({
+                position: step.tooltipPosition ?? "bottom",
+                targetTop: rect.top,
+                targetHeight: rect.height,
+                cardHeight,
+                viewportHeight: window.innerHeight,
+                headerHeight,
+            })) {
+                el.scrollIntoView({ block: "start", inline: "nearest" });
+                rect = el.getBoundingClientRect();
+            }
         }
 
         const newRect: TargetRect = {

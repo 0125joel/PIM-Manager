@@ -240,6 +240,29 @@ describe("a role whose policy is not readable is not counted as a setting (FIX-1
     });
 });
 
+describe("a role whose policy failed to load is not counted as a setting", () => {
+    const fail = (pick: (r: (typeof roles)[number]) => boolean) => roles.map((r) => (pick(r) ? { ...r, policy: null, configError: "Too many requests" } : r));
+
+    it("no privileged role loaded: the approval card says so instead of 0", () => {
+        const none = fail((r) => r.definition.isPrivileged === true);
+        expect(computeCards(input({ roles: none, allRoles: none })).requireApproval).toMatchObject({ value: "-", breakdown: "settings not loaded" });
+        expect(computeTerms(input({ roles: none, allRoles: none }))).toMatchObject({ roleCount: 0, entraMfa: 0, neither: 0 });
+    });
+
+    it("some failed: the approval card and Terms count the loaded ones", () => {
+        const first = roles.find((r) => r.definition.isPrivileged === true && r.policy)!;
+        const some = fail((r) => r === first);
+        expect(computeCards(input({ roles: some, allRoles: some })).requireApproval.breakdown).toBe("of 32 privileged");
+        expect(computeTerms(input({ roles: some, allRoles: some })).roleCount).toBe(32);
+    });
+
+    it("a role read as having no policy still counts", () => {
+        const first = roles.find((r) => r.definition.isPrivileged === true && r.policy)!;
+        const some = roles.map((r) => (r === first ? { ...r, policy: null } : r));
+        expect(computeCards(input({ roles: some, allRoles: some })).requireApproval.breakdown).toBe("of 33 privileged");
+    });
+});
+
 describe("failed loads are unknown, not zero", () => {
     it("shows a dash on every card when the roles failed", () => {
         const cards = unavailableCards("not loaded");
@@ -282,7 +305,7 @@ describe("an app that only holds an active role", () => {
         const only = role({ id: "r-app", isPrivileged: true, active: [{ principalId: "sp1", principal: { ...app("sp1"), displayName: "Deploy bot" }, assignmentType: "Assigned", ...noEnd }] });
         const rows = computeEasyToMiss(input({ roles: [only], allRoles: [only], groups: [] }));
         expect(rows.find((r) => r.id === "apps")?.count).toBe(1);
-        expect(applyDashboardFilterToRoles([only], { principalType: "servicePrincipal" })).toHaveLength(1);
+        expect(applyDashboardFilterToRoles([only], { principalType: "app" })).toHaveLength(1);
         expect(buildNameById([only]).get("sp1")).toBe("Deploy bot");
     });
 });

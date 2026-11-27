@@ -237,6 +237,17 @@ describe("contextsMeetingLabel (spec 9.3, second step)", () => {
         expect(policyMeetsLabel(policy({ grantControls: { builtInControls: ["compliantDevice"], authenticationStrength: { id: "00000000-0000-0000-0000-000000000004" } } }), { ...label, requireCompliantDevice: true })).toBe(true);
     });
 
+    it("never matches a disabled or report-only policy, whatever requireState the catalog sends (audit run-4)", () => {
+        for (const requireState of ["disabled", "enabledForReportingButNotEnforced"]) {
+            const hostile = parsed({ ...small, authContexts: [{ ...small.authContexts[0], requireState }] }).authContexts[0];
+            expect(hostile.requireState).toBeUndefined();
+            expect(policyMeetsLabel(policy({ state: requireState }), { ...label, requireState })).toBe(false);
+            expect(contextsMeetingLabel(hostile, [policy({ state: requireState })])).toEqual([]);
+        }
+        expect(parsed({ ...small, authContexts: [{ ...small.authContexts[0], requireState: "Enabled" }] }).authContexts[0].requireState).toBe("enabled");
+        expect(contextsMeetingLabel(label, [policy()])).toEqual(["c1"]);
+    });
+
     it("a label without requirements matches nothing, so the admin chooses", () => {
         expect(contextsMeetingLabel({ slug: "phish-resistant-no-sif" }, [policy()])).toEqual([]);
     });

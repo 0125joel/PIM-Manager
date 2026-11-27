@@ -108,6 +108,9 @@ describe("the review page as data (spec 12.1 to 12.3)", () => {
         ]);
         expect(view.steps.adds[0]).toMatchObject({ principal: PEOPLE.mo.displayName, target: "Privileged Role Administrator", type: "Eligible", scope: "Tenant-wide", start: "Starts when applied", end: "Ends 1 Apr 2027" });
         expect(view.steps.removals[0]).toMatchObject({ principal: PEOPLE.anna.displayName, tag: "Remove eligible" });
+        // Audit run-4: a row names who the write goes to beyond the display name (UPN, else object id)
+        expect(view.steps.adds[0].principalDetail).toBe(PEOPLE.mo.id);
+        expect(view.steps.removals[0].principalDetail).toBe(PEOPLE.anna.id);
         expect(view.removalNames).toEqual([`${PEOPLE.anna.displayName} (Global Administrator)`]);
         expect(view.countPerSetting).toBeNull();
         expect(view.checkedLine).toMatch(/^PIM Manager checked 4 things: .* A snapshot of these 2 targets is saved/);

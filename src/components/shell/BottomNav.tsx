@@ -22,11 +22,12 @@ const ITEM = "flex min-h-11 flex-col items-center justify-center gap-0.5 text-[1
 export function BottomNav({ currentPath, account, isMenuOpen, onMenuOpenChange }: BottomNavProps) {
     const { user } = account;
     const accountRef = useRef<HTMLButtonElement>(null);
+    const items = navItemsFor(environmentFromPath(currentPath));
 
     return (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden">
-            <nav aria-label="Main" data-tour="main-nav" className="grid h-[72px] grid-cols-4">
-                {navItemsFor(environmentFromPath(currentPath)).map((item) => {
+            <nav aria-label="Main" data-tour="main-nav" className={`grid h-[72px] ${items.length > 3 ? "grid-cols-5" : "grid-cols-4"}`}>
+                {items.map((item) => {
                     const isActive = isNavItemActive(currentPath, item);
                     return (
                         <Link

@@ -1,15 +1,15 @@
 import { ArmError, type ArmClient } from "@/utils/armClient";
 import { mapArmError } from "@/utils/armErrorMapping";
 import type { AccountInfo } from "@azure/msal-browser";
-import type { ArmEntity, ArmRoleScheduleInstance, ArmSubscription, AzureAssignment, AzureScope } from "@/types/azureResource.types";
+import type { ArmEntity, ArmRoleAssignment, ArmRoleScheduleInstance, ArmSubscription, AzureAssignment, AzureScope } from "@/types/azureResource.types";
 import { listEntities, listResourceGroups, listResources, listSubscriptions } from "@/services/azureScopeService";
-import { listAssignmentInstances, listAssignmentInstancesAt, listEligibilitySchedules, listEligibilitySchedulesAt } from "@/services/azureAssignmentService";
+import { listAssignmentInstances, listAssignmentInstancesAt, listEligibilitySchedules, listEligibilitySchedulesAt, listRoleAssignments } from "@/services/azureAssignmentService";
 import { AZURE_ENABLED_PREFIX, azureEnabledKey } from "@/utils/azureConsent";
 import { buildScopeTree, isCurrentSchedule, toAssignment, topReadableScopes } from "@/utils/azureScopes";
-import { AZURE_READ_BELOW_BUDGET, countUnread, createRequestBudget, mergeBelowRound, planBelowListing, planBelowReading, unreadTargets, withBelowState, type BelowItem, type BelowSettled, type BelowTarget } from "@/utils/azureReadBelow";
+import { AZURE_READ_BELOW_BUDGET, countUnread, createRequestBudget, mergeBelowRound, planBelowListing, planBelowReadingWithChecks, unreadTargets, withBelowState, type BelowSettled, type BelowTarget, type CheckedBelowItem } from "@/utils/azureReadBelow";
+import { reconcileInstances } from "@/utils/azureStaleInstances";
 import { getErrorStatusCode } from "@/utils/errorUtils";
 import { Logger } from "@/utils/logger";
-import { armRateLimiter } from "@/utils/rateLimiter";
 import { runWorkerPool } from "@/utils/workerPool";
 import { createSessionCache } from "./cache";
 import type { WorkloadAdapter, WorkloadContent } from "./types";
@@ -23,10 +23,9 @@ export type AzureContent = WorkloadContent<AzureAssignment, AzureExtras>;
 
 export const AZURE_INITIAL_EXTRAS: AzureExtras = { scopes: [] };
 
-/** Azure spec 5: 4 workers, 250 ms apart; every item reads two lists together (instances, or groups and resources), so it costs 2 */
+/** Azure spec 5: 4 workers, 250 ms apart; the client counts every request the items send */
 const WORKERS = 4;
 const DELAY_MS = 250;
-const COST_PER_ITEM = 2;
 
 // No minimal cache: one without assignments would show as an empty tenant, so on a quota error nothing is stored and the
 // next visit loads again (Azure spec 5)
@@ -110,7 +109,10 @@ interface BelowReport {
 /**
  * One round below the refused subscriptions (Azure spec 15.5), within `budget` ARM requests: per subscription that is
  * not listed yet its readable resource groups and resources, then per top readable scope its active instances and
- * eligibility schedules, in order, until the budget is spent (`utils/azureReadBelow.ts`). It stops without an error;
+ * eligibility schedules, in order, until the budget is spent (`utils/azureReadBelow.ts`). Each scope read the budget
+ * also pays one request for is checked against its role assignments (`listRoleAssignments`, `reconcileInstances`): an
+ * inherited instance of a removed assignment goes, a direct assignment the instance list left out comes in. A failed
+ * check leaves the instances as they came. It stops without an error;
  * what it did not reach is in the settled outcome (`unreadScopeIds`, `isUnlisted`). A 403, 404 or 400
  * `InsufficientPermissions` on the way is "not readable" and counts as read. A subscription is reported once, when all
  * its reads of the round are done; an abort throws and reports nothing more, so a subscription that was cut short
@@ -127,8 +129,7 @@ async function readBelowRound(client: ArmClient, signal: AbortSignal, targets: B
             workerCount: WORKERS,
             delayMs: DELAY_MS,
             signal,
-            rateLimiter: armRateLimiter,
-            costPerItem: COST_PER_ITEM,
+            // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
             // An ARM message can hold the UPN, object id and scope: log status and code only
             errorLog: "statusAndCode",
             processor: async (subscriptionId) => {
@@ -153,7 +154,7 @@ async function readBelowRound(client: ArmClient, signal: AbortSignal, targets: B
     const toRead = targets
         .filter((t) => !failed.has(t.subscriptionId) && !unlisted.has(t.subscriptionId))
         .map((t) => ({ subscriptionId: t.subscriptionId, scopeIds: t.scopeIds ?? listed.get(t.subscriptionId) ?? [] }));
-    const plan = planBelowReading(toRead, budget);
+    const plan = planBelowReadingWithChecks(toRead, budget);
     if (plan.unread.size > 0 || unlisted.size > 0) Logger.info("Azure", `The read budget of ${budgetTotal} requests is spent; ${plan.unread.size + unlisted.size} subscriptions keep scopes for Read the rest`);
 
     const remaining = new Map<string, number>();
@@ -177,22 +178,22 @@ async function readBelowRound(client: ArmClient, signal: AbortSignal, targets: B
         if (left <= 0) settle(subscriptionId);
     };
     if (plan.items.length === 0) return;
-    const reading = await runWorkerPool<BelowItem, ArmRoleScheduleInstance[]>({
+    const reading = await runWorkerPool<CheckedBelowItem, ArmRoleScheduleInstance[]>({
         items: plan.items,
         workerCount: WORKERS,
         delayMs: DELAY_MS,
         signal,
-        rateLimiter: armRateLimiter,
-        costPerItem: COST_PER_ITEM,
+        // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
         // An ARM message can hold the UPN, object id and scope: log status and code only
         errorLog: "statusAndCode",
-        processor: async ({ scopeId }) => {
+        processor: async ({ scopeId, checked }) => {
             try {
-                const [active, eligible] = await Promise.all([
+                const [active, eligible, roleAssignments] = await Promise.all([
                     listAssignmentInstancesAt(client, scopeId, signal),
                     listEligibilitySchedulesAt(client, scopeId, signal),
+                    checked ? readRoleAssignments(client, scopeId, signal) : Promise.resolve(null),
                 ]);
-                return [...active, ...currentOnly(eligible)];
+                return reconcileInstances([...active, ...currentOnly(eligible)], roleAssignments, scopeId);
             } catch (error: unknown) {
                 if (isUnreadable(error) || isRefused(error)) return [];
                 throw error;
@@ -214,6 +215,16 @@ async function readBelowRound(client: ArmClient, signal: AbortSignal, targets: B
         onProgress: report.progress,
     });
     if (reading.aborted || signal.aborted) throw new Error("Aborted");
+}
+
+/** The role assignments of a scope for the check of a round; null when the read failed in any way, so nothing is changed */
+async function readRoleAssignments(client: ArmClient, scopeId: string, signal: AbortSignal): Promise<ArmRoleAssignment[] | null> {
+    try {
+        return await listRoleAssignments(client, scopeId, signal);
+    } catch (error: unknown) {
+        if (!signal.aborted) Logger.info("Azure", `The role assignments of a scope below a subscription could not be read (${getErrorStatusCode(error) ?? "no status"}); its instances stay as they came`);
+        return null;
+    }
 }
 
 /** One row per instance: an item inherited from above comes back from every subscription below it, with the same id */
@@ -291,8 +302,7 @@ function buildAzureAdapter(cache: WorkloadAdapter<AzureAssignment, AzureExtras, 
                 workerCount: WORKERS,
                 delayMs: DELAY_MS,
                 signal,
-                rateLimiter: armRateLimiter,
-                costPerItem: COST_PER_ITEM,
+                // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
                 // An ARM message can hold the UPN, object id and scope: log status and code only
                 errorLog: "statusAndCode",
                 processor: async (subscription) => {

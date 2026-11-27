@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
 import type { AccessView } from "@/utils/configureStart";
+import { portalLinkClass } from "@/components/ui/PortalLink";
 
 interface AccessRowProps {
     view: AccessView;
@@ -59,7 +60,7 @@ export function AccessRow({ view, onRetry, onGrant, isGranting, reportHref }: Ac
                         <Icon name="alert" size={16} />
                         <span className="font-semibold">{row.title}</span>
                         <span className="text-xs text-body">{row.text}</span>
-                        <a href={row.link.href} target="_blank" rel="noreferrer" className="text-xs text-accent underline underline-offset-2">{row.link.label}</a>
+                        <a href={row.link.href} target="_blank" rel="noopener noreferrer" className={`text-xs ${portalLinkClass(false, true)}`}>{row.link.label}</a>
                         <span className="ml-auto">{detailsButton}</span>
                     </div>
                 )}

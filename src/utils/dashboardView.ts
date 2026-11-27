@@ -3,6 +3,7 @@ import type { PimGroupData } from "@/types/pimGroup.types";
 import type { DashboardFilter } from "@/types/dashboardFilter.types";
 import { applyDashboardFilterToGroups, applyDashboardFilterToRoles, filterAppliesToGroups, hasPolicyKey, isEmptyDashboardFilter, narrowAssignmentsToFilter } from "@/utils/dashboardFilter";
 import { buildFilterSentence, type DashboardStatsInput } from "@/utils/dashboardStats";
+import { isPolicyFailed } from "@/utils/policyReadAccess";
 
 export interface CountingState {
     directoryRoles: boolean;
@@ -45,6 +46,8 @@ export interface StatsView {
     notReadableGroupCount: number;
     /** Roles in scope a policy filter cannot judge: Graph answered 403 on their policy (FIX-12). Zero without a policy filter. */
     notReadableRoleCount: number;
+    /** Roles in scope a policy filter cannot judge because their policy failed to load. Zero without a policy filter. */
+    failedRoleCount: number;
 }
 
 /**
@@ -56,9 +59,13 @@ export function buildViewFilterSentence(view: StatsView, rolesData: RoleDetailDa
     const sentence = buildFilterSentenceForView(view, rolesData, effective, isGroupsCounted, isAdvanced);
     const roles = view.notReadableRoleCount;
     const groups = view.notReadableGroupCount;
-    if (roles + groups === 0) return sentence;
+    const failed = view.failedRoleCount;
     const parts = [roles > 0 && `${roles} ${roles === 1 ? "role" : "roles"}`, groups > 0 && `${groups} ${groups === 1 ? "group" : "groups"}`].filter(Boolean).join(" and ");
-    return `${sentence} ${parts} with settings not readable with your access ${roles + groups === 1 ? "is" : "are"} not counted.`;
+    return [
+        sentence,
+        roles + groups > 0 && `${parts} with settings not readable with your access ${roles + groups === 1 ? "is" : "are"} not counted.`,
+        failed > 0 && `${failed} ${failed === 1 ? "role" : "roles"} with settings that failed to load ${failed === 1 ? "is" : "are"} not counted.`,
+    ].filter(Boolean).join(" ");
 }
 
 function buildFilterSentenceForView(view: StatsView, rolesData: RoleDetailData[], effective: DashboardFilter, isGroupsCounted: boolean, isAdvanced: boolean): string {
@@ -93,6 +100,8 @@ export function buildStatsView({ rolesData, groupsData, counting, effective, pol
         ? applyDashboardFilterToGroups(managed.filter((g) => g.policiesForbidden), withoutPolicyKeys, { emergencyAccountIds }).length : 0;
     const notReadableRoleCount = counting.directoryRoles && policyFiltered
         ? applyDashboardFilterToRoles(inScope.filter((r) => r.policiesForbidden), withoutPolicyKeys, { emergencyAccountIds }).length : 0;
+    const failedRoleCount = counting.directoryRoles && policyFiltered
+        ? applyDashboardFilterToRoles(inScope.filter((r) => !r.policiesForbidden && isPolicyFailed(r)), withoutPolicyKeys, { emergencyAccountIds }).length : 0;
     // Cards, Who and Terms count only the assignments the filter is about; Easy to miss reads whole roles
     const narrowed = narrowAssignmentsToFilter(roles, groups, effective, { emergencyAccountIds });
     const input: DashboardStatsInput = {
@@ -111,5 +120,5 @@ export function buildStatsView({ rolesData, groupsData, counting, effective, pol
         emergencyAccountIds,
         scope,
     };
-    return { input, roleLevelInput: { ...input, roles, groups }, roles, groups, scopeRoleCount: inScope.length, isScoped: isScoping, managedCount: managed.length, isFiltered, appliesToGroups, notReadableGroupCount, notReadableRoleCount };
+    return { input, roleLevelInput: { ...input, roles, groups }, roles, groups, scopeRoleCount: inScope.length, isScoped: isScoping, managedCount: managed.length, isFiltered, appliesToGroups, notReadableGroupCount, notReadableRoleCount, failedRoleCount };
 }

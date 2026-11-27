@@ -37,11 +37,11 @@ export const DASHBOARD_HELP: HelpPage = {
         },
         {
             title: "Refresh",
-            paragraphs: ["Refresh picks up new or removed assignments and keeps the policies it already loaded. To reload every policy, clear the cached data in Settings and reload the page."],
+            paragraphs: ["Refresh picks up new or removed assignments and reads the settings of every role and group again in the background. Until that is done, the page shows what it had."],
         },
         {
             title: "Export",
-            paragraphs: ["Export opens one dialog for a PDF report or a CSV of all assignments. Choose Summary, Full or Full with appendix, an Admin or Management audience, whether names of people are replaced, bars, donuts or tables, what is counted, and which blocks go in. The header of the document says what is counted, when the data was read, the filter, who exported and the version."],
+            paragraphs: ["Export opens one dialog for a PDF report or a CSV of all assignments. Choose Summary, Full or Full with appendix, an Admin or Management audience, whether names of people are replaced, bars, donuts or tables, what is counted, and which blocks go in. The header of the document says what is counted, when the data was read, the filter, who exported and the version. Settings or groups that did not load are named in the PDF and left out of its numbers, so they never read as none."],
         },
     ],
 };

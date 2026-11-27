@@ -20,7 +20,7 @@ export function registerReportFonts(origin: string): void {
     Font.registerHyphenationCallback((word) => [word]);
 }
 
-const c = {
+export const c = {
     ink: "#1c1c1a",
     body: "#4a4a46",
     muted: "#6a6a64",
@@ -29,6 +29,7 @@ const c = {
     accent: "#0a6fa8",
     warn: "#b45309",
     warnTint: "#fdf3e3",
+    danger: "#b42318",
     band: "#f0f0ec",
 };
 // The light tokens of palette B (globals.css): accent, bar-light, warn-fill, neutral-fill, success, danger, muted

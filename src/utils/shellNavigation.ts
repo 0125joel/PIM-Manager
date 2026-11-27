@@ -18,13 +18,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     { name: "Dashboard", path: "/dashboard", icon: "dashboard", tourId: "nav-dashboard" },
     { name: "Report", path: "/report", icon: "report", tourId: "nav-report" },
     { name: "Configure", path: "/configure", icon: "configure", tourId: "nav-configure" },
+    { name: "Audit", path: "/audit", icon: "log", tourId: "nav-audit" },
 ];
 
-/** The same three pages under `/azure`; the tour ids stay the same, only one list is on screen at a time */
+/** The same four pages under `/azure`; the tour ids stay the same, only one list is on screen at a time */
 export const AZURE_NAV_ITEMS: readonly NavItem[] = [
     { name: "Dashboard", path: "/azure", icon: "dashboard", tourId: "nav-dashboard", isExact: true },
     { name: "Report", path: "/azure/report", icon: "report", tourId: "nav-report" },
     { name: "Configure", path: "/azure/configure", icon: "configure", tourId: "nav-configure" },
+    { name: "Audit", path: "/azure/audit", icon: "log", tourId: "nav-audit" },
 ];
 
 function withoutTrailingSlash(pathname: string): string {
@@ -67,7 +69,8 @@ export function switchEnvironmentPath(pathname: string | null | undefined, targe
     const from = navItemsFor(target === "azure" ? "entra" : "azure");
     const to = navItemsFor(target);
     const index = from.findIndex((item) => isNavItemActive(pathname, item));
-    if (index >= 0) return to[index].path;
+    // A page without a counterpart on the other side falls through to the dashboard
+    if (index >= 0 && to[index]) return to[index].path;
     return homePathFor(target);
 }
 

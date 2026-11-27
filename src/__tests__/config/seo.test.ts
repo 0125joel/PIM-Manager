@@ -7,12 +7,14 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  AZURE_AVAILABLE,
   COVERAGE,
   FAQ,
   OG_IMAGE_PATH,
   REPO_URL,
   SITE_DESCRIPTION,
   SITE_KEYWORDS,
+  SITE_TAGLINE,
   SITE_TITLE,
   SITE_URL,
   STATUS_LABEL,
@@ -254,5 +256,25 @@ describe("front page social tags", () => {
     expect(images?.[0].url).toBe(OG_IMAGE_PATH);
     expect((metadata.twitter as { card?: string }).card).toBe("summary_large_image");
     expect((metadata.twitter as { images?: string[] }).images).toEqual([OG_IMAGE_PATH]);
+  });
+});
+
+// Joël, 2026-11-06: what the product is must not fall behind what it covers
+describe("how the product is introduced", () => {
+  const read = (file: string) => readFileSync(join(process.cwd(), file), "utf8");
+  const INTRODUCTIONS = ["public/llms.txt", "README.md", "docs/en/01-introduction.md", "docs/nl/01-introductie.md"];
+
+  it("uses the one line in every introduction, also with Azure when it is available", () => {
+    for (const file of INTRODUCTIONS) expect(read(file), file).toContain(SITE_TAGLINE);
+    expect(FAQ.find((item) => item.question === "What is PIM Manager?")?.answer.startsWith(SITE_TAGLINE)).toBe(true);
+    expect(read("src/app/home/components/HomePage.tsx")).toContain("{SITE_TAGLINE}");
+    expect(SITE_TAGLINE.includes("Azure")).toBe(AZURE_AVAILABLE);
+    expect(SITE_TITLE.includes("Azure")).toBe(AZURE_AVAILABLE);
+  });
+
+  it("says what is Entra only, so a broader name promises nothing that is not there", () => {
+    const answer = FAQ.find((item) => item.question === "What is PIM Manager?")?.answer ?? "";
+    expect(answer).toContain("For Entra it also applies");
+    if (AZURE_AVAILABLE) expect(answer).toContain("Azure is read only");
   });
 });

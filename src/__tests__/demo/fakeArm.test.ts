@@ -8,6 +8,13 @@ import { createDemoFetch } from "@/demo/runtime/fetch";
 import { listResourceGroups, listResources, listSubscriptions } from "@/services/azureScopeService";
 import { listAssignmentInstances, listAssignmentInstancesAt, listEligibilitySchedules, listEligibilitySchedulesAt, listMyAssignments, listMyEligibilities } from "@/services/azureAssignmentService";
 import { getRoleDefinition } from "@/services/azureRoleDefinitionService";
+import { readAzureAudit } from "@/services/azureAuditService";
+import { buildDemoAuditRows } from "@/demo/contoso/audit";
+import { PEOPLE } from "@/demo/contoso/tenant";
+import type { ArmRoleScheduleInstance, AzureScope, AzureScopeLevel } from "@/types/azureResource.types";
+import { applyApprovers, mapAzureAuditEvents } from "@/utils/azureAuditEvents";
+import { buildAzureAuditContext, planAzureAuditRead } from "@/utils/azureAuditRead";
+import { toAssignments } from "@/workloads/azureAssignmentsAdapter";
 import { ArmError, createArmClient } from "@/utils/armClient";
 import { RateLimiter } from "@/utils/rateLimiter";
 
@@ -335,5 +342,116 @@ describe("the fake ARM's edges", () => {
         const withoutArm = createDemoFetch({ graph: () => Promise.reject(new Error("no Graph")), realFetch: network });
         await expect(withoutArm(`https://management.azure.com/subscriptions?api-version=${ARM_API_VERSIONS.subscriptions}`)).rejects.toThrow(TypeError);
         expect(network).not.toHaveBeenCalled();
+    });
+});
+
+describe("the Azure Audit reads against the fake ARM", () => {
+    const LEVELS: Record<string, AzureScopeLevel> = { tenant: "root", managementgroup: "managementGroup", subscription: "subscription", resourcegroup: "resourceGroup", resource: "resource" };
+    const scopes: AzureScope[] = azure.scopes.map((s) => ({
+        id: s.id, name: s.displayName, level: LEVELS[s.level], parentId: s.parentId,
+        ...(azure.subscriptions.find((sub) => `/subscriptions/${sub.subscriptionId}` === s.id)?.readableScopes ? { access: "partial" as const } : {}),
+    }));
+    const logClient = createArmClient(() => Promise.resolve("demo-token"), { limiter: new RateLimiter(1000, 1000) });
+    const GROUP_API = `${S.tenantRootGroup}/providers/Microsoft.Insights/eventtypes/management/values`;
+
+    async function readAll() {
+        const to = new Date();
+        const from = new Date(to.getTime() - 90 * 86_400_000);
+        const raw = await readAzureAudit({ client, logClient, plan: planAzureAuditRead(scopes), from: from.toISOString(), to: to.toISOString() });
+        const bySubscription: Record<string, ArmRoleScheduleInstance[]> = {};
+        for (const s of WHOLE) {
+            const path = `/subscriptions/${s.subscriptionId}${AUTH}`;
+            bySubscription[s.subscriptionId] = [
+                ...(await client.getAll<ArmRoleScheduleInstance>(`${path}/roleAssignmentScheduleInstances`, ARM_API_VERSIONS.authorization)),
+                ...(await client.getAll<ArmRoleScheduleInstance>(`${path}/roleEligibilitySchedules`, ARM_API_VERSIONS.authorization)),
+            ];
+        }
+        const context = buildAzureAuditContext(scopes, toAssignments(bySubscription));
+        const events = mapAzureAuditEvents({ assignmentRequests: raw.assignmentRequests, eligibilityRequests: raw.eligibilityRequests, activity: raw.activity, context });
+        return { raw, events };
+    }
+
+    it("answers the four calls through readAzureAudit and the real client, with nothing unanswered", async () => {
+        const before = unhandled.length;
+        const { raw } = await readAll();
+        expect(unhandled.length).toBe(before);
+        expect(raw.notRead).toEqual([]);
+        expect(raw.assignmentRequests.length).toBeGreaterThan(0);
+        expect(raw.eligibilityRequests.length).toBeGreaterThan(0);
+        // The tenant and management group answers hold other providers' rows, which the read leaves out
+        expect(raw.activity.every((r) => (r.operationName?.value ?? "").toLowerCase().startsWith("microsoft.authorization/"))).toBe(true);
+        expect(JSON.stringify(raw)).not.toContain("httpRequest");
+    });
+
+    it("adds the demo account's own request on a scope it cannot read, from asTarget() at the root, once", async () => {
+        const { raw } = await readAll();
+        const own = raw.assignmentRequests.filter((r) => r.properties.scope === S.rgPrivate);
+        expect(own).toHaveLength(1);
+        expect(own[0].properties.principalId).toBe(DEMO_ACCOUNT.id);
+        expect(raw.ownRequestCount).toBe(1);
+        // Every request is there once, also the account's own requests the scope reads already gave
+        for (const list of [raw.assignmentRequests, raw.eligibilityRequests]) expect(new Set(list.map((r) => r.name)).size).toBe(list.length);
+    });
+
+    it("refuses resourceProvider at a management group with 400 BadRequest, and serves no other filter", async () => {
+        const call = (filter: string, version: string = ARM_API_VERSIONS.managementGroupLog) =>
+            fetch(`https://management.azure.com${GROUP_API}?api-version=${version}&$filter=${encodeURIComponent(filter)}`);
+        const window = `eventTimestamp ge '2026-01-01T00:00:00.000Z' and eventTimestamp le '2026-12-01T00:00:00.000Z'`;
+        const refused = await call(`${window} and resourceProvider eq 'Microsoft.Authorization'`);
+        expect(refused.status).toBe(400);
+        expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("BadRequest");
+        const before = unhandled.length;
+        expect((await call(window)).status).toBe(200);
+        expect((await call("level eq 'Error'")).status).toBe(404);
+        expect((await call(window, ARM_API_VERSIONS.activityLog)).status).toBe(404);
+        expect(unhandled.length).toBe(before + 2);
+        unhandled.length = before;
+    });
+
+    it("answers 400 InsufficientPermissions for the root and for a subscription read only below its level", async () => {
+        const get = (path: string) => fetch(`https://management.azure.com${path}/providers/Microsoft.Authorization/roleAssignmentScheduleRequests?api-version=${ARM_API_VERSIONS.authorization}`);
+        for (const path of ["", S.labs, S.rgPrivate]) expect((await get(path)).status).toBe(400);
+        expect((await get(S.rgLabs)).status).toBe(200);
+    });
+
+    it("has every case of the Azure Audit page after the mapper", async () => {
+        const { raw, events } = await readAll();
+        const sentences = events.map((e) => e.sentence).join("\n");
+        expect(events.some((e) => e.viaGroup === "Azure Subscription Owners")).toBe(true);
+        expect(events.some((e) => e.targetIsGuest === true && e.target?.id === PEOPLE.kim.id)).toBe(true);
+        expect(events.some((e) => e.result === "failure" && (e.failureReason ?? "").includes("RoleAssignmentExists"))).toBe(true);
+        expect(events.some((e) => e.kind === "outside" && e.actor.id === PEOPLE.breakGlass1.id)).toBe(true);
+        expect(events.some((e) => e.kind === "outside" && e.actor.id === PEOPLE.alex.id)).toBe(true);
+        expect(events.some((e) => e.denied === true)).toBe(true);
+        // A refused extension (P8) and a scheduled activation with its start (P7) and a timed decision (P6)
+        expect(events.some((e) => e.kind === "assignment" && e.result === "failure" && (e.failureReason ?? "").includes("ActiveDurationTooShort"))).toBe(true);
+        expect(events.some((e) => e.startsAt !== undefined && e.decidedAfterMinutes !== undefined)).toBe(true);
+        expect(events.some((e) => e.requestOnly === true && e.source === "arm")).toBe(true);
+        expect(events.some((e) => e.kind === "usage" && e.usedMinutes !== undefined && e.endedAt !== undefined)).toBe(true);
+        expect(events.some((e) => e.endedBy !== undefined)).toBe(true);
+        expect(events.some((e) => e.kind === "assignment" && e.sentence.includes("removed"))).toBe(true);
+        expect(events.some((e) => e.kind === "setting")).toBe(true);
+        expect(events.some((e) => e.sentence === "Other Azure authorization operation")).toBe(true);
+        expect(events.some((e) => e.targetIsApp === true && e.source === "activity-log")).toBe(true);
+        expect(events.some((e) => e.scope === "Tenant Root Group")).toBe(true);
+        expect(sentences.toLowerCase()).not.toContain("validate");
+        expect(raw.activity.some((r) => (r.operationName?.value ?? "").toLowerCase().includes("validate/action"))).toBe(true);
+    });
+
+    it("lets the Entra log decide the approved and the denied request", async () => {
+        const { events } = await readAll();
+        const decided = applyApprovers(events, buildDemoAuditRows(new Date()));
+        expect(decided.some((e) => e.source === "arm" && e.approver === PEOPLE.alex.displayName)).toBe(true);
+        expect(decided.some((e) => e.denied === true && e.approver === PEOPLE.megan.displayName)).toBe(true);
+    });
+
+    it("pages through an empty page that has a nextLink", async () => {
+        const to = new Date();
+        const filter = `eventTimestamp ge '${new Date(to.getTime() - 90 * 86_400_000).toISOString()}' and eventTimestamp le '${to.toISOString()}' and resourceProvider eq 'Microsoft.Authorization'`;
+        const pages: number[] = [];
+        await logClient.getAll(`/subscriptions/${azure.subscriptions[1].subscriptionId}/providers/Microsoft.Insights/eventtypes/management/values`, ARM_API_VERSIONS.activityLog, { $filter: filter }, { onPage: (items) => pages.push(items.length) });
+        expect(pages[0]).toBe(0);
+        expect(pages.length).toBe(2);
+        expect(pages[1]).toBeGreaterThan(0);
     });
 });

@@ -7,6 +7,7 @@ import {
     mergeBelowRound,
     planBelowListing,
     planBelowReading,
+    planBelowReadingWithChecks,
     takeWithinBudget,
     unreadTargets,
     withBelowState,
@@ -93,6 +94,27 @@ describe("planning a round", () => {
         expect(plan.unread.get(S2)).toHaveLength(401);
         expect(plan.unread.get(S2)?.[0]).toBe(rg(599));
         expect(budget.left).toBe(0);
+    });
+
+    it("pays one request more per scope read for its role assignment check, right after the scope read", () => {
+        const budget = createRequestBudget(8);
+        const plan = planBelowReadingWithChecks([{ subscriptionId: "a", scopeIds: ["a1", "a2"] }, { subscriptionId: "b", scopeIds: ["b1", "b2"] }], budget);
+        // a1 3, a2 3, b1 2 with nothing left for its check
+        expect(plan.items).toEqual([
+            { subscriptionId: "a", scopeId: "a1", checked: true },
+            { subscriptionId: "a", scopeId: "a2", checked: true },
+            { subscriptionId: "b", scopeId: "b1", checked: false },
+        ]);
+        expect(plan.unread).toEqual(new Map([["b", ["b2"]]]));
+        expect(budget.left).toBe(0);
+    });
+
+    it("checks every scope when the budget reaches them all", () => {
+        const budget = createRequestBudget(AZURE_READ_BELOW_BUDGET);
+        const plan = planBelowReadingWithChecks([{ subscriptionId: "a", scopeIds: ["a1", "a2"] }], budget);
+        expect(plan.items.every((item) => item.checked)).toBe(true);
+        expect(plan.unread.size).toBe(0);
+        expect(budget.left).toBe(AZURE_READ_BELOW_BUDGET - 6);
     });
 });
 

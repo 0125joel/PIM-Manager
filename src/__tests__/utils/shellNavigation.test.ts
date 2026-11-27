@@ -33,6 +33,12 @@ describe("switchEnvironmentPath", () => {
         expect(switchEnvironmentPath("/azure/configure", "entra")).toBe("/configure");
         expect(switchEnvironmentPath("/azure/unknown", "entra")).toBe("/dashboard");
     });
+    it("takes the Audit page to the Azure Audit page and back", () => {
+        expect(switchEnvironmentPath("/audit", "azure")).toBe("/azure/audit");
+        expect(switchEnvironmentPath("/audit/", "azure")).toBe("/azure/audit");
+        expect(switchEnvironmentPath("/azure/audit", "entra")).toBe("/audit");
+        expect(switchEnvironmentPath("/azure/audit/", "entra")).toBe("/audit");
+    });
     it("returns a path without the query string", () => {
         expect(switchEnvironmentPath("/report", "azure")).not.toContain("?");
     });
@@ -48,8 +54,8 @@ describe("homePathFor", () => {
 });
 
 describe("navigation lists", () => {
-    it("has the same three pages under /azure with the same tour ids", () => {
-        expect(AZURE_NAV_ITEMS.map((i) => i.path)).toEqual(["/azure", "/azure/report", "/azure/configure"]);
+    it("has the same four pages under /azure with the same tour ids", () => {
+        expect(AZURE_NAV_ITEMS.map((i) => i.path)).toEqual(["/azure", "/azure/report", "/azure/configure", "/azure/audit"]);
         expect(AZURE_NAV_ITEMS.map((i) => i.name)).toEqual(NAV_ITEMS.map((i) => i.name));
         expect(AZURE_NAV_ITEMS.map((i) => i.tourId)).toEqual(NAV_ITEMS.map((i) => i.tourId));
         expect(navItemsFor("azure")).toBe(AZURE_NAV_ITEMS);
@@ -86,9 +92,10 @@ describe("isNavActive", () => {
         expect(isNavActive(null, "/dashboard")).toBe(false);
         expect(isNavActive(undefined, "/dashboard")).toBe(false);
     });
-    it("has three items with unique tour ids", () => {
-        expect(NAV_ITEMS.map((i) => i.path)).toEqual(["/dashboard", "/report", "/configure"]);
-        expect(new Set(NAV_ITEMS.map((i) => i.tourId)).size).toBe(3);
+    it("has four items with unique tour ids", () => {
+        expect(NAV_ITEMS.map((i) => i.path)).toEqual(["/dashboard", "/report", "/configure", "/audit"]);
+        expect(NAV_ITEMS.find((i) => i.path === "/audit")).toMatchObject({ name: "Audit", icon: "log", tourId: "nav-audit" });
+        expect(new Set(NAV_ITEMS.map((i) => i.tourId)).size).toBe(4);
     });
 });
 

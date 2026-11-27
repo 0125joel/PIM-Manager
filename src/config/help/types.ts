@@ -1,4 +1,4 @@
-export type HelpPageId = "dashboard" | "report" | "configure" | "settings" | "azure-report" | "azure-dashboard";
+export type HelpPageId = "dashboard" | "report" | "configure" | "settings" | "azure-report" | "azure-dashboard" | "azure-audit" | "audit";
 
 export interface HelpBlock {
     title: string;

@@ -24,7 +24,7 @@ type Settings = NonNullable<AzureFilterContext["settings"]>;
 /**
  * What the Azure Report filters need beyond the assignments, read only when a filter asks for it: role definitions for
  * Privileged and the role settings for the policy keys. The service principal types, and which principals are deleted,
- * are read once per load whenever something holds a role, for the managed identity and Deleted tags and the Held by filters.
+ * are read once per load whenever something holds a role, for the managed identity and Deleted tags and the Who filters.
  */
 export function useAzureReportFilterContext(filters: AzureReportFilters, assignments: AzureAssignment[], scopes: AzureScope[], selectedId: string | null, emergencyIds: ReadonlySet<string>, homeTenantId: string | undefined): AzureReportFilterContextState {
     const { getArmClient } = useAzureActions();
@@ -32,6 +32,7 @@ export function useAzureReportFilterContext(filters: AzureReportFilters, assignm
     const getGraph = useGraphClient();
     const [definitions, setDefinitions] = useState<Definitions | null>(null);
     const [spTypes, setSpTypes] = useState<SpTypes | null>(null);
+    const [spAppIds, setSpAppIds] = useState<ReadonlyMap<string, string> | null>(null);
     const [settings, setSettings] = useState<Settings | null>(null);
     const [settingsProgress, setSettingsProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -58,7 +59,10 @@ export function useAzureReportFilterContext(filters: AzureReportFilters, assignm
         const controller = new AbortController();
         loadAzureServicePrincipalTypes(getGraph, assignments, loadKey, controller.signal, undefined, directoryLookupIds(assignments, scopes, homeTenantId))
             .then((state) => {
-                if (!controller.signal.aborted && state.status === "loaded") setSpTypes(state.byId);
+                if (!controller.signal.aborted && state.status === "loaded") {
+                    setSpTypes(state.byId);
+                    setSpAppIds(state.appIds ?? null);
+                }
             })
             .catch(() => {
                 if (!controller.signal.aborted) Logger.warn("Azure", "The service principal types could not be read for the filter");
@@ -116,10 +120,11 @@ export function useAzureReportFilterContext(filters: AzureReportFilters, assignm
         () => ({
             ...(needsDefinitions && definitions ? { definitions } : {}),
             ...(needsSpTypes && spTypes ? { spTypes } : {}),
+            ...(needsSpTypes && spAppIds ? { spAppIds } : {}),
             ...(policyKeys && settings ? { settings } : {}),
             emergencyIds,
         }),
-        [needsDefinitions, definitions, needsSpTypes, spTypes, policyKeys, settings, emergencyIds],
+        [needsDefinitions, definitions, needsSpTypes, spTypes, spAppIds, policyKeys, settings, emergencyIds],
     );
     return { context, settingsProgress: policyKeys ? settingsProgress : null };
 }

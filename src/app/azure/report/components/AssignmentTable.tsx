@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/icons/Icon";
+import { PortalLink } from "@/components/ui/PortalLink";
 import { Tag } from "@/components/ui/Tag";
 import { AZURE_TERMS } from "@/config/help/azureReportTerms";
 import { useIsDetailed } from "@/contexts/DetailsContext";
@@ -9,7 +10,8 @@ import type { AzureAssignmentRow } from "@/utils/azureReport";
 import { azureAssignmentTags } from "@/utils/azureAssignmentTags";
 import { isAzureTagShown } from "@/utils/calmTags";
 import { formatDate } from "@/utils/dateFormat";
-import { scopeIconFor } from "@/utils/azureResourceIcons";
+import { scopeIconFor, scopeLevelLabel } from "@/utils/azureResourceIcons";
+import { getAzurePrincipalUrl, getAzureScopeUrl } from "@/utils/portalLinks";
 
 const HEADERS = ["Scope", "Principal", "Role", "Assignment", "Origin"];
 
@@ -21,12 +23,14 @@ interface AssignmentTableProps {
     onOpenRole?: (assignment: AzureAssignment) => void;
     /** Graph servicePrincipalType by lowercase object id, for the managed identity tag */
     spTypes?: ReadonlyMap<string, string> | null;
+    /** Graph appId by lowercase object id, for the Entra link of an app */
+    spAppIds?: ReadonlyMap<string, string> | null;
     /** Calm details spec 3.6: false hides the Origin column */
     showOrigin?: boolean;
 }
 
 /** The assignments as a table, from 640 px. */
-export function AssignmentTable({ rows, emergencyAccountIds, onOpenRole, spTypes, showOrigin = true }: AssignmentTableProps) {
+export function AssignmentTable({ rows, emergencyAccountIds, onOpenRole, spTypes, spAppIds, showOrigin = true }: AssignmentTableProps) {
     const isDetailed = useIsDetailed();
     return (
         <div className="overflow-hidden rounded border border-line bg-surface max-sm:hidden">
@@ -34,7 +38,7 @@ export function AssignmentTable({ rows, emergencyAccountIds, onOpenRole, spTypes
                 <caption className="sr-only">Assignments</caption>
                 <thead className="bg-band text-xs font-semibold text-muted">
                     <tr>
-                        {(showOrigin ? HEADERS : HEADERS.slice(0, 4)).map((header) => <th key={header} scope="col" className="px-3.5 py-2.5">{header}</th>)}
+                        {(showOrigin ? HEADERS : HEADERS.slice(0, 4)).map((header) => <th key={header} scope="col" className="px-3.5 py-2.5 font-semibold">{header}</th>)}
                     </tr>
                 </thead>
                 <tbody>
@@ -42,13 +46,20 @@ export function AssignmentTable({ rows, emergencyAccountIds, onOpenRole, spTypes
                         <tr key={row.assignment.id} className="border-t border-line">
                             <td className="px-3.5 py-3 align-middle">
                                 <span className="flex min-w-0 items-start gap-2 text-ink">
-                                    <Icon name={scopeIconFor(row.scope)} size={16} className="mt-0.5" />
-                                    <span className="min-w-0 wrap-anywhere">{row.scope.name}</span>
+                                    <span title={scopeLevelLabel(row.scope)} className="mt-0.5 inline-flex">
+                                        <Icon name={scopeIconFor(row.scope)} size={16} />
+                                        <span className="sr-only">{scopeLevelLabel(row.scope)}</span>
+                                    </span>
+                                    <span className="min-w-0 wrap-anywhere">
+                                        <PortalLink portal="Azure portal" href={getAzureScopeUrl(row.scope.id)}>{row.scope.name}</PortalLink>
+                                    </span>
                                 </span>
                             </td>
                             <td className="px-3.5 py-3 align-middle">
                                 <span className="block wrap-anywhere">
-                                    <span className="text-ink">{row.assignment.principalName}</span>
+                                    <span className="text-ink">
+                                        <PortalLink portal="Entra admin center" className="text-ink" href={getAzurePrincipalUrl(row.assignment.principalType, row.assignment.principalId, spTypes, spAppIds)}>{row.assignment.principalName}</PortalLink>
+                                    </span>
                                     <span className="block text-xs leading-4 text-muted wrap-anywhere">{row.assignment.principalUpn ?? row.principalTypeLabel}</span>
                                 </span>
                             </td>

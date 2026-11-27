@@ -32,6 +32,13 @@ This document details all Microsoft Graph API endpoints used by PIM Manager. Und
 |----------|---------|---------------------|
 | roleManagementAlerts/alerts | Get security alerts | RoleManagementAlert.Read.Directory |
 
+### Audit (Optional)
+
+| Endpoint | Purpose | Permissions Required |
+|----------|---------|---------------------|
+| auditLogs/directoryAudits | Read PIM events and direct role changes for the Audit page, up to 30 days | AuditLog.Read.All, plus Reports Reader, Security Reader or Security Administrator |
+| Log Analytics `POST /v1/workspaces/{id}/query` (`api.loganalytics.azure.com`) | The `AuditLogs` and `AzureActivity` tables of the workspaces you choose, not a Graph call | `https://api.loganalytics.io/Data.Read`, plus read access to the workspace |
+
 ### Custom Extensions (Optional, Preview)
 
 | Endpoint | Purpose | Permissions Required |
@@ -322,13 +329,13 @@ PIM Manager supports Microsoft Entra PIM for Groups, allowing you to manage priv
 GET /identityGovernance/privilegedAccess/group/resources
 ```
 
-**API Version**: `beta`
+**API Version**: `v1.0`
 
 **Permission**: `PrivilegedAccess.Read.AzureADGroup`
 
 **Purpose**: Discover which groups are enrolled in PIM (have PIM policies configured).
 
-**Response**: Returns groups with `id`, `displayName`, and resource metadata.
+**Response**: Returns one object per onboarded group, with only its `id` (the group id). The names come from the group read.
 
 ---
 
@@ -407,7 +414,7 @@ GET /policies/roleManagementPolicyAssignments
   &$expand=policy($expand=rules)
 ```
 
-**API Version**: `beta`
+**API Version**: `v1.0`
 
 **Permission**: `RoleManagementPolicy.Read.AzureADGroup`
 
@@ -463,7 +470,7 @@ PIM Custom Extensions let a role or group activation call an external REST API (
 
 ### Linked extension on a policy (no extra permission)
 
-Both slots ride the existing policy read (`roleManagementPolicyAssignments?$expand=policy($expand=rules)`, Directory Roles on v1.0, PIM for Groups on beta). They are two rules in the same `rules` array, present on every policy once the preview is rolled out to the tenant:
+Both slots ride the existing policy read (`roleManagementPolicyAssignments?$expand=policy($expand=rules)`, Directory Roles on v1.0, PIM for Groups on v1.0). They are two rules in the same `rules` array, present on every policy once the preview is rolled out to the tenant:
 
 ```json
 {
@@ -549,13 +556,16 @@ Body: `@odata.type`, `id`, `isEnabled`, `customExtensionId`, `customAttributes` 
 | `AdministrativeUnit.Read.All` | Delegated | Read administrative unit names |
 | `Application.Read.All` | Delegated | Read application names |
 
-### Optional Permissions (PIM for Groups, Security Alerts, Custom Extensions, Conditional Access)
+### Optional Permissions (PIM for Groups, Security Alerts, Audit, Custom Extensions, Conditional Access)
 
 | Permission | Scope | Used For |
 |------------|-------|----------|
 | `PrivilegedAccess.Read.AzureADGroup` | Delegated | Read PIM for Groups assignments and resources |
 | `RoleManagementPolicy.Read.AzureADGroup` | Delegated | Read PIM policies for groups (Member/Owner) |
 | `RoleManagementAlert.Read.Directory` | Delegated | Read security alerts for roles |
+| `AuditLog.Read.All` | Delegated | Read the audit log for the Audit page; asked when you choose to grant it |
+| `https://api.loganalytics.io/Data.Read` | Delegated | Read the workspaces you choose for the Audit page; asked when you choose one |
+| `https://management.azure.com/user_impersonation` | Delegated | Azure Resource Manager, not Graph: read PIM for Azure resources for the Azure environment; asked with a consent popup when you turn Azure on |
 | `PrivilegedAccess-CustomExt.Read.All` | Delegated | List the tenant's PIM custom extensions (Preview) |
 | `Policy.Read.All` | Delegated | Configure's optional Conditional Access check, requested on demand |
 

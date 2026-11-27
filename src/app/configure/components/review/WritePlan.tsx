@@ -35,7 +35,7 @@ function FromTo({ from, to }: { from: string; to: string }) {
 function StepBox({ number, title, count, children }: { number: number; title: string; count: string; children: ReactNode }) {
     const id = `review-step-${number}`;
     return (
-        <section aria-labelledby={id} className="rounded border border-line bg-surface">
+        <section aria-labelledby={id} data-visual-section={`review-${title}`} className="rounded border border-line bg-surface">
             <div className="flex items-center gap-3 border-b border-line px-4 py-3">
                 <span aria-hidden="true" className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-semibold text-surface">{number}</span>
                 <h3 id={id} className="text-sm font-semibold text-ink"><span className="sr-only">Step {number}: </span>{title}</h3>
@@ -72,7 +72,13 @@ function SettingRow({ row, onLeaveOut }: { row: SettingGroupRow; onLeaveOut: (id
 }
 
 function PersonTarget({ row }: { row: AssignmentRow }) {
-    return <><span className="font-semibold text-ink">{row.principal}</span><span className="text-ink"> · {row.target}</span>{row.line && <span className="text-xs text-body"> · {row.line}</span>}</>;
+    return (
+        <>
+            <span className="font-semibold text-ink">{row.principal}</span><span className="text-ink"> · {row.target}</span>{row.line && <span className="text-xs text-body"> · {row.line}</span>}
+            {/* Two people can share a name: the UPN (or object id) shows who the write goes to */}
+            {row.principalDetail && <span className={`block break-all text-body ${row.principalDetail.includes("@") ? "text-xs" : "font-mono text-[11px]"}`}>{row.principalDetail}</span>}
+        </>
+    );
 }
 
 /**

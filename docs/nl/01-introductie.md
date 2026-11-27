@@ -2,7 +2,7 @@
 
 ## Wat is PIM Manager?
 
-PIM Manager is een webapplicatie waarmee Microsoft 365 beheerders **Privileged Identity Management (PIM)** instellingen kunnen **bekijken en analyseren** voor Microsoft Entra ID rollen en groepen.
+Admin role management for Microsoft Entra and Azure. PIM Manager is een webapplicatie waarmee beheerders kunnen **bekijken en analyseren** wie welke beheerdersrol heeft, onder welke **Privileged Identity Management (PIM)**-instellingen, voor Microsoft Entra ID-rollen en -groepen en voor Azure-resources. Azure is voorlopig alleen-lezen.
 
 ### Het Probleem dat het Oplost
 
@@ -29,7 +29,7 @@ Deze applicatie is ontworpen voor:
 
 ## Belangrijkste Functies
 
-### 📈 Dashboard Pagina (Nieuw!)
+### Dashboard Pagina
 - **Weergavemodi:** Schakel tussen **Basis** (globaal overzicht) en **Geavanceerd** (gedetailleerde statistieken)
 - **Roloverzicht:** Doorzoekbare lijst met rollen en directe navigatie naar de rapportpagina
 - **Beveiligingswaarschuwingen:** Alleen-lezen overzicht van PIM-aanbevelingen (bijv. mogelijk verouderde accounts)
@@ -38,16 +38,16 @@ Deze applicatie is ontworpen voor:
 - **Actie-inzichten:** "Approvers Overview" en "Configuration Errors" widgets (Geavanceerde modus)
 - **Pro Tips:** Dynamische suggesties om je beveiliging te verbeteren
 
-### 📊 Rapportpagina (Hoofdfunctie)
+### Rapportpagina (Hoofdfunctie)
 - **Multi-Workload:** Bekijk zowel Directory Rollen als PIM Groepen in één geünificeerde interface
 - Bekijk alle Microsoft Entra ID rollen met hun PIM-configuraties
 - Filter op roltype, toewijzingstype, lidtype, scope en gebruiker
-- Exporteer naar PDF (Executive Report) of CSV
+- Exporteer als CSV (Overview, of het formaat van Configure Import) of als JSON-back-up van elke policy en toewijzing
 - Zie wie is toegewezen aan elke rol (eligible, actief, permanent)
 - Bekijk scope-informatie (Tenant-breed, App-scoped, RMAU)
 - Authentication Context weergave voor rollen die specifieke toegang vereisen
 
-### ⚙️ Configuratiepagina
+### Configuratiepagina
 - **Edit**: master-detail lijst van rollen en groepen met instellingen, Who has it en Select several
 - **Guided**: een route in stappen voor een wijziging op veel doelen, eventueel vanuit het access model
 - **Import**: CSV- of JSON-bestanden vergeleken met de tenant, daarna één review en apply; de pagina **Access model** toont de PIM Monitor-catalogus
@@ -57,13 +57,26 @@ Deze applicatie is ontworpen voor:
 > [!NOTE]
 > Schrijfmachtigingen voor Configure (`RoleManagementPolicy.ReadWrite.Directory` en gerelateerde scopes) worden aangevraagd via incrementele consent, alleen wanneer je in Configure kiest voor Grant permission. Rapportagefuncties vereisen deze machtigingen niet.
 
+### Azure-pagina's
+- **Azure-dashboard** (`/azure`): wie bevoorrechte toegang op je Azure-resources kan gebruiken en onder welke voorwaarden. Toewijzingen, rolinstellingen en de eigen waarschuwingen van PIM voor managementgroepen, subscriptions, resourcegroepen en resources, in Basic en Advanced, met een export als PDF of CSV
+- **Azure-rapport** (`/azure/report`): de rollen en toewijzingen per scope, met een scopeboom, de rolinstellingen en een CSV-export
+- Elk getal op Azure gaat over de scope die je in de scopebalk kiest; gedelegeerde subscriptions (Lighthouse) kun je weglaten
+- Alleen-lezen, met je eigen Azure-rollen: je ziet wat je mag lezen, nooit een totaal voor de hele tenant. Azure zet je per account aan met een eenmalige consent voor Azure Resource Manager
+
+### Audit-pagina
+- **Entra** (`/audit`): activaties van rollen en groepen, wijzigingen in toewijzingen en instellingen en rolwijzigingen buiten PIM in één tijdlijn, met filters en een weergave **No activation**. Die weergave laat activiteit in de periode zien, niet of een rol weg kan
+- Tot 30 dagen uit het Entra-auditlog met `AuditLog.Read.All`, dat een beheerder eenmalig voor de tenant goedkeurt. Kies in Settings Log Analytics-workspaces om verder terug te lezen; de pagina opent dan op 180 dagen
+- **Azure** (`/azure/audit`): dezelfde pagina voor de Azure-scopes die je kunt lezen, uit het Azure activity log en de PIM-aanvragen. Hij opent op 30 dagen en gaat tot 90, of tot een jaar met workspaces. Geen nieuwe machtiging: je Azure-rollen bepalen wat je ziet
+- Een activatie via een groep staat er als een directe, met de groep onder **Through**
+- Exporteer de huidige weergave als CSV, JSON of PDF
+
 ---
 
 ## Je weg vinden: de tours
 
-Niemand leest eerst een handleiding voordat hij gaat klikken, dus PIM Manager legt zichzelf uit terwijl je rondkijkt. De eerste keer dat je een onderdeel opent, start een korte tour. Eerst één door de app zelf: de wissel tussen Entra ID en Azure, de drie pagina's, Refresh, Help, Settings en je account. Daarna één voor de pagina waar je bent. Op Azure begint hij bij de scope, want elk getal op Azure gaat over de scope die je kiest.
+Niemand leest eerst een handleiding voordat hij gaat klikken, dus PIM Manager legt zichzelf uit terwijl je rondkijkt. De eerste keer dat je een onderdeel opent, start een korte tour. Eerst één door de app zelf: de wissel tussen Entra ID en Azure, de pagina's, Refresh, Help, Settings en je account. Daarna één voor de pagina waar je bent. Op Azure begint hij bij de scope, want elk getal op Azure gaat over de scope die je kiest.
 
-- Elk onderdeel krijgt de eerste keer zijn eigen tour: het Dashboard in Basic en in Advanced, de Report, Configure en elk van zijn modi, en hetzelfde op Azure.
+- Elk onderdeel krijgt de eerste keer zijn eigen tour: het Dashboard in Basic en in Advanced, de Report, Audit, Configure en elk van zijn modi, en hetzelfde op Azure.
 - Een tour is een handvol stappen: wat je ziet, wat het betekent en wat je ermee kunt. De laatste stap zegt waar je daarna kijkt.
 - **Skip tour** sluit die tour. **Turn off tours** zorgt dat geen enkele tour nog vanzelf start; zet ze terug aan onder **Settings > Display > Tours**.
 - **Start the tour** in Help, in het paneel en in de volledige gids, laat je kiezen: per product en per pagina, of **All of Entra** en **All of Azure** in één keer.
@@ -96,6 +109,8 @@ De applicatie vereist een Microsoft Entra app-registratie met de volgende **gede
 | Machtiging | Functie | Fallback Gedrag |
 |------------|---------|-----------------|
 | `RoleManagementAlert.Read.Directory` | Beveiligingswaarschuwingen paneel | Paneel verborgen bij 403 |
+| `AuditLog.Read.All` | Audit-pagina | De pagina vraagt erom, en een beheerder moet hem eenmalig voor je tenant goedkeuren; de rest van de app werkt zonder. Het log lezen vraagt ook Reports Reader, Security Reader of Security Administrator |
+| `https://api.loganalytics.io/Data.Read` | Audit-pagina, uit Log Analytics-workspaces die je in Settings kiest | Audit leest 30 dagen uit het Entra-auditlog en 90 dagen uit het Azure activity log |
 | `PrivilegedAccess.Read.AzureADGroup` | PIM voor Groepen workload | Workload niet getoond in instellingen |
 | `RoleManagementPolicy.Read.AzureADGroup` | PIM Groepen policies | Groepsdata onvolledig zonder dit |
 | `PrivilegedAccess-CustomExt.Read.All` | Lijst van PIM custom extensions (Preview) | Keuzelijst en controle op verweesde koppelingen verborgen; welke extension een beleid koppelt blijft zichtbaar |
@@ -131,7 +146,9 @@ Elke moderne browser (Chrome, Edge, Firefox, Safari) met JavaScript ingeschakeld
 │  Next.js React Applicatie                               │
 │  ├── Dashboard Pagina (Analyses & Inzichten)            │
 │  ├── Rapport Pagina (Gedetailleerde Configuratieweergave)│
-│  └── Configuratie Pagina (Edit/Guided/Import/Model)    │
+│  ├── Audit Pagina (Activaties & Wijzigingen)            │
+│  ├── Configuratie Pagina (Edit/Guided/Import/Model)     │
+│  └── Azure Pagina's (Dashboard/Rapport/Audit)           │
 ├─────────────────────────────────────────────────────────┤
 │  State Management Laag                                  │
 │  ├── UnifiedPimContext (Workload Orkestratie)           │

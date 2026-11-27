@@ -112,6 +112,36 @@ export function planBelowReading(scopesBySubscription: ReadonlyArray<{ subscript
     return { items: taken, unread };
 }
 
+/** The role assignment read of a scope (`listRoleAssignments`), checked against its instances: one request */
+export const REQUESTS_PER_BELOW_CHECK = 1;
+
+/** One scope read of a round of the Report, and whether the budget also pays for its role assignment check */
+export interface CheckedBelowItem extends BelowItem {
+    checked: boolean;
+}
+
+/**
+ * Step 2 of a round of the Report: as `planBelowReading`, with per scope read one more request for its role assignments
+ * (`utils/azureStaleInstances.ts`), taken right after the scope read. A scope the budget reads but cannot check is read
+ * unchecked: its instances stay as they come.
+ */
+export function planBelowReadingWithChecks(scopesBySubscription: ReadonlyArray<{ subscriptionId: string; scopeIds: readonly string[] }>, budget: RequestBudget): { items: CheckedBelowItem[]; unread: Map<string, string[]> } {
+    const all = scopesBySubscription.flatMap(({ subscriptionId, scopeIds }) => scopeIds.map((scopeId) => ({ subscriptionId, scopeId })));
+    const items: CheckedBelowItem[] = [];
+    let i = 0;
+    for (; i < all.length; i++) {
+        if (!budget.take(REQUESTS_PER_BELOW_ITEM)) break;
+        items.push({ ...all[i], checked: budget.take(REQUESTS_PER_BELOW_CHECK) });
+    }
+    const unread = new Map<string, string[]>();
+    for (const item of all.slice(i)) {
+        const list = unread.get(item.subscriptionId);
+        if (list) list.push(item.scopeId);
+        else unread.set(item.subscriptionId, [item.scopeId]);
+    }
+    return { items, unread };
+}
+
 /** One subscription at the end of a round: what was read below it and what is left */
 export interface BelowSettled {
     subscriptionId: string;

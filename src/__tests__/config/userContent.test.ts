@@ -50,6 +50,8 @@ const HELP_OF_ROUTE: Record<string, HelpPageId> = {
     "/settings": "settings",
     "/azure": "azure-dashboard",
     "/azure/report": "azure-report",
+    "/azure/audit": "azure-audit",
+    "/audit": "audit",
 };
 
 /** The source of every file outside the tests and the tour config, for the useTourPage check */

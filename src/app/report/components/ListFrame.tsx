@@ -7,8 +7,13 @@ import { REPORT_SORT_OPTIONS, isReportSort, type ReportSort } from "@/utils/repo
 interface ListFrameProps {
     /** "Role" or "Group" */
     label: string;
-    sort: ReportSort;
-    onSortChange: (sort: ReportSort) => void;
+    /** With `sort` and `onSortChange` the header holds the sort select; without them it holds `meta` */
+    sort?: ReportSort;
+    onSortChange?: (sort: ReportSort) => void;
+    /** What sits where the select would (for example "12 actions"); only used without a sort */
+    meta?: ReactNode;
+    /** From 1024 up the box fills its column instead of following the screen, so the list is exactly as high as what sits beside it */
+    fillsColumn?: boolean;
     children: ReactNode;
 }
 
@@ -38,25 +43,29 @@ function keepFocusedRowAsTabStop(event: FocusEvent<HTMLDivElement>) {
 }
 
 /** The box around the list: a header with the column name and the sort select, then the rows; from 1024 up the list scrolls inside its column (spec 2.4). */
-export function ListFrame({ label, sort, onSortChange, children }: ListFrameProps) {
+export function ListFrame({ label, sort, onSortChange, meta, fillsColumn = false, children }: ListFrameProps) {
     return (
-        <div className="overflow-hidden rounded border border-line bg-surface">
+        <div className={`overflow-hidden rounded border border-line bg-surface ${fillsColumn ? "lg:absolute lg:inset-0 lg:flex lg:flex-col" : ""}`}>
             <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 text-xs text-muted">
                 <span>{label}</span>
-                <label className="flex items-center gap-2">
-                    Sort
-                    <select
-                        value={sort}
-                        onChange={(event) => {
-                            if (isReportSort(event.target.value)) onSortChange(event.target.value);
-                        }}
-                        className="h-[26px] rounded border border-line bg-surface px-1 text-xs text-ink max-sm:h-11"
-                    >
-                        {REPORT_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                </label>
+                {sort !== undefined && onSortChange ? (
+                    <label className="flex items-center gap-2">
+                        Sort
+                        <select
+                            value={sort}
+                            onChange={(event) => {
+                                if (isReportSort(event.target.value)) onSortChange(event.target.value);
+                            }}
+                            className="h-[26px] rounded border border-line bg-surface px-1 text-xs text-ink max-sm:h-11"
+                        >
+                            {REPORT_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                    </label>
+                ) : (
+                    meta
+                )}
             </div>
-            <div onKeyDown={moveBetweenRows} onFocus={keepFocusedRowAsTabStop} className="lg:max-h-[calc(100dvh-14rem)] lg:overflow-y-auto">{children}</div>
+            <div onKeyDown={moveBetweenRows} onFocus={keepFocusedRowAsTabStop} className={`lg:overflow-y-auto ${fillsColumn ? "lg:min-h-0 lg:flex-1" : "lg:max-h-[calc(100dvh-14rem)]"}`}>{children}</div>
         </div>
     );
 }

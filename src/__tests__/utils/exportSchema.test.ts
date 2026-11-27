@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-    FILE_SCHEMAS, approversCodec, daysCodec, durationCodec, endDateCodec, enumCodec, intCodec, parseCsvText, prepareCsvText, readCsv, writeCsv, yesNoCodec,
+    FILE_SCHEMAS, approversCodec, daysCodec, durationCodec, escapeCsvCell, endDateCodec, enumCodec, intCodec, parseCsvText, prepareCsvText, readCsv, writeCsv, yesNoCodec,
     type ExportFileType, type ExportRow, type FileSchema,
 } from "@/utils/exportSchema";
 import {
@@ -397,6 +397,21 @@ describe("cell escaping", () => {
         const rows = rowsByType().bulkGroupPolicies.map((row, i) => (i === 0 ? { ...row, groupName: name } : row));
         const csv = writeCsv(FILE_SCHEMAS.bulkGroupPolicies, rows);
         const cells = csv.split(/\r\n|\n|\r/).flatMap((line) => line.split(";")).map((cell) => cell.replace(/^"/, ""));
+        expect(cells.filter((cell) => /^[=+\-@]/.test(cell))).toEqual([]);
+        expect(readCsv(FILE_SCHEMAS.bulkGroupPolicies, csv).rows[0].groupName).toBe(name);
+    });
+    it.each([" =1+1", '"=1+1', '" @x', "  -2"])("defuses a formula behind quotes or spaces at the start of a cell, and reads the value back: %j", (name) => {
+        expect(escapeCsvCell(name).replace(/^"/, "").startsWith("'")).toBe(true);
+        const rows = rowsByType().bulkGroupPolicies.map((row, i) => (i === 0 ? { ...row, groupName: name } : row));
+        const csv = writeCsv(FILE_SCHEMAS.bulkGroupPolicies, rows);
+        // A text cell is trimmed when it is read, as it always was: the formula sign is back, the apostrophe is gone
+        expect(readCsv(FILE_SCHEMAS.bulkGroupPolicies, csv).rows[0].groupName).toBe(name.trim());
+    });
+    it.each(['Finance;"=1+1', 'Finance;""=1+1', "Finance; =1+1", 'Finance\n"=1+1', 'Finance\r\n "@x', 'a;"-1;" +2'])("defuses a formula behind a quote or a space after a boundary, and reads the name back: %j", (name) => {
+        const rows = rowsByType().bulkGroupPolicies.map((row, i) => (i === 0 ? { ...row, groupName: name } : row));
+        const csv = writeCsv(FILE_SCHEMAS.bulkGroupPolicies, rows);
+        // Whatever a semicolon reader does with the quotes and spaces: no cell starts a formula behind them
+        const cells = csv.split(/\r\n|\n|\r|;/).map((cell) => cell.replace(/^[" ]+/, ""));
         expect(cells.filter((cell) => /^[=+\-@]/.test(cell))).toEqual([]);
         expect(readCsv(FILE_SCHEMAS.bulkGroupPolicies, csv).rows[0].groupName).toBe(name);
     });

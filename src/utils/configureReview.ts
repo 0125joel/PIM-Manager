@@ -13,7 +13,7 @@ import type { PreflightAssignment, PreflightCheck, PreflightFix, PreflightOutcom
 import { preflightVerdict } from "@/utils/configurePreflight";
 import { ACTIVATION_CATEGORIES, ASSIGNMENT_CATEGORIES, describeSettingValue, readTargetSettings, type ValueWords } from "@/utils/configureSettingRows";
 import type { GraphRule } from "@/utils/policyRules";
-import { getPrincipalKind, toBasicKind } from "@/utils/principalUtils";
+import { getPrincipalKind, principalDetailOf, toBasicKind } from "@/utils/principalUtils";
 import type { ResultRow } from "@/utils/configureResult";
 import { ROLE_TEMPLATES } from "@/utils/writeAccess";
 
@@ -176,6 +176,8 @@ export interface SettingGroupRow {
 export interface AssignmentRow {
     changeId: string;
     principal: string;
+    /** The UPN, or the object id of a group or app: tells two people with the same name apart before the write */
+    principalDetail?: string;
     target: string;
     /** Adds: "Eligible" or "Active" */
     type?: string;
@@ -292,6 +294,7 @@ export function describeReview({ basket, checks, nameOf, words }: ReviewInput): 
     const adds = changes.filter((c): c is BasketAdd => c.kind === "add").map((c): AssignmentRow => ({
         changeId: changeId(c),
         principal: c.principal.displayName,
+        principalDetail: principalDetailOf(c.principal),
         target: nameOf(c.target),
         type: c.type === "eligible" ? "Eligible" : "Active",
         scope: c.scope === "/" ? "Tenant-wide" : c.scopeName ?? c.scope,
@@ -302,6 +305,7 @@ export function describeReview({ basket, checks, nameOf, words }: ReviewInput): 
     const updates = changes.filter((c): c is BasketUpdate => c.kind === "update").map((c): AssignmentRow => ({
         changeId: changeId(c),
         principal: c.schedule.principal.displayName,
+        principalDetail: principalDetailOf(c.schedule.principal),
         target: nameOf(c.target),
         oldEnd: formatDate(c.schedule.end),
         newEnd: formatDate(c.end),
@@ -311,6 +315,7 @@ export function describeReview({ basket, checks, nameOf, words }: ReviewInput): 
     const removals = removalChanges.map((c): AssignmentRow => ({
         changeId: changeId(c),
         principal: c.schedule.principal.displayName,
+        principalDetail: principalDetailOf(c.schedule.principal),
         target: nameOf(c.target),
         tag: c.schedule.type === "eligible" ? "Remove eligible" : "Remove active",
         ...lineOf(c),

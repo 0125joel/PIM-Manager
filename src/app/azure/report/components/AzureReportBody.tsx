@@ -55,7 +55,7 @@ interface AzureReportBodyProps {
     onClearRole: () => void;
     getShareUrl: (roleId: string) => string;
     /** The detail of the shown role; the page reads its description and policy, the fixture passes fixed states */
-    renderRoleDetail: (props: { detail: AzureRoleDetailModel; scope: AzureScope; isHiddenByFilter: boolean; getShareUrl: () => string; tab: PolicyTabId; onTabChange: (tab: PolicyTabId) => void; spTypes?: ReadonlyMap<string, string> | null }) => ReactNode;
+    renderRoleDetail: (props: { detail: AzureRoleDetailModel; scope: AzureScope; isHiddenByFilter: boolean; getShareUrl: () => string; tab: PolicyTabId; onTabChange: (tab: PolicyTabId) => void; spTypes?: ReadonlyMap<string, string> | null; spAppIds?: ReadonlyMap<string, string> | null }) => ReactNode;
     /**
      * Reads the policies of the privileged roles in the role list at the scope, for "No MFA on activation" (Azure spec
      * 15.6). A hook, passed so the fixture route needs no ARM; without it the signal never shows.
@@ -201,7 +201,7 @@ export function AzureReportBody({ scopes, assignments, selectedId, filters, onSe
                             {rows.length > 0 && view === "roles" && (
                                 <ReportLayout
                                     list={<AzureRoleList rows={roleList} currentId={shownRoleId ?? undefined} onSelect={onSelectRole} sort={sort} onSortChange={setSort} />}
-                                    detail={detail && selectedScope ? renderRoleDetail({ detail, scope: selectedScope, isHiddenByFilter: isShownHidden, getShareUrl: () => getShareUrl(detail.id), tab, onTabChange: setTab, spTypes: filterContext.spTypes }) : null}
+                                    detail={detail && selectedScope ? renderRoleDetail({ detail, scope: selectedScope, isHiddenByFilter: isShownHidden, getShareUrl: () => getShareUrl(detail.id), tab, onTabChange: setTab, spTypes: filterContext.spTypes, spAppIds: filterContext.spAppIds }) : null}
                                     hasSelection={selectedRoleId !== null}
                                     backLabel="All roles"
                                     onBack={onClearRole}
@@ -213,8 +213,8 @@ export function AzureReportBody({ scopes, assignments, selectedId, filters, onSe
                             )}
                             {rows.length > 0 && view === "assignments" && (
                                 <>
-                                    <AssignmentTable rows={rows} emergencyAccountIds={emergencyAccountIds} onOpenRole={onOpenRole} spTypes={filterContext.spTypes} showOrigin={details.isDetailed || filters.origin !== "here"} />
-                                    <AssignmentCards rows={rows} emergencyAccountIds={emergencyAccountIds} onOpenRole={onOpenRole} spTypes={filterContext.spTypes} />
+                                    <AssignmentTable rows={rows} emergencyAccountIds={emergencyAccountIds} onOpenRole={onOpenRole} spTypes={filterContext.spTypes} spAppIds={filterContext.spAppIds} showOrigin={details.isDetailed || filters.origin !== "here"} />
+                                    <AssignmentCards rows={rows} emergencyAccountIds={emergencyAccountIds} onOpenRole={onOpenRole} spTypes={filterContext.spTypes} spAppIds={filterContext.spAppIds} />
                                 </>
                             )}
                         </div>

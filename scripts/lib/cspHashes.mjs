@@ -48,6 +48,15 @@ export function injectHashes(content, hashes, fileLabel = "header file") {
     return content.split(CSP_HASHES_TOKEN).join(hashes.join(" "));
 }
 
+/**
+ * What a header line of `longest` characters means for a limit of `max`: "ok" at or below it, otherwise "fail" for a real
+ * build and "warn" for a fixture build, which is never deployed.
+ */
+export function headerLineVerdict(longest, max, isFixtureBuild) {
+    if (longest <= max) return "ok";
+    return isFixtureBuild ? "warn" : "fail";
+}
+
 /** The Content-Security-Policy value found in a _headers or staticwebapp.config.json text */
 export function extractCspValue(content) {
     const match = /Content-Security-Policy["']?\s*:\s*["']?([^"\n]*)/.exec(content);

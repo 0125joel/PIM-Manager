@@ -13,6 +13,7 @@ import { buildAssignmentRows, type AssignmentExportRow } from "@/utils/exportRow
 import { getGroupsOutsidePim } from "@/utils/groupsOutsidePim";
 import { summarizeAlerts } from "@/utils/alertSummary";
 import { formatDuration } from "@/utils/durationUtils";
+import { isPolicyFailed } from "@/utils/policyReadAccess";
 import { summarizePolicyRules } from "@/utils/policySummary";
 import { getPrincipalKindLabel } from "@/utils/principalUtils";
 
@@ -72,6 +73,8 @@ export interface ExportInput {
     dismissedAlertIds?: ReadonlySet<string>;
     tenantExtensionIds: ReadonlySet<string> | null;
     policiesLoading: boolean;
+    /** PIM for Groups is counted but was not loaded (failed or still loading): the report says so instead of counting zero groups */
+    isGroupsUnavailable?: boolean;
     meta: { tenantName: string | null; tenantId?: string; exporter: string; version: string; dataReadAt?: Date; exportedAt: Date };
 }
 
@@ -179,11 +182,12 @@ export function buildExportReport(input: ExportInput, options: ExportOptions): E
     const groupsData = anonymised?.groups ?? input.groupsData;
     const effective = options.applyFilter ? getEffectiveDashboardFilter(input.filter) : {};
     const counting = options.counting;
-    const view = buildStatsView({ rolesData, groupsData, counting, effective, policiesLoading: input.policiesLoading, emergencyAccountIds: input.emergencyAccountIds, scope: "privileged" });
+    const isGroupsMissing = counting.pimGroups && input.isGroupsUnavailable === true;
+    const view = buildStatsView({ rolesData, groupsData, counting, effective, policiesLoading: input.policiesLoading, emergencyAccountIds: input.emergencyAccountIds, scope: "privileged", isGroupsUnavailable: isGroupsMissing });
     const notes: string[] = [];
     const blocks = options.blocks;
 
-    const counted = [counting.directoryRoles && "Directory roles", counting.pimGroups && "PIM for Groups", counting.pimGroups && counting.unmanagedGroups && "Groups outside PIM", counting.securityAlerts && "Security alerts"].filter((x): x is string => !!x);
+    const counted = [counting.directoryRoles && "Directory roles", counting.pimGroups && `PIM for Groups${isGroupsMissing ? " (not loaded)" : ""}`, counting.pimGroups && counting.unmanagedGroups && `Groups outside PIM${isGroupsMissing ? " (not loaded)" : ""}`, counting.securityAlerts && "Security alerts"].filter((x): x is string => !!x);
     const filterText = view.isFiltered ? getFilterLabels(effective, buildFilterNames(rolesData)).map((l) => l.label).join(", ") : null;
     const header: ReportHeader = {
         title: "Privileged access report",
@@ -208,6 +212,9 @@ export function buildExportReport(input: ExportInput, options: ExportOptions): E
         const parts = [rolesNotReadable > 0 && `${rolesNotReadable} ${rolesNotReadable === 1 ? "role" : "roles"}`, groupsNotReadable > 0 && `${groupsNotReadable} ${groupsNotReadable === 1 ? "group" : "groups"}`].filter(Boolean).join(" and ");
         notes.push(`${parts} ${rolesNotReadable + groupsNotReadable === 1 ? "has" : "have"} settings that are not readable with the current access: they say "Not readable" in the settings rows and are left out of the settings charts.`);
     }
+    const rolesFailed = view.failedRoleCount + view.roles.filter((r) => !r.policiesForbidden && isPolicyFailed(r)).length;
+    if (rolesFailed > 0) notes.push(`The settings of ${plural(rolesFailed, "role", "roles")} failed to load: ${rolesFailed === 1 ? "it is" : "they are"} left out of the settings numbers and charts. Refresh and export again to include ${rolesFailed === 1 ? "it" : "them"}.`);
+    if (isGroupsMissing) notes.push("PIM for Groups was not loaded, so groups are missing from every number and table in this report.");
 
     // Key numbers
     let numbers: ReportNumber[] | null = null;

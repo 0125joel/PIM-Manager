@@ -61,7 +61,7 @@ describe("readServicePrincipalTypes", () => {
         const sizes = graph.requests.map((r) => (r.query.filter ?? "").match(/'/g)!.length / 2).sort((a, b) => b - a);
         expect(sizes).toEqual([15, 15, 1]);
         for (const request of graph.requests) {
-            expect(request).toMatchObject({ method: "GET", version: "v1.0", path: "/servicePrincipals", query: { select: "id,servicePrincipalType" } });
+            expect(request).toMatchObject({ method: "GET", version: "v1.0", path: "/servicePrincipals", query: { select: "id,servicePrincipalType,appId" } });
         }
         expect(types.size).toBe(31);
         expect(types.get(ids[0].toLowerCase())).toBe("ManagedIdentity");

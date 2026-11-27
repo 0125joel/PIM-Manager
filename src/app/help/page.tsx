@@ -5,7 +5,7 @@ import { PAGE_TITLE_CLASS, PANEL_CLASS } from "@/components/ui/SectionHeader";
 import { requestTourChoice } from "@/hooks/useOnboarding";
 import { Button } from "@/components/ui/Button";
 import { AZURE_SCOPES, loginRequest } from "@/config/authConfig";
-import { ALERTS_PERMISSION, CONDITIONAL_ACCESS_PERMISSION, CUSTOM_EXTENSION_SCOPES } from "@/config/constants";
+import { ALERTS_PERMISSION, AUDIT_LOG_PERMISSION, CONDITIONAL_ACCESS_PERMISSION, CUSTOM_EXTENSION_SCOPES, LOG_ANALYTICS_PERMISSION } from "@/config/constants";
 import { WORKLOAD_SCOPES, WORKLOAD_WRITE_SCOPES } from "@/hooks/useIncrementalConsent";
 import { buildPermissionCatalog } from "@/utils/permissionCatalog";
 
@@ -15,6 +15,8 @@ const PERMISSIONS = buildPermissionCatalog({
     optional: [
         { feature: "PIM for Groups", scopes: WORKLOAD_SCOPES.pimGroups },
         { feature: "Security alerts", scopes: [ALERTS_PERMISSION] },
+        { feature: "Audit", scopes: [AUDIT_LOG_PERMISSION] },
+        { feature: "Audit, with a workspace", scopes: [LOG_ANALYTICS_PERMISSION] },
         { feature: "Custom extensions", scopes: [CUSTOM_EXTENSION_SCOPES.read] },
         { feature: "Conditional Access check", scopes: [CONDITIONAL_ACCESS_PERMISSION] },
         { feature: "Azure resources", scopes: AZURE_SCOPES },
@@ -29,7 +31,8 @@ const NAVIGATION = [
     ["Dashboard", "who has privileged access and on which terms"],
     ["Report", "every role and group with its assignments and policy"],
     ["Configure", "change policies and assignments with Edit, Guided or Import, after a review"],
-    ["Settings", "permissions, display and emergency access accounts"],
+    ["Audit", "activations and changes from the audit log, 30 days or longer with a workspace"],
+    ["Settings", "permissions, Log Analytics workspaces, display and emergency access accounts"],
 ];
 
 function Panel({ id, eyebrow, title, children }: { id: string; eyebrow: string; title: string; children: React.ReactNode }) {

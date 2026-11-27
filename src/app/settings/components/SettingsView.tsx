@@ -7,10 +7,11 @@ import { DisplaySection } from "./DisplaySection";
 import { EmergencyAccountsSection } from "./EmergencyAccountsSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsIndex } from "./SettingsIndex";
+import { WorkspaceSection } from "./WorkspaceSection";
 import type { SettingsViewProps } from "./settingsTypes";
 
 /** The settings page body, driven by props only (no MSAL, no Graph) so the fixture page can show every state. */
-export function SettingsView({ permissions, display, emergency, accessModel, advanced }: SettingsViewProps) {
+export function SettingsView({ permissions, workspace, display, emergency, accessModel, advanced }: SettingsViewProps) {
     return (
         <div className="max-w-[1180px]">
             <h1 className={PAGE_TITLE_CLASS}>Settings</h1>
@@ -18,6 +19,7 @@ export function SettingsView({ permissions, display, emergency, accessModel, adv
                 <SettingsIndex />
                 <div className="space-y-12 pb-16">
                     <PermissionsSection {...permissions} />
+                    <WorkspaceSection {...workspace} />
                     <DisplaySection {...display} />
                     <EmergencyAccountsSection {...emergency} />
                     {accessModel && <AccessModelLabelsSection {...accessModel} />}

@@ -265,3 +265,21 @@ describe("role assignments no schedule covers (the legacy list)", () => {
         expect(rows.total).toBe(3);
     });
 });
+
+describe("buildRoleAssignmentRows: links for managed identities and unknown principals", () => {
+    it("gives a managed identity no appId, so it gets no Entra link", () => {
+        const mi = { id: "mi-1", "@odata.type": "#microsoft.graph.servicePrincipal", servicePrincipalType: "ManagedIdentity", appId: "00000000-0000-0000-0000-0000000000c1", displayName: "Backup identity" };
+        const data = role({ id: "r", eligible: [{ id: "e-mi-1", principalId: "mi-1", principal: mi, ...noEnd }] });
+        const row = buildRoleAssignmentRows(data, ctx()).eligible[0];
+        expect(row.kind).toBe("app");
+        expect(row.principalAppId).toBeUndefined();
+        expect(row.isUnknownPrincipal).toBe(false);
+    });
+
+    it("marks a row without a principal and without a name in nameById as an unknown principal", () => {
+        const data = role({ id: "r", eligible: [{ id: "e-unknown", principalId: "unknown-1234567890", ...noEnd }] });
+        const row = buildRoleAssignmentRows(data, ctx()).eligible[0];
+        expect(row.name).toBe("Unknown (unknown-)");
+        expect(row.isUnknownPrincipal).toBe(true);
+    });
+});

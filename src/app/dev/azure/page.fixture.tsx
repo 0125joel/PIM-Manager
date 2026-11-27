@@ -77,7 +77,8 @@ function buildScopes(azure: DemoAzure): AzureScope[] {
 }
 
 function buildAssignments(azure: DemoAzure): AzureAssignment[] {
-    return azure.instances.filter((i) => !isHidden(i.scope)).map((i) => ({
+    // A removed assignment is left out, as the read engine does (reconcileInstances, AU-20c)
+    return azure.instances.filter((i) => !isHidden(i.scope) && !i.removed).map((i) => ({
         id: `fixture:${i.key}`,
         scopeId: i.scope,
         principalId: i.principal.id,

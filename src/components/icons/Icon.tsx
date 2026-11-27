@@ -3,7 +3,7 @@ import { ICON_DATA, type IconElement, type IconName } from "./iconData";
 
 export type { IconName } from "./iconData";
 
-export type IconSize = 16 | 20 | 24;
+export type IconSize = 12 | 14 | 16 | 20 | 24;
 
 export interface IconProps {
     name: IconName;

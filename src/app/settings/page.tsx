@@ -12,6 +12,7 @@ import { useEmergencyAccounts } from "@/hooks/useEmergencyAccounts";
 import { useTenantName } from "@/hooks/useTenantName";
 import { useUserSearch } from "@/hooks/useUserSearch";
 import { useWorkloadPermissions } from "@/hooks/useWorkloadPermissions";
+import { useAuditWorkspaces } from "@/hooks/useAuditWorkspaces";
 import type { FoundUser } from "@/hooks/useUserSearch";
 import { clearPimSessionCaches } from "@/utils/cacheUtils";
 import { parseEmergencyAccountsImport, serializeEmergencyAccounts, type EmergencyAccount } from "@/utils/emergencyAccounts";
@@ -49,6 +50,7 @@ export default function SettingsPage() {
     const permissions = useWorkloadPermissions();
     const emergency = useEmergencyAccounts();
     const tenantName = useTenantName(emergency.tenantId || undefined);
+    const workspace = useAuditWorkspaces(tenantName ?? (emergency.tenantId ? emergency.tenantId.slice(0, 8) : null));
 
     // Access model labels (spec 9.3, C2-02): the label to context choices Configure keeps per tenant
     const { authenticationContexts } = useRolesData();
@@ -179,6 +181,7 @@ export default function SettingsPage() {
     return (
         <SettingsView
             permissions={{ rows: permissions.rows, busyRow: permissions.busyRow, message: permissions.message, onAction: permissions.act, onDismissMessage: permissions.dismissMessage }}
+            workspace={workspace}
             display={{ theme, onThemeChange: setTheme, viewMode, onViewModeChange: handleViewModeChange, azureReportView, onAzureReportViewChange: handleAzureReportViewChange, details, onDetailsChange: handleDetailsChange, tours, onToursChange: handleToursChange }}
             emergency={{
                 tenantLabel: tenantName ?? (emergency.tenantId ? emergency.tenantId.slice(0, 8) : null),

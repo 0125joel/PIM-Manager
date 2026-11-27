@@ -9,7 +9,6 @@ import { mapArmError } from "@/utils/armErrorMapping";
 import { graphRulesOf, parseArmPolicy } from "@/utils/armPolicyRules";
 import { azurePolicyKey, isRootScope } from "@/utils/azureScopes";
 import { Logger } from "@/utils/logger";
-import { armRateLimiter } from "@/utils/rateLimiter";
 import { runWorkerPool } from "@/utils/workerPool";
 
 export type AzureRolePolicyState =
@@ -87,7 +86,7 @@ export async function readAzureRolePolicy(client: ArmClient, scopeId: string, ro
 }
 
 /**
- * The policies of a few roles at one scope (Azure spec 15.6), on the worker pool with `armRateLimiter`: 4 workers,
+ * The policies of a few roles at one scope (Azure spec 15.6), on the worker pool (the client counts on `armRateLimiter`): 4 workers,
  * 250 ms apart, one request each. Roles read before are skipped. A failure leaves that role out (logged); the others
  * are kept.
  */
@@ -104,8 +103,7 @@ export async function readAzureRolePolicies(client: ArmClient, scopeId: string, 
         workerCount: 4,
         delayMs: 250,
         signal,
-        rateLimiter: armRateLimiter,
-        costPerItem: 1,
+        // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
         // An ARM message can hold the UPN, object id and scope: log status and code only
         errorLog: "statusAndCode",
         processor: (id) => readAzureRolePolicy(client, scopeId, id, signal),
@@ -128,8 +126,8 @@ export interface AzureRolePolicyPair {
 export type AzureRolePolicyOutcome = Settled | { status: "failed" };
 
 /**
- * The policies of the given role and scope pairs (the role settings file of the export), on the worker pool with
- * `armRateLimiter`: 4 workers, 250 ms apart, one request each, as `readAzureRolePolicies`. Pairs read before are not
+ * The policies of the given role and scope pairs (the role settings file of the export), on the worker pool (the
+ * client counts on `armRateLimiter`): 4 workers, 250 ms apart, one request each, as `readAzureRolePolicies`. Pairs read before are not
  * asked again; the root scope sends no request. A failure is that pair's outcome, the others go on. Returns the
  * outcome per `policyKey`.
  */
@@ -158,8 +156,7 @@ export async function readAzureRolePolicyPairs(
         workerCount: 4,
         delayMs: 250,
         signal,
-        rateLimiter: armRateLimiter,
-        costPerItem: 1,
+        // No `rateLimiter`: the client counts every request on `armRateLimiter`, so the pool takes nothing
         // An ARM message can hold the UPN, object id and scope: log status and code only
         errorLog: "statusAndCode",
         processor: async (pair) => {

@@ -10,6 +10,8 @@
  * always set the .light or .dark class on <html>, so no media query is needed.
  */
 :root {
+  /* The browser draws native controls and scrollbars in the theme */
+  color-scheme: light;
   --page: #f7f7f5;
   --surface: #ffffff;
   --band: #f0f0ec;
@@ -46,6 +48,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --page: #161615;
   --surface: #1d1d1c;
   --band: #242422;
@@ -56,7 +59,7 @@
   --track: #31302d;
   --accent: #48c5fa;
   --accent-ink: #0b1a2b;
-  --accent-tint: #1b2c35;
+  --accent-tint: #192931;
   --bar-light: #1e6a90;
   --neutral-fill: #77756e;
   --warn-fill: #f59e0b;
@@ -71,7 +74,7 @@
   --mode-guided: #b3a8d8;
   --mode-guided-tint: #26233a;
   --mode-edit: #48c5fa;
-  --mode-edit-tint: #1b2c35;
+  --mode-edit-tint: #192931;
   --mode-import: #d9ae74;
   --mode-import-tint: #2e2619;
   --scrim: rgba(0, 0, 0, 0.56);
@@ -169,3 +172,24 @@ button.pim-dimmed:hover {
 .pim-dimmed :is(.bg-accent-tint, .bg-warn-tint) {
   background-color: var(--band);
 }
+
+/*
+ * The colour of each kind of event on the Audit page (the chips, the list and, from AU-4, the timeline). The element sets
+ * `--kind`; its icons take it as line and accent colour. Tokens only, so both themes follow.
+ */
+.audit-kind-usage { --kind: var(--accent); }
+.audit-kind-assignment { --kind: var(--mode-guided); }
+.audit-kind-setting { --kind: var(--mode-import); }
+.audit-kind-outside { --kind: var(--warn-fill); }
+.audit-kind-system { --kind: var(--neutral-fill); }
+.audit-kind-failed { --kind: var(--danger-text); }
+
+/*
+ * The icon inside the ring of a point on the Audit timeline. The artwork of some icons sits off centre in its 20 by 20
+ * grid (measured, docs/Assets/audit/2026-11-audit-dashboards-research.md section 1); these shifts, as a percentage of the
+ * icon so they scale, put it in the middle of the ring. Only the ring: the chips and the list keep the icon as drawn.
+ * `shield-off` and `log` need none.
+ */
+.audit-ring-icon-assign { transform: translate(-2.5%, -2.5%); }
+.audit-ring-icon-configure { transform: translate(-1%, 0); }
+.audit-ring-icon-active { transform: translate(0, 0.5%); }

@@ -5,7 +5,8 @@
 
 export type ProbeResult = "granted" | "notGranted" | "unknown";
 
-export type CellStatus = "checking" | "granted" | "notGranted" | "unknown" | "readOnly" | "needsLicence";
+/** `notAsked`: a permission that is only asked for when its feature is used (Log Analytics, when workspaces are chosen) */
+export type CellStatus = "checking" | "granted" | "notGranted" | "unknown" | "readOnly" | "needsLicence" | "notAsked";
 
 export type RowAction = "grantRead" | "grantWrite" | "retry" | null;
 
@@ -50,6 +51,11 @@ export function customExtensionCell(status: CustomExtensionStatus): CellStatus {
     }
 }
 
+/** Read cell of a permission that is asked for by its feature, not from this table: no consent yet is "not asked yet" */
+export function askedLaterCell(probe: ProbeResult | "checking"): CellStatus {
+    return probe === "notGranted" ? "notAsked" : probe;
+}
+
 /** One action per row: read first, then write; a cell that could not be read offers a retry. */
 export function rowAction(read: CellStatus, write: CellStatus): RowAction {
     if (read === "notGranted") return "grantRead";
@@ -68,6 +74,8 @@ export function cellLabel(status: CellStatus): string {
             return "Could not check";
         case "readOnly":
             return "Read only";
+        case "notAsked":
+            return "Not asked yet";
         case "needsLicence":
             return "Needs Entra ID Governance or Entra Suite";
         default:

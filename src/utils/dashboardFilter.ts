@@ -14,6 +14,8 @@ import { completeRules } from "@/utils/policyView";
 import { parseTotalHours } from "@/utils/durationUtils";
 import { getPrincipalKind, isAgentKind, type PrincipalKind } from "@/utils/principalUtils";
 import { summarizePolicyRules, type PolicySummary } from "@/utils/policySummary";
+import { parseFilterPairs } from "@/utils/filterControls";
+import { HOLDER_LABELS, type HolderKind } from "@/utils/holderKinds";
 import { isGuestUserType } from "@/utils/userTypeUtils";
 import { getLinkedCustomExtensions, parseCustomExtensionRules } from "@/utils/customExtensionUtils";
 
@@ -29,6 +31,11 @@ const EXTENSION_ID = /^[A-Za-z0-9._-]{1,128}$/;
 
 function isOneOf<T extends string>(allowed: readonly T[], value: string): value is T {
     return (allowed as readonly string[]).includes(value);
+}
+
+function normalizePrincipalType(value: string): DashboardFilter["principalType"] | null {
+    const normalized = value === "servicePrincipal" ? "app" : value;
+    return isOneOf(DASHBOARD_FILTER_VALUES.principalType, normalized) ? normalized : null;
 }
 
 /** Reads one `key:value` pair into the filter; returns false when the pair is not valid. */
@@ -55,8 +62,11 @@ function applyPair(filter: DashboardFilter, key: string, value: string): boolean
             filter.maxDuration = value;
             return true;
         case "principalType":
-            if (!isOneOf(DASHBOARD_FILTER_VALUES.principalType, value)) return false;
-            filter.principalType = value;
+            {
+                const principalType = normalizePrincipalType(value);
+                if (principalType === null) return false;
+                filter.principalType = principalType;
+            }
             return true;
         case "via":
             if (!isOneOf(DASHBOARD_FILTER_VALUES.via, value)) return false;
@@ -112,22 +122,7 @@ function applyPair(filter: DashboardFilter, key: string, value: string): boolean
  */
 export function parseDashboardFilter(raw: string | null | undefined): DashboardFilter {
     const filter: DashboardFilter = {};
-    if (!raw) return filter;
-
-    let text = raw.trim();
-    if (text.includes("%")) {
-        try {
-            text = decodeURIComponent(text);
-        } catch {
-            // keep the text as it came
-        }
-    }
-
-    for (const pair of text.split(",")) {
-        const separator = pair.indexOf(":");
-        if (separator < 1) continue;
-        applyPair(filter, pair.slice(0, separator).trim(), pair.slice(separator + 1).trim());
-    }
+    for (const { key, value } of parseFilterPairs(raw)) applyPair(filter, key, value);
     return filter;
 }
 
@@ -177,7 +172,8 @@ const VIA_LABELS = { direct: "directly", group: "through a group" } as const;
 
 /** Names of role templates a filter can name without the role data at hand */
 const KNOWN_ROLE_TEMPLATES: Record<string, string> = { "62e90394-69f5-4237-9190-012177145e10": "Global Administrator" };
-const PRINCIPAL_LABELS = { user: "user", guest: "guest", servicePrincipal: "app", group: "group", agent: "agent" } as const;
+const lower = (kind: HolderKind) => HOLDER_LABELS[kind].one.toLowerCase();
+const PRINCIPAL_LABELS = { user: lower("user"), guest: lower("guest"), app: lower("app"), group: lower("group"), agent: lower("agent") };
 
 export interface FilterLabel {
     key: DashboardFilterKey;
@@ -228,7 +224,7 @@ function labelFor(filter: DashboardFilter, key: DashboardFilterKey, names?: Filt
         case "maxDuration":
             return `Maximum activation: ${DURATION_LABELS[filter.maxDuration!]}`;
         case "principalType":
-            return `Held by: ${PRINCIPAL_LABELS[filter.principalType!]}`;
+            return `Who: ${PRINCIPAL_LABELS[filter.principalType!]}`;
         case "noEndDate":
             return "Eligible without an end date";
         case "activationNotification":
@@ -370,7 +366,7 @@ function matchesAssignmentKeys(fact: AssignmentFacts, filter: DashboardFilter, e
         case "guest":
             if (!fact.isGuest) return false;
             break;
-        case "servicePrincipal":
+        case "app":
             if (fact.kind !== "servicePrincipal") return false;
             break;
         case "group":

@@ -20,16 +20,26 @@ export interface ArmRequestOptions {
     signal?: AbortSignal;
 }
 
+/** Options of a list read (`getAll`); `ArmRequestOptions` stays the base of them */
+export interface ArmListOptions<T> extends ArmRequestOptions {
+    /** Replaces ARM_MAX_PAGES for this list; past it the list throws, as now */
+    maxPages?: number;
+    /** Gets each page as it comes. With it, the items are not kept and `getAll` returns an empty list, so raw rows do not stay in memory */
+    onPage?: (items: T[]) => void;
+}
+
 export interface ArmClient {
     /** One GET of a path below the ARM base, such as `/subscriptions` */
     get<T>(path: string, apiVersion: string, query?: ArmQuery, options?: ArmRequestOptions): Promise<T>;
-    /** Every item of a list, following `nextLink` until it is absent */
-    getAll<T>(path: string, apiVersion: string, query?: ArmQuery, options?: ArmRequestOptions): Promise<T[]>;
+    /** Every item of a list, following `nextLink` until it is absent (an empty page with a `nextLink` goes on) */
+    getAll<T>(path: string, apiVersion: string, query?: ArmQuery, options?: ArmListOptions<T>): Promise<T[]>;
     /**
      * Like `getAll`, for a list that ARM serves with POST and no body (`getEntities`): the first page and every
      * `nextLink` page are fetched with POST. Only for a read that is a POST by design; the app has no write path.
      */
     postAll<T>(path: string, apiVersion: string, query?: ArmQuery, options?: ArmRequestOptions): Promise<T[]>;
+    /** One read that ARM serves as a POST with a JSON body (Resource Graph). Only for a read that is a POST by design; the app has no write path. */
+    postRead<T>(path: string, apiVersion: string, body: unknown, options?: ArmRequestOptions): Promise<T>;
 }
 
 export interface ArmClientOptions {
@@ -106,12 +116,13 @@ export function createArmClient(getToken: () => Promise<string>, options: ArmCli
     const fetchImpl = options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
     const limiter = options.limiter ?? armRateLimiter;
 
-    async function request<T>(url: string, signal?: AbortSignal, method: 'GET' | 'POST' = 'GET'): Promise<T> {
+    async function request<T>(url: string, signal?: AbortSignal, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {
         await limiter.acquire(1, signal);
         const token = await getToken();
         const response = await fetchImpl(url, {
             method,
-            headers: { Authorization: `Bearer ${token}` },
+            headers: body === undefined ? { Authorization: `Bearer ${token}` } : { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
             signal,
         });
         logRemaining(response.headers);
@@ -123,13 +134,17 @@ export function createArmClient(getToken: () => Promise<string>, options: ArmCli
         return (await response.json()) as T;
     }
 
-    async function requestAll<T>(path: string, apiVersion: string, method: 'GET' | 'POST', query?: ArmQuery, requestOptions?: ArmRequestOptions): Promise<T[]> {
+    async function requestAll<T>(path: string, apiVersion: string, method: 'GET' | 'POST', query?: ArmQuery, requestOptions?: ArmListOptions<T>): Promise<T[]> {
         const items: T[] = [];
+        const maxPages = requestOptions?.maxPages ?? ARM_MAX_PAGES;
+        const onPage = requestOptions?.onPage;
         let url: string | null = buildUrl(path, apiVersion, query);
         for (let page = 0; url; page++) {
-            if (page === ARM_MAX_PAGES) throw new Error(`ARM list ${path} has more than ${ARM_MAX_PAGES} pages`);
+            if (page === maxPages) throw new Error(`ARM list ${path} has more than ${maxPages} pages`);
             const body: ArmPage<T> = await request<ArmPage<T>>(url, requestOptions?.signal, method);
-            items.push(...(body.value ?? []));
+            const pageItems = body.value ?? [];
+            if (onPage) onPage(pageItems);
+            else items.push(...pageItems);
             url = body.nextLink || null;
             if (url) assertArmUrl(url);
         }
@@ -141,12 +156,16 @@ export function createArmClient(getToken: () => Promise<string>, options: ArmCli
             return request<T>(buildUrl(path, apiVersion, query), requestOptions?.signal);
         },
 
-        async getAll<T>(path: string, apiVersion: string, query?: ArmQuery, requestOptions?: ArmRequestOptions): Promise<T[]> {
+        async getAll<T>(path: string, apiVersion: string, query?: ArmQuery, requestOptions?: ArmListOptions<T>): Promise<T[]> {
             return requestAll<T>(path, apiVersion, 'GET', query, requestOptions);
         },
 
         async postAll<T>(path: string, apiVersion: string, query?: ArmQuery, requestOptions?: ArmRequestOptions): Promise<T[]> {
             return requestAll<T>(path, apiVersion, 'POST', query, requestOptions);
+        },
+
+        async postRead<T>(path: string, apiVersion: string, body: unknown, requestOptions?: ArmRequestOptions): Promise<T> {
+            return request<T>(buildUrl(path, apiVersion), requestOptions?.signal, 'POST', body);
         },
     };
 }

@@ -92,8 +92,8 @@ The application is built from **loosely coupled modules** that can be developed 
 │  │Service       │  │Service       │                           │
 │  └──────────────┘  └──────────────┘                           │
 │  ┌──────────────┐  ┌──────────────┐                           │
-│  │pimConfigur-  │  │configureApply│                           │
-│  │ationService  │  │Service       │                           │
+│  │audit         │  │configureApply│                           │
+│  │Service       │  │Service       │                           │
 │  └──────────────┘  └──────────────┘                           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -173,17 +173,19 @@ The UI is designed around **user-centric principles**:
 #### 2. Visual Hierarchy
 ```
 ┌────────────────────────────────────────┐
-│ 🔵 Primary: Action buttons, totals      │
+│ accent: Primary actions, totals        │
 │                                        │
-│ 🟢 Success: Positive statuses          │
+│ success-text: Positive statuses        │
 │                                        │
-│ 🟡 Warning: Attention points           │
+│ warn-text: Attention points            │
 │                                        │
-│ 🔴 Danger: Problems, errors            │
+│ danger-text: Problems, errors          │
 │                                        │
-│ ⚪ Neutral: Supporting info            │
+│ neutral-fill: Supporting info          │
 └────────────────────────────────────────┘
 ```
+
+Colors come from the tokens in `STYLEGUIDE.md`. A warning, error or success state always has a text or shape cue as well as the color.
 
 #### 3. Responsive Feedback
 - **Loading states** always show progress `(17/135)`
@@ -273,7 +275,7 @@ Microsoft Entra ID PIM manages privileged access for various workloads:
 | Workload | Base Endpoint | API Version | Permissions |
 |----------|---------------|-------------|-------------|
 | Directory Roles | `/roleManagement/directory/` | v1.0/beta | RoleManagement.Read.Directory |
-| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | beta (policies and their assignments use v1.0) | PrivilegedAccess.Read.AzureADGroup |
+| PIM for Groups | `/identityGovernance/privilegedAccess/group/` | v1.0 (only group members and their count use beta) | PrivilegedAccess.Read.AzureADGroup |
 | Intune Roles (planned) | `/deviceManagement/roleDefinitions` | v1.0 | DeviceManagementRBAC.Read.All |
 
 ### Authentication & Consent Flow
@@ -295,7 +297,7 @@ Microsoft Entra ID PIM manages privileged access for various workloads:
 
 **Incremental Consent Strategy:**
 1. Ten read scopes on login (`loginRequest` in `config/authConfig.ts`): User.Read, RoleManagement.Read.Directory, RoleAssignmentSchedule.Read.Directory, RoleEligibilitySchedule.Read.Directory, RoleManagementPolicy.Read.Directory, Policy.Read.ConditionalAccess, User.Read.All, Group.Read.All, AdministrativeUnit.Read.All, Application.Read.All
-2. Request additional scopes when user activates a workload (PIM for Groups, Security Alerts), asks for the custom extension list (PrivilegedAccess-CustomExt.Read.All) or enters Configure (write scopes: RoleManagementPolicy / RoleEligibilitySchedule / RoleAssignmentSchedule.ReadWrite.Directory and RoleManagementPolicy / PrivilegedEligibilitySchedule / PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup)
+2. Request additional scopes when user activates a workload (PIM for Groups, Security Alerts), opens the Audit page (AuditLog.Read.All), chooses Log Analytics workspaces in Settings (`https://api.loganalytics.io/Data.Read`), asks for the custom extension list (PrivilegedAccess-CustomExt.Read.All) or enters Configure (write scopes: RoleManagementPolicy / RoleEligibilitySchedule / RoleAssignmentSchedule.ReadWrite.Directory and RoleManagementPolicy / PrivilegedEligibilitySchedule / PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup)
 3. Consent state stored in localStorage for session persistence
 
 ---
@@ -364,10 +366,9 @@ After refactoring, all services follow a consistent pattern:
 | Service | Purpose | Filename |
 |---------|---------|----------|
 | Directory Roles | Entra ID roles + policies | `directoryRoleService.ts` |
-| PIM for Groups | PIM-onboarded groups (beta resources endpoint) | `pimGroupService.ts` |
-| PIM Configuration | Read and write the PIM policy of a directory role (`getRolePolicy`, `updatePimPolicy`) | `pimConfigurationService.ts` |
+| PIM for Groups | PIM-onboarded groups (v1.0 resources endpoint) | `pimGroupService.ts` |
 | Configure Apply | The one apply engine of Configure: snapshot first, then policies and assignments step by step | `configureApplyService.ts` |
-| Custom Extensions | PIM custom extensions (Preview): list and create the tenant's extension objects (beta) | `customExtensionService.ts` |
+| Custom Extensions | PIM custom extensions (Preview): list the tenant's extension objects (beta) | `customExtensionService.ts` |
 | Write Access | The reads of the Configure access check: your roles, owned groups and PIM group instances | `writeAccessService.ts` |
 | Dry Run | The new assignments of the basket sent once as validation only | `assignmentDryRunService.ts` |
 | Conditional Access | The optional Conditional Access check of the review | `conditionalAccessService.ts` |
@@ -382,6 +383,10 @@ After refactoring, all services follow a consistent pattern:
 | Azure Role Settings | One role's settings at one scope, read only (Azure Resource Manager) | `azurePolicyService.ts` |
 | Azure Role Definitions | Azure role definitions, for the description and the privileged check (Azure Resource Manager) | `azureRoleDefinitionService.ts` |
 | Azure Alerts | The PIM alerts of a subscription, read only (Azure Resource Manager) | `azureAlertService.ts` |
+| Audit | PIM events from the Entra audit log for a period (Graph) | `auditService.ts` |
+| Audit Workspaces | Log Analytics workspaces you can read and the PIM events in them (Azure Resource Manager, Log Analytics) | `auditWorkspaceService.ts` |
+| Azure Audit | Role assignment events from the Azure Activity Log (counted on `activityLogRateLimiter`) and the PIM request lists per scope (Azure Resource Manager) | `azureAuditService.ts` |
+| Azure Audit Workspaces | Azure Activity events from the chosen Log Analytics workspaces (Log Analytics) | `azureAuditWorkspaceService.ts` |
 | Service Principal Types | Whether a service principal behind an Azure assignment is an app or a managed identity, and whether the principal still exists (Graph) | `servicePrincipalTypeService.ts` |
 | Policy Parser | Parse PIM policy rule structures into `PolicySettings` | `utils/policyParser.ts` |
 | Intune (future) | Intune RBAC roles | `intuneService.ts` |
@@ -394,12 +399,15 @@ After refactoring, all services follow a consistent pattern:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 1: Fast Load (~10-15s)                                 │
+│ Phase 1: Fast Load                                          │
 │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ 1. GET /roleManagement/directory/roleDefinitions        │ │
-│ │ 2. GET /roleManagement/directory/roleAssignments        │ │
-│ │ 3. GET /roleManagement/directory/roleEligibilitySchedules│ │
-│ │ 4. GET /roleManagement/directory/roleAssignmentSchedules │ │
+│ │ Then in parallel, under /roleManagement/directory:      │ │
+│ │ 2. GET roleAssignments                                  │ │
+│ │ 3. GET roleEligibilitySchedules                         │ │
+│ │ 4. GET roleAssignmentSchedules                          │ │
+│ │ 5. GET roleAssignmentScheduleInstances                  │ │
+│ │    (marks an activation through a group)                │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                         │                                    │
 │                         ▼                                    │
@@ -408,12 +416,20 @@ After refactoring, all services follow a consistent pattern:
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Phase 2: Background Policy Load (~2-3 min)                   │
+│ Phase 2: Background Policy Load                             │
 │ ┌─────────────────────────────────────────────────────────┐ │
-│ │ For each role (parallel via worker pool):               │ │
+│ │ From 10 roles: every role's policy in one paged call    │ │
 │ │   GET /policies/roleManagementPolicyAssignments         │ │
-│ │       ?$filter=roleDefinitionId eq '{id}'               │ │
+│ │       ?$filter=scopeId eq '/'                           │ │
+│ │         and scopeType eq 'Directory'                    │ │
 │ │       &$expand=policy($expand=rules)                    │ │
+│ │                                                         │ │
+│ │ Then per role, via the worker pool, only the roles      │ │
+│ │ missing from that answer:                               │ │
+│ │   same call, filter adds roleDefinitionId eq '{id}'     │ │
+│ │ Fewer than 10 roles, or the one call failed: all roles  │ │
+│ │ go this way. A 403 stops the load, since Graph would    │ │
+│ │ refuse the same per role.                               │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                         │                                    │
 │                         ▼                                    │
@@ -427,7 +443,7 @@ After refactoring, all services follow a consistent pattern:
 ┌─────────────────────────────────────────────────────────────┐
 │ Phase 1: Discovery (~2-5s)                                   │
 │ ┌─────────────────────────────────────────────────────────┐ │
-│ │ GET /beta/identityGovernance/privilegedAccess/          │ │
+│ │ GET /v1.0/identityGovernance/privilegedAccess/          │ │
 │ │     group/resources                                      │ │
 │ │                                                          │ │
 │ │ → Returns ONLY PIM-onboarded groups                      │ │
@@ -552,18 +568,14 @@ async function runWorkerPool<TItem, TResult>({
 ```
 
 **Benefits:**
-- **8x faster** than sequential (optimized from 3x)
+- Runs several requests at once instead of one after another (8 workers and a 300 ms delay unless a call sets its own)
 - Prevents Graph API throttling (429)
 - Consistent progress reporting
 - Reusable for all workloads
 
 **Performance Impact:**
-- Policy fetch time: ~15-20s → ~3-5s (for 50 roles)
-- **70-80% faster** than original implementation
-- Still well within Microsoft Graph API throttling limits:
-  - Large tenant (>500 users): 10% of quota usage
-  - Medium tenant (50-500): 16% of quota usage
-  - Small tenant (<50): 22% of quota usage
+- From 10 roles the policies of the whole tenant come in one paged call (`fetchAllRolePolicies`) instead of one call per role: a few pages at most, where the old load made one request for every role.
+- The worker pool only reads what that call misses, or every role when the tenant has fewer than 10 roles or the call failed. Those per-role reads take 2 ResourceUnits each from `graphRateLimiter`, so they stay under the app's own cap (see the Graph limits below).
 
 ### Rate Limiting Strategy
 
@@ -572,25 +584,29 @@ async function runWorkerPool<TItem, TResult>({
 | Directory Roles: per-role policy fetch | 12 | 200ms | `concurrentFetchPolicies` (called by `workloads/directoryRolesAdapter.ts`); raised from 8/300ms in v2.1.0 |
 | Directory Roles: scope enrichment | 8 | 300ms | `enrichAssignmentsWithScope` |
 | PIM for Groups: managed groups (full load, 4 calls per group) | 3 | 500ms | `fetchAllPimGroupData` |
-| PIM for Groups: managed groups (smart refresh, 2 calls per group) | 3 | 500ms | `refreshPimGroupAssignments` |
+| PIM for Groups: managed groups (smart refresh, 3 calls per group, plus a details read only when those fail) | 3 | 500ms | `refreshPimGroupAssignments` |
 | PIM for Groups: unmanaged groups | 5 | 200ms | `fetchAllPimGroupData`, `refreshPimGroupAssignments` (one lightweight call per group) |
 | PIM for Groups: member count of unmanaged groups | 6 | 500ms | `addMemberCounts` (`pimGroupService.ts`) |
-| Azure: assignments (instances and eligibility schedules per subscription; resource groups and resources of a subscription that refuses its own level) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`, with `armRateLimiter`; `costPerItem` 2, because each item reads two lists together |
-| Azure: role settings of the role and scope pairs (settings dialog, export) | 4 | 250ms | `readAzureRolePolicyPairs` and the policies hook in `hooks/useAzureRolePolicy.ts`, with `armRateLimiter`, `costPerItem` 1; the root scope sends no request |
-| Azure dashboard: custom role definitions per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, with `armRateLimiter`, `costPerItem` 1; the tenant-level lists and the first subscription's built-in roles are single calls |
-| Azure dashboard: PIM alerts per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`, with `armRateLimiter`, `costPerItem` 1 |
+| Azure: assignments (instances and eligibility schedules per subscription; resource groups and resources of a subscription that refuses its own level) | 4 | 250ms | `workloads/azureAssignmentsAdapter.ts`; the pool takes nothing from the limiter, the ARM client counts every request |
+| Azure: role settings of the role and scope pairs (settings dialog, export) | 4 | 250ms | `readAzureRolePolicyPairs` and the policies hook in `hooks/useAzureRolePolicy.ts`; the ARM client counts every request; the root scope sends no request |
+| Azure dashboard: custom role definitions per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`; the ARM client counts every request; the tenant-level lists and the first subscription's built-in roles are single calls |
+| Azure dashboard: PIM alerts per subscription | 4 | 250ms | `hooks/useAzureDashboardReads.ts`; the ARM client counts every request |
+| Audit (Entra and Azure): workspaces per subscription, and the diagnostic settings that send to a workspace | 4 | 250ms | `listWorkspaces`, `listAuditLogWorkspaceIds`, `listActivityLogWorkspaceIds` (`auditWorkspaceService.ts`); the ARM client counts every request |
+| Audit (Entra and Azure): Log Analytics queries per chosen workspace (read and check) | 5 | 200ms | `readWorkspaces`, `checkWorkspaceLogs` (`auditWorkspaceService.ts`), `readAzureWorkspaces` (`azureAuditWorkspaceService.ts`); one gate keeps at most 5 queries running, under `logAnalyticsRateLimiter` |
+| Azure Audit: Activity Log and request lists per scope | 4 | 250ms | `readAzureAudit` (`azureAuditService.ts`); the ARM client counts every request |
+| Configure: dry run of new assignments | 4 | 500ms | `dryRunAssignments` (`assignmentDryRunService.ts`), with `graphRateLimiter` |
 | Worker pool default (if not specified) | 8 | 300ms | `runWorkerPool` |
 
-The Configure apply (`services/configureApplyService.ts`) runs its steps on `runWorkerPool` with 4 workers and a 500 ms delay. `updatePimPolicy` is not pooled: its rules are PATCHed one at a time with a 300 ms pause. Every Graph call, pooled or not, also passes through `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window of 500 resource units per 10 seconds).
+The Configure apply (`services/configureApplyService.ts`) runs its steps on `runWorkerPool` with 4 workers and a 500 ms delay. Pools that pass `rateLimiter: graphRateLimiter`, and the calls that take a unit themselves (`acquire`, such as the Configure PATCHes and the group member reads), count against `graphRateLimiter` (`utils/rateLimiter.ts`, sliding window of 500 resource units per 10 seconds). Other Graph calls take no unit, but they do wait out a 429: `withRetry` and the throttle watcher of the Graph client pause the limiter (`backOff`).
 
-Azure Resource Manager has its own limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window of 200 requests per 10 seconds), separate from `graphRateLimiter`. The ARM client (`utils/armClient.ts`) also takes one unit from the same limiter for every request it sends, in addition to the `costPerItem` the worker pool takes per item. After a 429 the client pauses the limiter for the `Retry-After` of the answer, so every worker waits.
+Azure Resource Manager has its own limiter, `armRateLimiter` (`utils/rateLimiter.ts`, sliding window of 200 requests per 10 seconds), separate from `graphRateLimiter`. The ARM client (`utils/armClient.ts`) takes one unit from it for every request it sends, every page included, so an ARM worker pool takes nothing itself (`rateLimiter` is not passed; an architecture test holds this). After a 429 the client pauses the limiter for the `Retry-After` of the answer, so every worker waits. The Activity Log of Azure Audit has its own limit: its client counts on `activityLogRateLimiter` (`utils/rateLimiter.ts`, sliding window of 50 requests per 30 seconds), not on `armRateLimiter`.
 
 **Microsoft Graph API Limits (Identity & Access):**
 - Small tenant: 3,500 ResourceUnits per 10 sec
 - Medium tenant: 5,000 ResourceUnits per 10 sec
 - Large tenant: 8,000 ResourceUnits per 10 sec
 - Policy fetch cost: 2 ResourceUnits per request, derived from the Graph rules (a request costs 1, `$expand` adds 1). Microsoft publishes no cost for `/policies/roleManagementPolicyAssignments`, so this is not measured; the `x-ms-resource-unit` response header shows the real value.
-- The app's own cap is 500 ResourceUnits per 10 sec (`graphRateLimiter`): 14% of a small, 10% of a medium and 6% of a large tenant's budget, about 25 policy requests per second.
+- The app's own cap is 500 ResourceUnits per 10 sec (`graphRateLimiter`, for the reads and writes that take a unit from it): 14% of a small, 10% of a medium and 6% of a large tenant's budget, about 25 policy requests per second.
 
 ---
 
@@ -615,12 +631,12 @@ Azure Resource Manager has its own limiter, `armRateLimiter` (`utils/rateLimiter
 
 ### Groups Display Strategy
 
-**Decision:** Show ALL role-assignable groups, highlight PIM-enabled:
+**Decision:** Show all role-assignable groups; the Report lists the groups Outside PIM first:
 
-| Badge | Meaning |
-|-------|---------|
-| 🟢 PIM Active | Group has active/eligible assignments |
-| ⚪ No PIM | Role-assignable but no PIM assignments |
+| Tag | Meaning |
+|-----|---------|
+| Under PIM | Membership is eligible or time-bound and follows the PIM policy of the group |
+| Outside PIM (danger tag) | A role-assignable group that PIM does not manage: its members hold its roles all the time |
 
 **Rationale:**
 - User sees full potential
@@ -734,12 +750,10 @@ Key architectural decisions documented for future reference:
 | ADR-001 | **Client-side only** (no backend) | Accepted | Avoids server costs, simpler deployment, data stays with user |
 | ADR-002 | **Static Export** via Next.js | Accepted | Cloudflare Pages hosting, no server-side rendering needed |
 | ADR-003 | **UnifiedPimContext** for multi-workload | Accepted | Single source of truth, scales to new workloads. Azure has its own `AzureProvider` (`src/contexts/AzureContext.tsx`) next to it, mounted only around the Azure pages |
-| ADR-004 | **Worker Pool pattern** for API throttling | Accepted | Prevents 429 errors, up to 8x faster than sequential |
+| ADR-004 | **Worker Pool pattern** for API throttling | Accepted | Prevents 429 errors, several requests at once instead of one after another |
 | ADR-005 | **Aggregated cards** instead of per-workload | Accepted | Cleaner UI, scales better |
 | ADR-006 | **Incremental Consent** per workload | Accepted | Least privilege, user chooses which data |
-| ADR-007 | **Beta API** only where v1.0 lacks the data: `isPrivileged`, alerts, custom extensions, PIM for Groups resources, group members and member count | ⚠️ Risk Accepted | Needed for security insights and PIM for Groups; each beta call carries its reason in a code comment. The `isPrivileged` read falls back to v1.0 without that field. The ARM endpoint for PIM alerts (`roleManagementAlerts`, `src/services/azureAlertService.ts`) is also a preview, `2022-08-01-preview` |
-
-> See `docs/adr/` for detailed ADR documents (if created).
+| ADR-007 | **Beta API** only where v1.0 lacks the data: `isPrivileged`, alerts, custom extensions, group members and member count | Risk Accepted | Needed for security insights and PIM for Groups; each beta call carries its reason in a code comment. The `isPrivileged` read falls back to v1.0 without that field. ARM previews, each with its reason in a code comment: PIM alerts (`roleManagementAlerts`, `src/services/azureAlertService.ts`, `2022-08-01-preview`), the Activity Log of a management group (`src/services/azureAuditService.ts`, `2017-03-01-preview`) and the diagnostic settings read for Audit workspaces (`src/services/auditWorkspaceService.ts`, `2017-04-01-preview` and `2021-05-01-preview`) |
 
 ---
 
@@ -774,7 +788,10 @@ Key architectural decisions documented for future reference:
 │  ├── PIM for Groups: PrivilegedAccess.Read.AzureADGroup,      │
 │  │     RoleManagementPolicy.Read.AzureADGroup                  │
 │  ├── Security Alerts: RoleManagementAlert.Read.Directory       │
+│  ├── Audit: AuditLog.Read.All                                  │
+│  │     Workspaces: api.loganalytics.io/Data.Read               │
 │  ├── Custom Extensions: PrivilegedAccess-CustomExt.Read.All    │
+│  ├── Azure: management.azure.com/user_impersonation            │
 │  └── Configure: granular *.ReadWrite.Directory and            │
 │        *.ReadWrite.AzureADGroup scopes                         │
 │                                                                │
@@ -859,7 +876,7 @@ For detailed deployment instructions, see: **[10-deployment.md](./10-deployment.
 
 ```
 src/
-├── app/                          # Routes: /, dashboard, report, configure, settings, help, redirect, demo
+├── app/                          # Routes: /, dashboard, report, audit, configure, settings, help, redirect, demo, azure
 ├── components/
 │   ├── AppProviders.tsx          # The provider tree (rendered by app/layout.tsx)
 │   ├── ui/                       # Primitives: Button, Chip, Dialog, Menu, SegmentedControl, StatCard, Tag, Skeleton, Toast, DurationSlider, DemoLock, ...
@@ -878,7 +895,6 @@ src/
 ├── services/
 │   ├── directoryRoleService.ts   # Entra ID Roles + Policies
 │   ├── pimGroupService.ts        # PIM for Groups
-│   ├── pimConfigurationService.ts # Role policy read and write
 │   ├── configureApplyService.ts  # The apply engine of Configure
 │   ├── assignmentDryRunService.ts # Dry run of new assignments (isValidationOnly)
 │   ├── writeAccessService.ts     # Reads of the Configure access check

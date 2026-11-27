@@ -1,6 +1,7 @@
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { getErrorCode, getErrorStatusCode } from "@/utils/errorUtils";
 import { Logger } from "@/utils/logger";
+import { isEmptySingleIdAnswer } from "@/utils/graphIdFilter";
 import { escapeODataString } from "@/utils/odataUtils";
 import { graphRateLimiter } from "@/utils/rateLimiter";
 import { withRetry } from "@/utils/retryUtils";
@@ -21,6 +22,7 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface DirectoryItem {
     id: string;
     servicePrincipalType?: string;
+    appId?: string;
 }
 
 /**
@@ -48,6 +50,8 @@ async function readByIds(client: Client, path: "/servicePrincipals" | "/users" |
                 const response = await withRetry(() => client.api(path).version("v1.0").filter(filter).select(select).get(), 3, 1000, "azurePrincipal read");
                 return (response.value ?? []) as DirectoryItem[];
             } catch (error: unknown) {
+                // One id that this collection does not have answers 404 (measured 2026-11-24): an empty chunk, not a failure
+                if (isEmptySingleIdAnswer(error, chunk.length)) return [];
                 // Status and code only: a Graph message can repeat the filter, and that holds the ids
                 Logger.warn("azurePrincipal", `A read of ${path} failed: status ${getErrorStatusCode(error) ?? "unknown"}, code ${getErrorCode(error) ?? "unknown"}`);
                 failure ??= error;
@@ -63,13 +67,21 @@ async function readByIds(client: Client, path: "/servicePrincipals" | "/users" |
     return items;
 }
 
+/** The `servicePrincipalType` and the `appId` per object id (lowercase), from one read; an id Graph does not return is missing from the maps */
+export async function readServicePrincipalInfo(client: Client, ids: readonly string[], signal?: AbortSignal): Promise<{ types: Map<string, string>; appIds: Map<string, string> }> {
+    const types = new Map<string, string>();
+    const appIds = new Map<string, string>();
+    for (const item of await readByIds(client, "/servicePrincipals", "id,servicePrincipalType,appId", ids, signal)) {
+        if (!item.id) continue;
+        if (item.servicePrincipalType) types.set(item.id.toLowerCase(), item.servicePrincipalType);
+        if (item.appId) appIds.set(item.id.toLowerCase(), item.appId);
+    }
+    return { types, appIds };
+}
+
 /** The `servicePrincipalType` per object id (lowercase); an id Graph does not return is missing from the map */
 export async function readServicePrincipalTypes(client: Client, ids: readonly string[], signal?: AbortSignal): Promise<Map<string, string>> {
-    const types = new Map<string, string>();
-    for (const item of await readByIds(client, "/servicePrincipals", "id,servicePrincipalType", ids, signal)) {
-        if (item.id && item.servicePrincipalType) types.set(item.id.toLowerCase(), item.servicePrincipalType);
-    }
-    return types;
+    return (await readServicePrincipalInfo(client, ids, signal)).types;
 }
 
 /** The ids (lowercase) of these users or groups that Graph finds in the user's directory; the rest is deleted */

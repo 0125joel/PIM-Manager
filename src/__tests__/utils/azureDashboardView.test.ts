@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ArmRoleManagementAlert, AzureAssignment, AzureScope } from "@/types/azureResource.types";
 import { DEFAULT_AZURE_FILTERS, EMPTY_AZURE_FILTERS, type AzureReportFilters } from "@/utils/azureReport";
-import { azureScopePath, buildAzureDashboardView, countAzureScopes, hasPartialInView, summarizeAzureAlerts, type AzureAlertsOutcome } from "@/utils/azureDashboardView";
+import { azureScopePath, buildAzureDashboardView, countAzureScopes, hasPartialInView, subscriptionsInView, summarizeAzureAlerts, type AzureAlertsOutcome } from "@/utils/azureDashboardView";
 
 const MG = "/providers/Microsoft.Management/managementGroups/mg1";
 const SA = "/subscriptions/sa";
@@ -156,6 +156,17 @@ describe("countAzureScopes", () => {
         const counts = countAzureScopes(scopes.filter((s) => s.id !== SB), "t-home");
         expect(counts.hasUnreadable).toBe(false);
         expect(counts.readableSubscriptions).toBe(1);
+    });
+});
+
+describe("subscriptionsInView", () => {
+    it("keeps the subscriptions of the chosen scope, and the delegated ones only while they are counted", () => {
+        const ids = (chosen: string | null, delegated: boolean) => subscriptionsInView(scopes, chosen, delegated, "t-home").map((s) => s.id);
+        expect(ids(null, true)).toEqual(scopes.filter((s) => s.level === "subscription").map((s) => s.id));
+        expect(ids(SA, true)).toEqual([SA]);
+        expect(ids(RG, true)).toHaveLength(1);
+        expect(ids(SD, true)).toEqual([SD]);
+        expect(ids(null, false)).not.toContain(SD);
     });
 });
 

@@ -6,6 +6,7 @@ import { isActivated, isActivatedGroupAssignment, isPermanentActive, isTimeBound
 import { parseTotalHours } from "@/utils/durationUtils";
 import { summarizePolicyRules } from "@/utils/policySummary";
 import { isAgentKind } from "@/utils/principalUtils";
+import { isPolicyFailed } from "@/utils/policyReadAccess";
 
 /**
  * Every number of the dashboard's Basic view (spec 4.2 and 4.4), computed from raw role and group data.
@@ -172,12 +173,13 @@ export function computeCards(input: DashboardStatsInput): Record<CardId, CardSta
         approvalCard = { value: "-", breakdown: "directory roles not counted", isWarning: false };
     } else {
         // Filtered: of the roles that stay; otherwise of the privileged roles. A role whose policy Graph answered 403 on
-        // (FIX-12) is not "no approval": it is left out, and with none readable the card says so instead of 0
-        const base = (input.isFiltered ? countedRoles : privileged).filter((r) => !r.policiesForbidden);
-        const notReadable = (input.isFiltered ? countedRoles : privileged).length - base.length;
+        // (FIX-12) or whose policy failed to load is not "no approval": it is left out, and with none left the card says so instead of 0
+        const candidates = input.isFiltered ? countedRoles : privileged;
+        const base = candidates.filter((r) => !r.policiesForbidden && !isPolicyFailed(r));
+        const hasFailed = candidates.some((r) => !r.policiesForbidden && isPolicyFailed(r));
         const progress = policyProgress(base, input.policiesLoading);
-        if (notReadable > 0 && base.length === 0) {
-            approvalCard = { value: "-", breakdown: "settings not readable", isWarning: false };
+        if (candidates.length > 0 && base.length === 0) {
+            approvalCard = { value: "-", breakdown: hasFailed ? "settings not loaded" : "settings not readable", isWarning: false };
         } else if (progress.isPending || (!privilegedReported && !input.isFiltered && scope === "privileged")) {
             approvalCard = {
                 value: progress.isPending ? null : "-",
@@ -278,8 +280,8 @@ export interface TermsStats {
 /** The Terms donut and its three mini figures (spec 4.2). Only roles with a loaded policy are counted. */
 export function computeTerms(input: DashboardStatsInput): TermsStats {
     const scope = input.scope ?? "privileged";
-    // A role whose policy is not readable (FIX-12) is left out: "0 of 35 ask for MFA" would claim what was never read
-    const roles = (input.isDirectoryRolesCounted ? input.roles : []).filter((r) => isPrivilegedRole(r, scope) && !r.policiesForbidden);
+    // A role whose policy is not readable (FIX-12) or failed to load is left out: "0 of 35 ask for MFA" would claim what was never read
+    const roles = (input.isDirectoryRolesCounted ? input.roles : []).filter((r) => isPrivilegedRole(r, scope) && !r.policiesForbidden && !isPolicyFailed(r));
     const stats: TermsStats = { roleCount: roles.length, entraMfa: 0, authContext: 0, neither: 0, approval: 0, justification: 0, withoutJustification: 0, overEightHours: 0, isPending: policyProgress(roles, input.policiesLoading).isPending };
 
     for (const role of roles) {
@@ -386,7 +388,7 @@ export function formatNameList(names: string[]): string {
 export const EASY_TO_MISS_FILTERS = {
     permanentGlobalAdmins: { assignment: "permanent", roleTemplateId: GLOBAL_ADMINISTRATOR_TEMPLATE_ID, excludeEmergency: true },
     eligibleWithoutEnd: { noEndDate: true },
-    apps: { principalType: "servicePrincipal", privileged: true },
+    apps: { principalType: "app", privileged: true },
     agents: { principalType: "agent" },
     guests: { principalType: "guest" },
     nobodyNotified: { privileged: true, activationNotification: "none" },

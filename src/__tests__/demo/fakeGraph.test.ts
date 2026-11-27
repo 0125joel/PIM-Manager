@@ -35,6 +35,10 @@ import { readImportFile } from "@/utils/importDetect";
 import { checkAssignmentRows, knownPrincipals, mergePrincipals, neededLookups } from "@/utils/importAssignments";
 import { compareAccessModel, compareSettingsRows } from "@/utils/importSettings";
 import { fetchBlueprintNames } from "@/services/agentBlueprintService";
+import { fetchAuditRows } from "@/services/auditService";
+import { mapAuditEvents } from "@/utils/auditEvents";
+import { auditHolderOf } from "@/utils/auditView";
+import { AUDIT_DEMO_GROUP_ID, AUDIT_DEMO_ROLES } from "@/demo/contoso/audit";
 
 /**
  * The demo runs the app's real loaders against the fake Graph. This test does the same: if the app starts a Graph call
@@ -192,6 +196,20 @@ describe("the app's loaders against the fake Graph", () => {
         const firstGroup = tenant.groups[0].displayName.split(" ")[0];
         expect((await searchPrincipals(client(), firstGroup)).some((p) => p.kind === "group")).toBe(true);
         expect(await fetchTenantDisplayName(client(), tenant.id)).toBe("Contoso");
+        // The Entra audit log: both reads through the real service and mapper; every kind and both environments present
+        const auditSince = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+        const auditEvents = mapAuditEvents(await fetchAuditRows(client(), auditSince));
+        const kinds = new Set(auditEvents.map((e) => e.kind));
+        for (const kind of ["usage", "assignment", "setting", "outside", "system"] as const) expect(kinds.has(kind), kind).toBe(true);
+        expect(new Set(auditEvents.map((e) => e.environment))).toEqual(new Set(["role", "group"]));
+        expect(auditEvents.some((e) => e.result === "failure")).toBe(true);
+        expect(auditEvents.some((e) => e.usedMinutes !== undefined)).toBe(true);
+        // The window: nothing older than the start is served
+        expect(auditEvents.every((e) => Date.parse(e.time) >= Date.parse(auditSince))).toBe(true);
+        // Every choice of Who has an example, and an event without a holder
+        expect(new Set(auditEvents.map(auditHolderOf))).toEqual(new Set(["user", "guest", "group", "app", null]));
+        for (const [key, id] of Object.entries(AUDIT_DEMO_ROLES)) expect(id, key).toBe(ROLE[key as keyof typeof ROLE]);
+        expect(AUDIT_DEMO_GROUP_ID).toBe(GROUPS.legacyIntune.id);
         // Add people: the scopes of a role (NG-67)
         expect((await fetchAdministrativeUnits(client())).length).toBe(tenant.administrativeUnits.length);
         const firstApp = String(tenant.applications[0].displayName).split(" ")[0];
@@ -215,6 +233,20 @@ describe("the app's loaders against the fake Graph", () => {
         expect((await c.api("/users").select("id,displayName,mail").top(10).filter("startswith(displayName,'me') or startswith(mail,'me')").get()).value.map((u: { displayName: string }) => u.displayName)).toEqual(["Megan Bowen"]);
         expect((await c.api("/groups").select("id,displayName,isAssignableToRole").top(25).filter("isAssignableToRole eq true and startswith(displayName,'t')").get()).value.map((g: { displayName: string }) => g.displayName).sort()).toEqual(["Teams Rollout Team", "Tier 0 Identity Admins"]);
         expect((await c.api("/users").filter("userPrincipalName eq 'AdeleV@contoso.com'").select("id").get()).value[0].id).toBe(PEOPLE.adele.id);
+        expect(unhandled).toEqual([]);
+    });
+
+    it("answers one id that the collection does not have with 404, like Graph; two ids give an empty list", async () => {
+        const id = GROUPS.tier0.id;
+        const other = "00000000-0000-0000-0000-000000000000";
+        const error: unknown = await client().api("/users").version("v1.0").filter(`id in ('${id}')`).select("id").get().then(() => null, (e: unknown) => e);
+        expect(error).toMatchObject({ statusCode: 404, code: "Request_ResourceNotFound" });
+        const eq: unknown = await client().api("/servicePrincipals").version("v1.0").filter(`id eq '${id}'`).get().then(() => null, (e: unknown) => e);
+        expect(eq).toMatchObject({ statusCode: 404, code: "Request_ResourceNotFound" });
+        const two = await client().api("/users").version("v1.0").filter(`id in ('${id}','${other}')`).select("id").get();
+        expect(two.value).toEqual([]);
+        const groups = await client().api("/groups").version("v1.0").filter(`id in ('${id}')`).select("id").get();
+        expect(groups.value.map((g: { id: string }) => g.id)).toEqual([id]);
         expect(unhandled).toEqual([]);
     });
 

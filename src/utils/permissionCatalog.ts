@@ -35,6 +35,8 @@ export const PERMISSION_PURPOSES: Record<string, string> = {
     "PrivilegedAccess.Read.AzureADGroup": "groups under PIM and their assignments",
     "RoleManagementPolicy.Read.AzureADGroup": "the PIM settings of each group",
     "RoleManagementAlert.Read.Directory": "PIM's own security alerts",
+    "AuditLog.Read.All": "activations and changes in the audit log, on the Audit page",
+    "https://api.loganalytics.io/Data.Read": "the audit log in the Log Analytics workspaces you choose, on the Audit page",
     "PrivilegedAccess-CustomExt.Read.All": "the custom extensions of the tenant (preview)",
     "Policy.Read.All": "the Conditional Access policies behind an authentication context, checked before Configure applies",
     "RoleManagementPolicy.ReadWrite.Directory": "changing the PIM settings of a role",
@@ -62,7 +64,7 @@ export function buildPermissionCatalog(sources: PermissionSources): PermissionGr
         {
             id: "optional",
             title: "Read permissions asked when you switch a feature on",
-            note: "Microsoft asks for these once, the first time you switch the feature on. Nothing is changed in your tenant.",
+            note: "Asked once, the first time you use the feature. Some, such as the audit log, need an admin to approve them once for your tenant. Nothing is changed in your tenant.",
             items: sources.optional.flatMap((o) => items(o.scopes, `${o.feature}: `)),
         },
         {

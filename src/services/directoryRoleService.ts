@@ -4,6 +4,7 @@ import { RoleDefinition, RoleAssignment, PimEligibilitySchedule, PimAssignmentSc
 import { detectScopeType, enrichScopeInfo } from "@/utils/scopeUtils";
 import { runWorkerPool } from "@/utils/workerPool";
 import { withRetry } from "@/utils/retryUtils";
+import { isEmptySingleIdAnswer } from "@/utils/graphIdFilter";
 import { graphRateLimiter } from "@/utils/rateLimiter";
 import { Logger } from "../utils/logger";
 import { getErrorMessage } from "@/utils/errorUtils";
@@ -1007,11 +1008,17 @@ export async function fetchUserTypes(
         rateLimiter: graphRateLimiter,
         onProgress,
         processor: async (ids) => {
-            const response = await withRetry(
-                () => client.api("/users").version("v1.0").filter(buildUserIdFilter(ids)).select("id,userType").get(),
-                3, 1000, "fetchUserTypes"
-            );
-            return (response.value ?? []) as { id: string; userType?: string }[];
+            try {
+                const response = await withRetry(
+                    () => client.api("/users").version("v1.0").filter(buildUserIdFilter(ids)).select("id,userType").get(),
+                    3, 1000, "fetchUserTypes"
+                );
+                return (response.value ?? []) as { id: string; userType?: string }[];
+            } catch (error: unknown) {
+                // One id that /users does not have answers 404 (measured 2026-11-24): no userType, not a failure
+                if (isEmptySingleIdAnswer(error, ids.length)) return [];
+                throw error;
+            }
         },
         onItemComplete: (_ids, users) => {
             for (const user of users) {
@@ -1048,10 +1055,11 @@ export async function refreshRoleAssignments(
     const freshRoles = await fetchRoleDefinitionsAndAssignments(client, onProgress, signal, collectKnownUserTypes(currentData));
 
     clearPolicyCache();
-    return freshRoles.map(role => {
-        const previous = previousById.get(role.definition.id);
-        return previous && previous.policy !== undefined
-            ? { ...role, policy: previous.policy, configError: previous.configError }
-            : role;
-    });
+    return freshRoles.map(role => keepPolicyState(role, previousById.get(role.definition.id)));
+}
+
+/** What is known about a role's policy stays until it is read again: the policy, the failed read or the refused one (403). */
+export function keepPolicyState(role: RoleDetailData, previous: RoleDetailData | undefined): RoleDetailData {
+    if (!previous || previous.policy === undefined) return role;
+    return { ...role, policy: previous.policy, configError: previous.configError, policiesForbidden: previous.policiesForbidden };
 }

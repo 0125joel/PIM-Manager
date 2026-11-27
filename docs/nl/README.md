@@ -6,6 +6,7 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 
 | Document | Beschrijving |
 |----------|--------------|
+| [Architectuur](./00-architecture.md) | Architectuur en ontwerpbeslissingen in één document |
 | [Introductie](./01-introductie.md) | Wat is PIM Manager en welke problemen lost het op? |
 | [Mappenstructuur](./02-mappenstructuur.md) | Overzicht van de code-organisatie |
 | [Dataflow](./03-dataflow.md) | Hoe data wordt opgehaald en verwerkt |
@@ -15,8 +16,10 @@ Welkom bij de technische documentatie van PIM Manager. Deze handleiding is bedoe
 | [Dashboard Pagina](./07-dashboard-pagina.md) | Visueel overzicht en beveiligingsinzichten |
 | [Rapport Pagina](./08-rapport-pagina.md) | Gedetailleerde rolconfiguratieweergave |
 | [Configuratie Pagina](./09-configuratie-pagina.md) | Edit, Guided, Import en Access model, met review en Undo |
+| [Implementatie](./10-deployment.md) | De gehoste versie op pimmanager.com of je eigen kopie op Azure Static Web Apps, en de app-registratie |
 | [Instellingen](./11-settings.md) | Workloads en consent framework |
 | [Azure Dashboard](./12-azure-dashboard-pagina.md) | Bevoorrechte toegang op Azure-resources |
+| [Audit Pagina](./13-audit-pagina.md) | Activaties en wijzigingen in Entra-rollen en groepen en op Azure-resources, met export |
 
 ---
 

@@ -18,7 +18,7 @@ interface ReportHeadProps {
 /** Title, the sync time, Refresh and Export (spec 2.1). Export is an icon button below 640. */
 export function ReportHead({ syncedText, refresh, isExportDisabled, onExport, detailsToggle }: ReportHeadProps) {
     return (
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+        <div data-visual-section="report-head" className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             {/* Below 640 the checkbox moves under the sentence, so the title and its sentence stay together */}
             <div className="flex min-w-0 flex-wrap items-center gap-x-4">
                 <h1 className={PAGE_TITLE_CLASS}>Report</h1>

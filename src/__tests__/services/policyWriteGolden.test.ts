@@ -2,9 +2,9 @@
  * Golden tests of the policy write path (NG-53, spec 11.3).
  *
  * Every case loads a fixture policy into the settings model the Configure screens edit (`parseGraphPolicy`), changes one
- * field, applies it through the one write path (`updatePimPolicy` for roles; for groups `buildRuleUpdates` over
- * `settingsToChanges`, which is what the apply engine of Configure sends) against the recording client, and stores what
- * it sent as snapshots:
+ * field, applies it through the one mapper (`buildRuleUpdates` over `settingsToChanges`, which is what the apply engine of
+ * Configure sends; roles over the rules as read, groups over `completeRules`) against the recording client, and stores
+ * what it sent as snapshots:
  *
  * - "{case}": the PATCH bodies of the rules the field maps to (spec 11.2), in the order they were sent;
  * - "bug 4: {case}, rules the change did not touch": the bodies of every other rule that was written;
@@ -22,8 +22,7 @@
  * The PATCH version is not part of the record: roles go to beta today and NG-54 moves them to v1.0 (spec 13.1); the
  * service tests of NG-54 pin it.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { updatePimPolicy } from "@/services/pimConfigurationService";
+import { describe, expect, it } from "vitest";
 import { buildRuleUpdates, settingsToChanges, type GraphRule } from "@/utils/policyRules";
 import { completeRules } from "@/utils/policyView";
 import { parseGraphPolicy } from "@/utils/policyParser";
@@ -77,14 +76,6 @@ function fixtureClient(rules: FixtureRule[]): RecordingClient {
     ]);
 }
 
-/** Runs a promise to the end while fake timers skip the pacing delays of the services */
-async function settle<T>(promise: Promise<T>): Promise<T> {
-    let done = false;
-    promise.then(() => { done = true; }, () => { done = true; });
-    while (!done) await vi.advanceTimersByTimeAsync(500);
-    return promise;
-}
-
 interface Written {
     path: string;
     version: string;
@@ -97,12 +88,10 @@ async function write(workload: Workload, fixture: FixtureOptions, edit: (s: Poli
     const recording = fixtureClient(rules);
     const settings = parseGraphPolicy({ rules: JSON.parse(JSON.stringify(rules)) });
     edit(settings);
-    if (workload === "roles") await settle(updatePimPolicy(recording.client, ROLE_ID, settings));
-    else {
-        const complete = completeRules(rules) as GraphRule[];
-        const updates = buildRuleUpdates("pimGroups", complete, settingsToChanges(parseGraphPolicy({ rules: complete }), settings));
-        for (const update of updates) await recording.client.api(`/policies/roleManagementPolicies/${GROUP_POLICY_ID}/rules/${update.ruleId}`).version("v1.0").patch(update.body);
-    }
+    const read = (workload === "roles" ? rules : completeRules(rules)) as GraphRule[];
+    const policyId = workload === "roles" ? ROLE_POLICY_ID : GROUP_POLICY_ID;
+    const updates = buildRuleUpdates(workload === "roles" ? "directoryRoles" : "pimGroups", read, settingsToChanges(parseGraphPolicy({ rules: read }), settings));
+    for (const update of updates) await recording.client.api(`/policies/roleManagementPolicies/${policyId}/rules/${update.ruleId}`).version("v1.0").patch(update.body);
     const writes = recording.writes();
     expect(writes.every((w) => w.method === "PATCH")).toBe(true);
     return writes.map((w) => ({ path: w.path, version: w.version, ruleId: w.path.split("/").pop() ?? "", body: w.body }));
@@ -210,10 +199,6 @@ function label(workload: Workload, c: GoldenCase): string {
     return bugs.length ? `${bugs.join(", ")}: ${c.name}` : c.name;
 }
 
-// applyDirectoryRolePolicies imports pimConfigurationService on demand; load it once with real timers
-beforeAll(async () => { await import("@/services/pimConfigurationService"); });
-beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); });
-afterEach(() => { vi.useRealTimers(); });
 
 /** `enabledRules` is a set: the two old paths send it in different orders, so the snapshot sorts it */
 function canonical(body: unknown): unknown {

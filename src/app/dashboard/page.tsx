@@ -27,7 +27,7 @@ import { useTourPage } from "@/hooks/useTourPage";
 import { DetailsToggle } from "@/components/ui/DetailsToggle";
 import { filterNeedsDetails } from "@/utils/detailsFilter";
 import { useEscapeClearsFilter } from "@/hooks/useEscapeClearsFilter";
-import { summarizeAlerts } from "@/utils/alertSummary";
+import { alertsForExport, summarizeAlerts } from "@/utils/alertSummary";
 import { useIncrementalConsent } from "@/hooks/useIncrementalConsent";
 import { useEmergencyAccountIds } from "@/hooks/useEmergencyAccountIds";
 import { useDashboardScope } from "@/hooks/useDashboardScope";
@@ -104,6 +104,10 @@ function DashboardContent() {
         [counting.agents, rolesData, pimGroupsData]
     );
 
+    const isGroupsLoading = ["idle", "consent", "fetching", "processing"].includes(workloadLoading.pimGroups.phase);
+    // No groups in hand and the load failed or is not done: the export says they are missing instead of counting zero
+    const isGroupsUnavailable = workloads.pimGroups.consent.consented && pimGroupsData.length === 0 && (isGroupsLoading || workloadLoading.pimGroups.phase === "error");
+
     useEscapeClearsFilter(isDashboardFilterActive, clearDashboardFilter);
     useTourPage(isAdvanced ? "entra-dashboard-advanced" : "entra-dashboard-basic", !loading && rolesData.length > 0, viewMode, setViewMode);
 
@@ -176,7 +180,7 @@ function DashboardContent() {
                 counting={counting}
                 filter={dashboardFilter}
                 isRolesLoading={loading || (rolesData.length === 0 && !error)}
-                isGroupsLoading={["idle", "consent", "fetching", "processing"].includes(workloadLoading.pimGroups.phase)}
+                isGroupsLoading={isGroupsLoading}
                 policiesLoading={policiesLoading}
                 emergencyAccountIds={emergencyAccountIds}
                 onSetFilter={setDashboardFilter}
@@ -222,10 +226,11 @@ function DashboardContent() {
                         filter: dashboardFilter,
                         emergencyAccountIds,
                         authenticationContexts,
-                        alerts: hasAlertsPermission ? securityAlerts : null,
+                        alerts: alertsForExport({ hasPermission: hasAlertsPermission, loading: alertsLoading, error: alertsError, alerts: securityAlerts }),
                         dismissedAlertIds: dismissedAlerts,
                         tenantExtensionIds,
                         policiesLoading,
+                        isGroupsUnavailable,
                     }}
                     meta={{ tenantName, tenantId, exporter: account?.name ? `${account.name} (${userPrincipalName})` : userPrincipalName ?? "unknown", version: process.env.NEXT_PUBLIC_APP_VERSION ?? "", dataReadAt: syncHistory && syncHistory.length > 0 ? new Date(syncHistory[0].timestamp) : undefined }}
                     counting={{ ...counting, securityAlerts: isSecurityAlertsVisible && hasAlertsPermission === true }}

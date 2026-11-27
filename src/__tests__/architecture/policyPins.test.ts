@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { AZURE_SCOPES } from "@/config/authConfig";
+import { LOG_ANALYTICS_PERMISSION } from "@/config/constants";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
@@ -47,23 +48,22 @@ const APPROVED_SCOPES = [
   "AdministrativeUnit.Read.All", "Application.Read.All",
   // Optional, incremental consent
   "RoleManagementAlert.Read.Directory", "PrivilegedAccess.Read.AzureADGroup", "RoleManagementPolicy.Read.AzureADGroup",
-  "PrivilegedAccess-CustomExt.Read.All", "Policy.Read.All",
+  "PrivilegedAccess-CustomExt.Read.All", "Policy.Read.All", "AuditLog.Read.All",
   // Planned workloads, defined in WORKLOAD_SCOPES but not active in the UI
   "DeviceManagementRBAC.Read.All", "RoleManagement.Read.Exchange", "Sites.Read.All",
   // Configure writes, incremental consent
   "RoleManagementPolicy.ReadWrite.Directory", "RoleEligibilitySchedule.ReadWrite.Directory", "RoleAssignmentSchedule.ReadWrite.Directory",
   "RoleManagementPolicy.ReadWrite.AzureADGroup", "PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup",
   "PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup",
-  // Declared, never requested (see DECLARED_NOT_REQUESTED)
-  "PrivilegedAccess-CustomExt.ReadWrite.All",
 ].sort();
 
 /** Named in the code but passed to no token request; documented only once something requests it. */
 const DECLARED_NOT_REQUESTED: Record<string, string> = {
-  "PrivilegedAccess-CustomExt.ReadWrite.All": "CUSTOM_EXTENSION_SCOPES.readWrite in config/constants.ts has no caller (2026-10-29); linking an extension uses the RoleManagementPolicy write scopes",
 };
 
 const ARM_SCOPES = ["https://management.azure.com/user_impersonation"];
+/** Optional, asked only when Log Analytics workspaces are chosen for the Audit page (AU-9); the audience is `https://api.loganalytics.io` */
+const LOG_ANALYTICS_SCOPES = ["https://api.loganalytics.io/Data.Read"];
 
 const SCOPE = /["'`]([A-Z][A-Za-z]+(?:-[A-Za-z]+)?\.(?:Read|ReadWrite)(?:\.[A-Za-z]+)*)["'`]/g;
 
@@ -84,11 +84,16 @@ describe("policy pins: permissions (P1)", () => {
     expect(AZURE_SCOPES).toEqual(ARM_SCOPES);
   });
 
+  it("the Log Analytics scope is the one approved scope of that API", () => {
+    expect([LOG_ANALYTICS_PERMISSION]).toEqual(LOG_ANALYTICS_SCOPES);
+  });
+
   // docs/architecture is not in the public mirror: this check runs where the private docs exist
   it.skipIf(!existsSync(join(process.cwd(), "docs/architecture/auth-and-deployment.md")))("every requested scope is documented in docs/architecture/auth-and-deployment.md", () => {
     const doc = read("docs/architecture/auth-and-deployment.md");
     const requested = [...APPROVED_SCOPES.filter((s) => !(s in DECLARED_NOT_REQUESTED)), ...ARM_SCOPES];
     expect(requested.filter((s) => !doc.includes(s.replace("https://management.azure.com/", "")))).toEqual([]);
+    expect(LOG_ANALYTICS_SCOPES.filter((s) => !doc.includes(s))).toEqual([]);
   });
 });
 
@@ -98,7 +103,7 @@ const CSP_HOSTS: Record<string, string[]> = {
   "script-src": ["https://aadcdn.msauth.net", "https://aadcdn.msftauth.net", "https://alcdn.msauth.net", "https://static.cloudflareinsights.com"],
   "img-src": ["https://graph.microsoft.com"],
   "connect-src": [
-    "https://api.github.com", "https://cloudflareinsights.com", "https://graph.microsoft.com", "https://login.microsoft.com",
+    "https://api.github.com", "https://api.loganalytics.azure.com", "https://cloudflareinsights.com", "https://graph.microsoft.com", "https://login.microsoft.com",
     "https://login.microsoftonline.com", "https://management.azure.com", "https://pimmonitor.com",
   ],
   "frame-src": ["https://login.microsoftonline.com"],

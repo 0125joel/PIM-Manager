@@ -7,9 +7,25 @@ import type { LoadingPhase } from "@/types/workload.types";
 import { EMPTY_AZURE_FILTERS, endTextFor, type AzureReportFilters } from "@/utils/azureReport";
 import { toAssignment } from "@/utils/azureScopes";
 import { formatSyncedAgo } from "@/utils/loadingStatus";
+import type { MyGroupPathsState } from "@/utils/myGroupPaths";
+
+/** The loaded own roles, with the PIM groups the user is an eligible member of (AU-21) */
+export interface MyAzureRolesLoaded {
+    active: MyAzureRoleRow[];
+    eligible: MyAzureRoleRow[];
+    groups: MyGroupPathsState;
+}
 
 /** The user's own active and eligible roles (Azure spec 15.5): null while they are read, "failed" when a read failed */
-export type MyAzureRolesState = { active: MyAzureRoleRow[]; eligible: MyAzureRoleRow[] } | "failed" | null;
+export type MyAzureRolesState = MyAzureRolesLoaded | "failed" | null;
+
+/** Whether "Your Azure roles" has anything to show: own rows, a listed group, or a note about the group read */
+export function hasMyRolesContent(roles: MyAzureRolesLoaded): boolean {
+    return roles.active.length > 0
+        || roles.eligible.length > 0
+        || roles.groups.kind !== "listed"
+        || roles.groups.groups.length > 0;
+}
 
 export type AzureReportView = "loading" | "empty" | "failed" | "report";
 
@@ -20,6 +36,8 @@ export interface MyAzureRoleRow {
     /** "Permanent" or the end date, as the table */
     endText: string;
     isPermanent: boolean;
+    /** The PIM group the role is held through (ARM `memberType` `Group`); absent for a direct or inherited role */
+    viaGroup?: string;
 }
 
 /** The first rule that holds wins: data shows the report, then error, then complete (nothing readable), else loading */
@@ -62,12 +80,19 @@ export function isFiltered(filters: AzureReportFilters): boolean {
 
 export function toMyRoleRow(instance: ArmRoleScheduleInstance): MyAzureRoleRow {
     const a = toAssignment(instance);
+    const principal = instance.properties.expandedProperties?.principal;
+    const viaGroup = instance.properties.memberType?.toLowerCase() === "group"
+        && typeof principal?.displayName === "string" && principal.displayName !== ""
+        && principal.type?.toLowerCase() === "group"
+        ? principal.displayName
+        : undefined;
     return {
         id: a.id,
         roleName: a.roleName,
         scopeName: instance.properties.expandedProperties?.scope?.displayName ?? a.scopeId,
         endText: endTextFor(a.endDateTime),
         isPermanent: a.endDateTime === null,
+        ...(viaGroup !== undefined ? { viaGroup } : {}),
     };
 }
 

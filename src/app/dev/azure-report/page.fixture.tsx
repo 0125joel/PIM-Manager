@@ -21,7 +21,7 @@ import { VisibilityLine } from "@/app/azure/report/components/VisibilityLine";
 import { DEFAULT_AZURE_FILTERS, buildAssignmentRows, defaultScopeId, findScope, flattenScopeTree, type AzureReportFilters } from "@/utils/azureReport";
 import type { AzureListView } from "@/utils/azureRoleView";
 import { DEFAULT_AZURE_EXPORT_CHOICE, allScopeRows, type AzureExportData, type AzureExportView } from "@/utils/azureExportPlan";
-import { AZURE_FIXTURE_MY_ROLES, AZURE_FIXTURE_PANEL_ID, buildAzurePanelRules, buildAzurePanelSettings, buildAzureReportFixture } from "@/__tests__/fixtures/azureReportFixture";
+import { AZURE_FIXTURE_MY_ROLES, AZURE_FIXTURE_MY_ROLES_NO_CONSENT, AZURE_FIXTURE_PANEL_ID, buildAzurePanelRules, buildAzurePanelSettings, buildAzureReportFixture } from "@/__tests__/fixtures/azureReportFixture";
 import { RefreshButtonView } from "@/components/ui/RefreshButton";
 import { withBelowBudgetSpent } from "@/__tests__/fixtures/azureUnreadFixture";
 import { topReadableScopes } from "@/utils/azureScopes";
@@ -31,7 +31,7 @@ import { DetailsToggle } from "@/components/ui/DetailsToggle";
  * The Azure Report with the Contoso fixture and no sign-in (NG-96). The `.fixture.tsx` extension keeps it out of a normal
  * build (see the Report fixture). Query parameter `state`: none (the report) | scope | filtered | notices | panel |
  * inherited-only | filters-open | panel-loading | panel-missing | panel-failed | panel-unavailable | panel-no-access | tree-partial | loading | empty | empty-roles |
- * empty-roles-only-eligible | empty-roles-failed | failed | consent | consent-admin | export | export-all | export-empty |
+ * empty-roles-only-eligible | empty-roles-no-consent | empty-roles-failed | failed | consent | consent-admin | export | export-all | export-empty |
  * export-loading | export-reading | roles | roles-selected | roles-marked | roles-policy-failed | roles-scope | roles-no-mfa (the role view,
  * Roles on the switch; the others keep the assignments view) | unread (the first subscription read below its own level with
  * a read budget that ran out: Read the rest). Query parameter `details` = on (default) | off.
@@ -151,16 +151,17 @@ function AzureReportFixture() {
     let content: ReactNode;
     if (state === "consent" || state === "consent-admin") {
         content = <AzureConsentView status={state === "consent-admin" ? "needsAdmin" : "idle"} onEnable={noop} />;
-    } else if (state === "loading" || state === "empty" || state === "empty-roles" || state === "empty-roles-only-eligible" || state === "empty-roles-failed" || state === "failed") {
+    } else if (state === "loading" || state === "empty" || state === "empty-roles" || state === "empty-roles-only-eligible" || state === "empty-roles-no-consent" || state === "empty-roles-failed" || state === "failed") {
         content = (
             <div className="mx-auto max-w-[1376px]">
                 <AzureReportHead scopeName={null} syncedText={SYNCED} refresh={<RefreshButtonView isDisabled={false} onRefresh={noop} />} />
                 {!state.startsWith("empty") && <VisibilityLine className="mt-4" />}
                 <div className="mt-4 flex flex-col gap-4">
                     {state === "loading" && <AzureReportLoading message="Loading Azure role assignments: 1 of 2 subscriptions" percent={50} />}
-                    {state === "empty" && <AzureReportEmpty myRoles={{ active: [], eligible: [] }} />}
+                    {state === "empty" && <AzureReportEmpty myRoles={{ active: [], eligible: [], groups: { kind: "listed", groups: [] } }} />}
                     {state === "empty-roles" && <AzureReportEmpty myRoles={AZURE_FIXTURE_MY_ROLES} />}
-                    {state === "empty-roles-only-eligible" && <AzureReportEmpty myRoles={{ active: [], eligible: AZURE_FIXTURE_MY_ROLES.eligible }} />}
+                    {state === "empty-roles-only-eligible" && <AzureReportEmpty myRoles={{ active: [], eligible: AZURE_FIXTURE_MY_ROLES.eligible, groups: { kind: "listed", groups: [] } }} />}
+                    {state === "empty-roles-no-consent" && <AzureReportEmpty myRoles={AZURE_FIXTURE_MY_ROLES_NO_CONSENT} />}
                     {state === "empty-roles-failed" && <AzureReportEmpty myRoles="failed" />}
                     {state === "failed" && <AzureLoadError message={FAILED_TEXT} onRetry={noop} isRetrying={false} />}
                 </div>

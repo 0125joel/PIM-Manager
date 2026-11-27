@@ -62,6 +62,8 @@ export interface Principal {
     servicePrincipalType?: string | null;
     /** An agent identity: the appId of the blueprint it was created from */
     agentIdentityBlueprintId?: string | null;
+    /** Service principals: the application (client) id; the principal expand returns it */
+    appId?: string | null;
     /** An agent's user account: the object id of its agent identity */
     identityParentId?: string | null;
     "@odata.type": string;

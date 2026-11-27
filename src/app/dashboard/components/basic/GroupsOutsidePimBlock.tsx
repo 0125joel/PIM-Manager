@@ -10,6 +10,7 @@ import { StatusBox } from "@/components/ui/StatusBox";
 import { ChangeInConfigureLink } from "@/components/ui/ChangeInConfigureLink";
 import type { ConfigureLinkTarget } from "@/utils/configureLinks";
 import { getEntraGroupUrl, type GroupOutsidePim } from "@/utils/groupsOutsidePim";
+import { portalLinkClass } from "@/components/ui/PortalLink";
 
 /** More rows than this are folded: a tenant can have dozens of role-assignable groups outside PIM */
 const VISIBLE_LIMIT = 10;
@@ -34,7 +35,7 @@ interface GroupsOutsidePimBlockProps {
 
 function BringUnderPim({ group }: { group: GroupOutsidePim }) {
     return (
-        <a href={getEntraGroupUrl(group.id)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-6 items-center gap-1 whitespace-nowrap text-[13px] leading-[18px] text-accent underline underline-offset-2 max-sm:min-h-11 max-sm:items-center">
+        <a href={getEntraGroupUrl(group.id)} target="_blank" rel="noopener noreferrer" className={`inline-flex min-h-6 items-center gap-1 whitespace-nowrap text-[13px] leading-[18px] max-sm:min-h-11 max-sm:items-center ${portalLinkClass()}`}>
             Bring under PIM
             <span className="sr-only">: {group.name}, opens the Microsoft Entra admin center</span>
         </a>

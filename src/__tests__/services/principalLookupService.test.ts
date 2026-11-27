@@ -53,6 +53,26 @@ describe("lookupPrincipals by id", () => {
         expect(graph.requests.map((r) => r.path)).toEqual(["/users", "/groups", "/servicePrincipals"]);
     });
 
+    it("resolves one group id when /users answers 404 for the one id, without throwing", async () => {
+        const group = "00000000-0000-0000-0000-00000000beef";
+        const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+        const graph = createRecordingClient([
+            { match: /^\/users$/, respond: () => { throw graphError(404, "Request_ResourceNotFound"); } },
+            { match: /^\/groups$/, respond: (request) => echoIds(request) },
+        ]);
+        const found = await lookupPrincipals(graph.client, { ids: [group], upns: [] });
+        expect(found.byId.get(group)?.kind).toBe("group");
+        expect(graph.requests.map((r) => r.path)).toEqual(["/users", "/groups"]);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("still throws on a 404 for a chunk of two ids", async () => {
+        const second = "00000000-0000-0000-0000-00000000cafe";
+        vi.spyOn(Logger, "warn").mockImplementation(() => {});
+        const graph = createRecordingClient([{ match: /^\/users$/, respond: () => { throw graphError(404, "Request_ResourceNotFound"); } }]);
+        await expect(lookupPrincipals(graph.client, { ids: [ID, second], upns: [] })).rejects.toMatchObject({ statusCode: 404 });
+    });
+
     it("throws on a 500 with status and code, without the ids or UPNs of the Graph message", async () => {
         const upn = "adele@contoso.com";
         vi.spyOn(Logger, "warn").mockImplementation(() => {});

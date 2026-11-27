@@ -10,11 +10,13 @@ import { Tag } from "@/components/ui/Tag";
 import { AZURE_TERMS } from "@/config/help/azureReportTerms";
 import { useIsDetailed } from "@/contexts/DetailsContext";
 import type { AzureAssignment } from "@/types/azureResource.types";
+import { PortalLink } from "@/components/ui/PortalLink";
 import { azureAssignmentTags } from "@/utils/azureAssignmentTags";
 import { isAzureTagShown } from "@/utils/calmTags";
 import type { AzureRoleAssignmentItem, AzureRoleDetailModel } from "@/utils/azureRoleView";
 import { formatDate } from "@/utils/dateFormat";
 import { scopeIconFor } from "@/utils/azureResourceIcons";
+import { getAzurePrincipalUrl } from "@/utils/portalLinks";
 import { buildPolicyView, type PolicyTabId } from "@/utils/policyView";
 
 interface AzureRoleDetailProps {
@@ -35,10 +37,12 @@ interface AzureRoleDetailProps {
     onOpenSettings: (assignment: AzureAssignment) => void;
     /** Graph servicePrincipalType by lowercase object id, for the managed identity tag */
     spTypes?: ReadonlyMap<string, string> | null;
+    /** Graph appId by lowercase object id, for the Entra link of an app */
+    spAppIds?: ReadonlyMap<string, string> | null;
 }
 
 /** A role on one scope: its head, the assignments Eligible and Active in the Entra row layout, and the role configuration at that scope (Azure spec 15.2). */
-export function AzureRoleDetail({ detail, scopeName, description, policyState, onRetryPolicy, tab, onTabChange, emergencyAccountIds, isHiddenByFilter, getShareUrl, onOpenSettings, spTypes }: AzureRoleDetailProps) {
+export function AzureRoleDetail({ detail, scopeName, description, policyState, onRetryPolicy, tab, onTabChange, emergencyAccountIds, isHiddenByFilter, getShareUrl, onOpenSettings, spTypes, spAppIds }: AzureRoleDetailProps) {
     const rules = policyState.status === "loaded" ? policyState.rules : null;
     const view = useMemo(
         () => (rules ? buildPolicyView(rules, { isPrivileged: detail.isPrivileged }) : null),
@@ -86,8 +90,8 @@ export function AzureRoleDetail({ detail, scopeName, description, policyState, o
                         </div>
                     ) : (
                         <div className="mt-3 flex flex-col gap-4">
-                            {detail.eligible.length > 0 && <AssignmentGroup title={`Eligible (${detail.eligible.length})`} items={detail.eligible} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} />}
-                            {detail.active.length > 0 && <AssignmentGroup title={`Active (${detail.active.length})`} items={detail.active} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} />}
+                            {detail.eligible.length > 0 && <AssignmentGroup title={`Eligible (${detail.eligible.length})`} items={detail.eligible} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} spAppIds={spAppIds} />}
+                            {detail.active.length > 0 && <AssignmentGroup title={`Active (${detail.active.length})`} items={detail.active} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} spAppIds={spAppIds} />}
                         </div>
                     )}
                 </section>
@@ -115,13 +119,13 @@ export function AzureRoleDetail({ detail, scopeName, description, policyState, o
     );
 }
 
-function AssignmentGroup({ title, items, detail, emergencyAccountIds, onOpenSettings, spTypes }: { spTypes?: ReadonlyMap<string, string> | null; title: string; items: AzureRoleAssignmentItem[]; detail: AzureRoleDetailModel; emergencyAccountIds: ReadonlySet<string>; onOpenSettings: (assignment: AzureAssignment) => void }) {
+function AssignmentGroup({ title, items, detail, emergencyAccountIds, onOpenSettings, spTypes, spAppIds }: { spTypes?: ReadonlyMap<string, string> | null; spAppIds?: ReadonlyMap<string, string> | null; title: string; items: AzureRoleAssignmentItem[]; detail: AzureRoleDetailModel; emergencyAccountIds: ReadonlySet<string>; onOpenSettings: (assignment: AzureAssignment) => void }) {
     return (
         <div>
             <h4 className="mb-2 text-[13px] leading-5 font-semibold text-body">{title}</h4>
             <ul className="flex flex-col gap-2">
                 {items.map((item) => (
-                    <AzureRoleAssignmentRow key={item.row.assignment.id} item={item} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} />
+                    <AzureRoleAssignmentRow key={item.row.assignment.id} item={item} detail={detail} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} spAppIds={spAppIds} />
                 ))}
             </ul>
         </div>
@@ -134,10 +138,11 @@ interface AzureRoleAssignmentRowProps {
     emergencyAccountIds: ReadonlySet<string>;
     onOpenSettings: (assignment: AzureAssignment) => void;
     spTypes?: ReadonlyMap<string, string> | null;
+    spAppIds?: ReadonlyMap<string, string> | null;
 }
 
 /** One assignment in the Entra row layout: name and second line left, tags right; marked when the detail marks rows. */
-function AzureRoleAssignmentRow({ item, detail, emergencyAccountIds, onOpenSettings, spTypes }: AzureRoleAssignmentRowProps) {
+function AzureRoleAssignmentRow({ item, detail, emergencyAccountIds, onOpenSettings, spTypes, spAppIds }: AzureRoleAssignmentRowProps) {
     const { row } = item;
     const marked = detail.isMarking && item.isMarked;
     const dimmed = detail.isMarking && !item.isMarked;
@@ -145,7 +150,9 @@ function AzureRoleAssignmentRow({ item, detail, emergencyAccountIds, onOpenSetti
         <li>
             <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded border border-line bg-surface px-3 py-2.5 ${marked ? "border-l-2 border-l-accent" : ""}`}>
                 <div className={`min-w-0 ${dimmed ? "text-muted" : ""}`}>
-                    <p className={`truncate text-sm leading-5 font-medium ${dimmed ? "text-muted" : "text-ink"}`}>{row.assignment.principalName}</p>
+                    <p className={`truncate text-sm leading-5 font-medium ${dimmed ? "text-muted" : "text-ink"}`}>
+                        <PortalLink portal="Entra admin center" className={dimmed ? "text-muted" : "text-ink"} isMuted={dimmed} href={getAzurePrincipalUrl(row.assignment.principalType, row.assignment.principalId, spTypes, spAppIds)}>{row.assignment.principalName}</PortalLink>
+                    </p>
                     <p className="truncate text-xs leading-4 text-muted">{row.assignment.principalUpn ?? row.principalTypeLabel}</p>
                 </div>
                 <RowTags item={item} detailName={detail.name} emergencyAccountIds={emergencyAccountIds} onOpenSettings={onOpenSettings} spTypes={spTypes} />

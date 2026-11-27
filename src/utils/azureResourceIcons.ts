@@ -48,6 +48,22 @@ export function resourceIconFor(resourceType: string | undefined): ResourceIcon 
     return RESOURCE_ICONS_BY_LOWER_TYPE.get(resourceType.toLowerCase()) ?? { icon: "resource", label: resourceType };
 }
 
+/** The level of a scope in words, for the icon's tooltip: the resource type decides for resources */
+export function scopeLevelLabel(scope: Pick<AzureScope, "level" | "resourceType">): string {
+    switch (scope.level) {
+        case "root":
+            return "Root";
+        case "managementGroup":
+            return "Management group";
+        case "subscription":
+            return "Subscription";
+        case "resourceGroup":
+            return "Resource group";
+        case "resource":
+            return resourceIconFor(scope.resourceType).label;
+    }
+}
+
 /** The icon of a scope in the tree: one icon per level, the resource type decides for resources */
 export function scopeIconFor(scope: Pick<AzureScope, "level" | "resourceType">): IconName {
     switch (scope.level) {

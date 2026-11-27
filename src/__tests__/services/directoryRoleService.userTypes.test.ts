@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { Logger } from "@/utils/logger";
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { fetchUserTypes } from "@/services/directoryRoleService";
 
@@ -46,6 +47,20 @@ describe("fetchUserTypes", () => {
         const { client, calls } = mockClient(() => []);
         expect((await fetchUserTypes(client, [])).size).toBe(0);
         expect(calls).toHaveLength(0);
+    });
+
+    it("gives no userType and no warning for a one-id chunk that answers 404 Request_ResourceNotFound", async () => {
+        const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {});
+        const ids = Array.from({ length: 16 }, (_, i) => `u${i}`);
+        const { client } = mockClient((filter) => {
+            if (filter === "id in ('u15')") return Object.assign(new Error("gone"), { statusCode: 404, code: "Request_ResourceNotFound" });
+            return (filter.match(/'u\d+'/g) ?? []).map((s) => ({ id: s.slice(1, -1), userType: "Member" }));
+        });
+        const result = await fetchUserTypes(client, ids);
+        expect(result.size).toBe(15);
+        expect(result.has("u15")).toBe(false);
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
     });
 
     it("leaves the users of a failed request out instead of failing", async () => {

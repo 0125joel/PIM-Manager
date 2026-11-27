@@ -97,3 +97,8 @@ export function getAssignmentMemberType(assignment: {
     if (!assignment.principal?.["@odata.type"]) return null;
     return getPrincipalKind(assignment.principal) === "group" ? "Group" : "Direct";
 }
+
+/** What tells two principals with the same display name apart: the UPN of a user, else the object id (a group or an app) */
+export function principalDetailOf(principal: { id: string; userPrincipalName?: string }): string {
+    return principal.userPrincipalName || principal.id;
+}

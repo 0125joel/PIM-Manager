@@ -10,7 +10,7 @@ import { Logger } from "@/utils/logger";
 import { isDemoAvailable } from "@/demo/runtime/session";
 import { DEMO_ENTRY_PATH } from "@/config/demo";
 import { useRotatingRole } from "@/hooks/useRotatingRole";
-import { COVERAGE, FAQ, REPO_URL, coverageMarker } from "@/config/site";
+import { COVERAGE, FAQ, REPO_URL, coverageMarker, SITE_TAGLINE } from "@/config/site";
 
 const noSubscribe = () => () => undefined;
 
@@ -56,13 +56,19 @@ const FEATURES: { key: string; route: string; title: string; text: string }[] = 
     key: "report",
     route: "/report",
     title: "Who has what, under which policy",
-    text: "Every privileged role and PIM group with its users, guests, apps, AI agents and settings. Filter, then export to PDF, CSV or JSON.",
+    text: "Every privileged role and PIM group with its users, guests, apps, AI agents and settings. Filter, then export to CSV or JSON.",
   },
   {
     key: "configure",
     route: "/configure",
     title: "Change many roles at once",
     text: "Edit, follow Guided steps or import a file. Checks catch conflicting settings, and you review every change before it is written.",
+  },
+  {
+    key: "audit",
+    route: "/audit",
+    title: "What happened, and who did it",
+    text: "Activations and changes, in and outside PIM, on one timeline of 30 days, or longer with your own workspaces. Export to PDF, CSV or JSON.",
   },
 ];
 
@@ -138,9 +144,9 @@ export function HomePage() {
               in your tenant, and on what terms?
             </h1>
             <p className={`text-base lg:text-lg leading-7 ${C.body}`}>
-              PIM Manager reads who holds admin roles in your Entra ID tenant, people, guests, apps and AI agents, and
-              under which PIM policy, through Microsoft Graph. It lays that out as a dashboard and reports, and when
-              you want to change it, it applies policies and assignments in bulk.
+              {SITE_TAGLINE}. PIM Manager reads who holds admin roles, people, guests, apps and AI agents, and under
+              which PIM policy, through Microsoft Graph and Azure Resource Manager. It lays that out as dashboards and
+              reports, and for Entra it applies policies and assignments in bulk when you want to change them.
             </p>
             <p className="font-mono text-sm lg:text-[15px] leading-[22px] font-medium">
               No backend. No agent.
@@ -187,7 +193,7 @@ export function HomePage() {
         <section className={`border-t ${C.line}`}>
           <div className="mx-auto max-w-7xl px-4 sm:px-8 lg:px-20 py-12 lg:py-18 flex flex-col gap-9">
             <SectionTitle eyebrow="what it does" title="Look first. Change when you're sure." />
-            <div className="grid gap-8 lg:gap-12 md:grid-cols-3">
+            <div data-visual-section="home-features" className="grid gap-8 lg:gap-12 md:grid-cols-2 xl:grid-cols-4">
               {FEATURES.map((f) => (
                 <div key={f.key} className={`flex flex-col gap-2.5 border-t-2 pt-4 ${C.rule}`}>
                   <div className={`font-mono text-[13px] font-medium ${C.accent}`}>{f.route}</div>
@@ -417,28 +423,28 @@ function AnnotatedScreenshot({ demoHref }: { demoHref?: string }) {
 function DataFlowPanel() {
   const node = "border border-[#45433e] px-4 py-3.5 lg:px-[18px] lg:py-4 flex flex-col gap-1";
   return (
-    <div className="relative mx-2 lg:mx-0 bg-[#191918] border border-[#31302d] text-[#e3e3de] px-5 py-6 lg:px-12 lg:py-10 flex flex-col gap-6 lg:gap-9">
+    <div data-visual-section="home-data-flow" className="relative mx-2 lg:mx-0 bg-[#191918] border border-[#31302d] text-[#e3e3de] px-5 py-6 lg:px-12 lg:py-10 flex flex-col gap-6 lg:gap-9">
       <div className="flex justify-between font-mono text-[10px] lg:text-[11px] tracking-[0.12em] text-[#8f8d86]">
         <span><span className="text-[#48c5fa]">browser</span>{" // graph.microsoft.com"}</span>
         <span className="hidden sm:inline">data flow</span>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-[18px] font-mono text-[13px]">
-        <div className={`${node} lg:min-w-[200px]`}>
+      <div className="flex flex-col xl:flex-row xl:items-center gap-2 xl:gap-[18px] font-mono text-[13px]">
+        <div className={`${node} xl:min-w-[200px]`}>
           <span className="font-semibold text-white">your browser</span>
           <span className="text-[11px] text-[#8f8d86]">PIM Manager runs here</span>
         </div>
         <Connector />
-        <div className={`${node} lg:min-w-[230px]`}>
+        <div className={`${node} xl:min-w-[230px]`}>
           <span className="font-semibold text-white">login.microsoftonline.com</span>
           <span className="text-[11px] text-[#8f8d86]">MSAL token, delegated scopes</span>
         </div>
         <Connector />
-        <div className={`${node} lg:min-w-[200px]`}>
+        <div className={`${node} xl:min-w-[200px]`}>
           <span className="font-semibold text-white">graph.microsoft.com</span>
           <span className="text-[11px] text-[#8f8d86]">your tenant data</span>
         </div>
-        <div className="mt-2 lg:mt-0 lg:ml-auto border border-dashed border-[#45433e] px-4 py-3.5 lg:px-[18px] lg:py-4 flex lg:flex-col justify-between gap-1 lg:min-w-[150px]">
+        <div className="mt-2 xl:mt-0 xl:ml-auto border border-dashed border-[#45433e] px-4 py-3.5 lg:px-[18px] lg:py-4 flex xl:flex-col justify-between gap-1 xl:min-w-[150px]">
           <span className="text-[#8f8d86] line-through">our server</span>
           <span className="text-[11px] text-[#d97706]">no backend</span>
         </div>
@@ -460,9 +466,9 @@ function DataFlowPanel() {
 
 function Connector() {
   return (
-    <span className="text-[#d97706] pl-4 lg:pl-0" aria-hidden="true">
-      <span className="lg:hidden">│</span>
-      <span className="hidden lg:inline">──▶</span>
+    // The arrow of the icon set, not text glyphs: a box-drawing character takes whatever font a build or a system supplies
+    <span className="text-[#d97706] pl-4 xl:pl-0 flex" aria-hidden="true">
+      <Icon name="arrow-right" size={20} className="rotate-90 xl:rotate-0" />
     </span>
   );
 }
@@ -520,6 +526,7 @@ const OPTIONAL_SCOPES: { group: string; scopes: [string, string][] }[] = [
     ],
   },
   { group: "Custom extensions (Preview)", scopes: [["PrivilegedAccess-CustomExt.Read.All", "Read PIM custom extensions"]] },
+  { group: "Audit", scopes: [["AuditLog.Read.All", "Read the audit log for the Audit page"], ["https://api.loganalytics.io/Data.Read", "Read the audit log in the Log Analytics workspaces you choose"]] },
   {
     group: "Azure resource roles",
     scopes: [["https://management.azure.com/user_impersonation", "Read Azure role assignments and role settings, asked at Turn on Azure"]],
@@ -582,7 +589,7 @@ function PermissionsAccordion() {
               </div>
             ))}
             <p className={`text-[13px] leading-5 ${C.muted}`}>
-              Optional scopes are requested when you switch on the feature that needs them. The Graph scopes need admin consent; the Azure scope only when your tenant does not let users consent themselves.
+              Optional scopes are requested when you switch on the feature that needs them. The Graph scopes need admin consent; the Azure and Log Analytics scopes only when your tenant does not let users consent themselves.
             </p>
           </div>
         </div>

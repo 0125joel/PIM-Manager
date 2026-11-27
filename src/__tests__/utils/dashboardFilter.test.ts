@@ -23,7 +23,7 @@ const ALL_KEYS: DashboardFilter = {
     mfa: "authContext",
     justification: "required",
     maxDuration: "upTo12h",
-    principalType: "servicePrincipal",
+    principalType: "app",
     noEndDate: true,
     activationNotification: "none",
     hasEligible: false,
@@ -45,7 +45,7 @@ describe("serialize and parse", () => {
             ...(["entraMfa", "authContext", "neither"] as const).map((mfa) => ({ mfa })),
             ...(["required", "notRequired"] as const).map((justification) => ({ justification })),
             ...(["upTo1h", "upTo4h", "upTo8h", "upTo12h", "over12h"] as const).map((maxDuration) => ({ maxDuration })),
-            ...(["user", "guest", "servicePrincipal", "group"] as const).map((principalType) => ({ principalType })),
+            ...(["user", "guest", "app", "group"] as const).map((principalType) => ({ principalType })),
             { privileged: true },
             { privileged: false },
             { customRole: true },
@@ -91,7 +91,12 @@ describe("serialize and parse", () => {
 
     it("round-trips the agent value and gives it a readable chip label", () => {
         expect(parseDashboardFilter(serializeDashboardFilter({ principalType: "agent" }))).toEqual({ principalType: "agent" });
-        expect(getFilterLabels({ principalType: "agent" })).toEqual([{ key: "principalType", label: "Held by: agent" }]);
+        expect(getFilterLabels({ principalType: "agent" })).toEqual([{ key: "principalType", label: "Who: agent" }]);
+    });
+
+    it("maps the legacy servicePrincipal URL value to app", () => {
+        expect(parseDashboardFilter("principalType:servicePrincipal")).toEqual({ principalType: "app" });
+        expect(serializeDashboardFilter(parseDashboardFilter("principalType:servicePrincipal"))).toBe("principalType:app");
     });
 });
 
@@ -113,7 +118,7 @@ describe("helpers", () => {
         const labels = getFilterLabels(ALL_KEYS).map((l) => l.label);
         expect(labels).toHaveLength(13);
         expect(getFilterLabels({ mfa: "neither" })).toEqual([{ key: "mfa", label: "MFA on activation: neither" }]);
-        expect(getFilterLabels({ principalType: "servicePrincipal" })[0].label).toBe("Held by: app");
+        expect(getFilterLabels({ principalType: "app" })[0].label).toBe("Who: app");
         expect(getFilterLabels({ maxDuration: "over12h" })[0].label).toBe("Maximum activation: over 12 h");
         expect(labels.every((l) => l.length > 0 && !l.includes(String.fromCharCode(0x2014)))).toBe(true);
     });
@@ -200,7 +205,7 @@ describe("applyDashboardFilterToRoles", () => {
     });
 
     it("principalType resolves active schedules through the other lists and principalUserType", () => {
-        expect(apply({ principalType: "servicePrincipal" })).toEqual(["app"]);
+        expect(apply({ principalType: "app" })).toEqual(["app"]);
         expect(apply({ principalType: "group" })).toEqual(["sec"]);
         expect(apply({ principalType: "guest" })).toEqual(["custom"]);
         expect(apply({ principalType: "user" })).toEqual(["ga", "custom"]);
@@ -230,8 +235,8 @@ describe("applyDashboardFilterToRoles", () => {
 
     it("assignment, principal type and end date must hold on the same assignment", () => {
         // the app only has an eligible assignment, the permanent ones belong to users
-        expect(apply({ assignment: "permanent", principalType: "servicePrincipal" })).toEqual([]);
-        expect(apply({ assignment: "eligible", principalType: "servicePrincipal" })).toEqual(["app"]);
+        expect(apply({ assignment: "permanent", principalType: "app" })).toEqual([]);
+        expect(apply({ assignment: "eligible", principalType: "app" })).toEqual(["app"]);
         // ga has a user with a permanent assignment and a different user with an eligibility without an end
         expect(apply({ assignment: "permanent", noEndDate: true })).toEqual([]);
     });
@@ -269,7 +274,7 @@ describe("applyDashboardFilterToRoles", () => {
             role({ id: "base-agent", eligible: [{ principalId: "base-agent", principal: agentBase("base-agent") }] }),
         ];
         expect(applyDashboardFilterToRoles([agentUserRole], { principalType: "user" })).toEqual([]);
-        expect(applyDashboardFilterToRoles(identityRoles, { principalType: "servicePrincipal" })).toEqual([]);
+        expect(applyDashboardFilterToRoles(identityRoles, { principalType: "app" })).toEqual([]);
     });
 });
 
@@ -290,7 +295,7 @@ describe("applyDashboardFilterToGroups", () => {
         expect(gids({ assignment: "permanent" })).toEqual(["g2"]);
         expect(gids({ assignment: "active" })).toEqual(["g4"]);
         expect(gids({ assignment: "activeTimeBound" })).toEqual(["g4"]);
-        expect(gids({ principalType: "servicePrincipal" })).toEqual(["g2"]);
+        expect(gids({ principalType: "app" })).toEqual(["g2"]);
         expect(gids({ noEndDate: true })).toEqual(["g1"]);
     });
 

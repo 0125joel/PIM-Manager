@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AzureAssignment, AzureScope } from "@/types/azureResource.types";
-import { buildAzureReadability, partlyNote, readabilitySentence, unreadSentence, type AzureReadability } from "@/utils/azureReadability";
+import { buildAzureReadability, coverageNotes, partlyNote, readabilitySentence, unreadSentence, type AzureReadability } from "@/utils/azureReadability";
 import { azurePolicyKey } from "@/utils/azureScopes";
 
 const OWNER = "8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
@@ -118,5 +118,22 @@ describe("what is not read yet", () => {
         expect(partlyNote({ unread: 120, isUnlisted: false })).toBe("Only the resource groups and resources you can read are counted; 120 are not read yet.");
         expect(partlyNote({ unread: 1, isUnlisted: false })).toBe("Only the resource groups and resources you can read are counted; 1 is not read yet.");
         expect(partlyNote({ unread: 0, isUnlisted: true })).toBe("Only the resource groups and resources you can read are counted; they are not read yet.");
+    });
+});
+
+describe("coverageNotes", () => {
+    it("says nothing when every subscription was read whole", () => {
+        expect(coverageNotes([sub(1), sub(2)])).toEqual([]);
+        expect(coverageNotes([])).toEqual([]);
+    });
+
+    it("names failed, loading, partly read and unread, each on its own", () => {
+        expect(coverageNotes([sub(1), sub(2, { access: "failed" })])).toEqual(["1 subscription could not be read, so its assignments are missing."]);
+        expect(coverageNotes([sub(1, { access: "failed" }), sub(2, { access: "failed" })])).toEqual(["2 subscriptions could not be read, so their assignments are missing."]);
+        expect(coverageNotes([sub(1, { access: "loading" })])).toEqual(["1 subscription was still loading, so its assignments can be missing."]);
+        expect(coverageNotes([sub(1, { access: "partial" }), sub(2, { access: "partial", unreadScopeIds: ["x", "y"] }), sub(3, { access: "partial", isUnlisted: true })])).toEqual([
+            "3 subscriptions were read in part: only the resource groups and resources you can read are counted.",
+            "2 resource groups and resources are not read yet, and those of 1 more subscription.",
+        ]);
     });
 });

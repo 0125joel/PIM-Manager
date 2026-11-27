@@ -232,16 +232,16 @@ export function ReportBody({ roles, groups, emergencyAccountIds, isRolesLoading,
                 {!isGroupsView && !isRolesUnknown && isPrivilegedStatusMissing(roles) && <PrivilegedStatusWarning />}
                 {failedSummary && <FailedRolesBox summary={failedSummary} onRetry={onRetryFailed} isRetrying={isRetryingFailed} />}
                 {isAllFailed ? (
-                    <AllFailedBox cause={summarizeFailureCause([rolesError])} onRetry={onRetryAll} />
+                    <div data-visual-section="report-failed"><AllFailedBox cause={summarizeFailureCause([rolesError])} onRetry={onRetryAll} /></div>
                 ) : isGroupsFailed ? (
-                    <AllFailedBox what="groups" cause={summarizeFailureCause([groupsError])} onRetry={onRetryGroups} />
+                    <div data-visual-section="report-failed"><AllFailedBox what="groups" cause={summarizeFailureCause([groupsError])} onRetry={onRetryGroups} /></div>
                 ) : isGroupsView && isGroupsLocked ? (
                     <StatusBox variant="consent" title="PIM for Groups is not granted yet" action={<Button variant="primary" onClick={onGrantGroups}>Grant read access</Button>}>
                         Groups under PIM and role-assignable groups outside it need read access to PIM for Groups. The Roles view works without it.
                     </StatusBox>
                 ) : (
                     <MembershipProvider useMembership={useMembership}>
-                        <ReportLayout list={list} detail={detailBody} hasSelection={hasSelection} backLabel={isGroupsView ? "All groups" : "All roles"} onBack={url.clearSelection} />
+                        <ReportLayout list={list} detail={detailBody} hasSelection={hasSelection} backLabel={isGroupsView ? "All groups" : "All roles"} onBack={url.clearSelection} visualSection="report" />
                     </MembershipProvider>
                 )}
             </div>

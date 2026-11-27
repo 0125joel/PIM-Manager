@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { buildGroupAssignments, readIsAssignableToRole, toGroupPolicies } from "@/services/pimGroupService";
-import type { GroupAssignmentScheduleInstance, GroupPimPolicy } from "@/types/pimGroup.types";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import type { Client } from "@microsoft/microsoft-graph-client";
+import { buildGroupAssignments, readIsAssignableToRole, refreshPimGroupAssignments, toGroupPolicies } from "@/services/pimGroupService";
+import type { GroupAssignmentScheduleInstance, GroupPimPolicy, PimGroupData } from "@/types/pimGroup.types";
 
 function instance(overrides: Partial<GroupAssignmentScheduleInstance>): GroupAssignmentScheduleInstance {
     return {
@@ -107,5 +108,72 @@ describe("readIsAssignableToRole", () => {
 
     it("keeps true", () => {
         expect(readIsAssignableToRole(true)).toBe(true);
+    });
+});
+
+describe("refreshPimGroupAssignments with a deleted group", () => {
+    const GONE = "11111111-1111-1111-1111-111111111111";
+    const KEPT = "22222222-2222-2222-2222-222222222222";
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    const cachedGroup = (id: string) => ({
+        group: { id, displayName: id, isAssignableToRole: true },
+        isManaged: true,
+        assignments: [],
+        policies: [],
+    }) as unknown as PimGroupData;
+
+    /** A stub client: the instance reads of GONE answer 403 (a user without an admin role), `groupStatus` is what /groups/GONE answers */
+    function stubClient(groupStatus: 200 | 404) {
+        const client = {
+            api(path: string) {
+                let filter = "";
+                const builder = {
+                    version: () => builder,
+                    select: () => builder,
+                    expand: () => builder,
+                    header: () => builder,
+                    filter: (value: string) => {
+                        filter = value;
+                        return builder;
+                    },
+                    get: async () => {
+                        if (path.endsWith("/group/resources")) return { value: [{ id: GONE }, { id: KEPT }] };
+                        if (path === "/groups") return { value: [] };
+                        if (path.includes("ScheduleInstances")) {
+                            if (filter.includes(GONE)) throw Object.assign(new Error("Attempted to perform an unauthorized operation."), { statusCode: 403 });
+                            return { value: [] };
+                        }
+                        if (path === "/policies/roleManagementPolicyAssignments") return { value: [] };
+                        if (path === `/groups/${GONE}`) {
+                            if (groupStatus === 404) throw Object.assign(new Error("Not found"), { statusCode: 404 });
+                            return { id: GONE, displayName: "Gone" };
+                        }
+                        return { value: [] };
+                    },
+                };
+                return builder;
+            },
+        };
+        return client as unknown as Client;
+    }
+
+    it("leaves out a group whose instance read fails and whose group is gone (404)", async () => {
+        vi.useFakeTimers();
+        const done = refreshPimGroupAssignments(stubClient(404), [cachedGroup(GONE), cachedGroup(KEPT)]);
+        await vi.runAllTimersAsync();
+        const result = await done;
+        expect(result.map((g) => g.group.id)).toEqual([KEPT]);
+    });
+
+    it("still fails when the instance read fails and the group still exists", async () => {
+        vi.useFakeTimers();
+        const done = refreshPimGroupAssignments(stubClient(200), [cachedGroup(GONE), cachedGroup(KEPT)]);
+        const outcome = expect(done).rejects.toThrow("1 of 2 PIM groups could not be loaded after retrying.");
+        await vi.runAllTimersAsync();
+        await outcome;
     });
 });

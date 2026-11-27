@@ -10,12 +10,13 @@
  */
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { collectHashes, injectHashes, extractCspValue } from "./lib/cspHashes.mjs";
+import { collectHashes, injectHashes, extractCspValue, headerLineVerdict } from "./lib/cspHashes.mjs";
 
 // Cloudflare Pages limits a _headers line to 2000 characters
 const MAX_HEADER_LINE = 2000;
 
 const outDir = process.argv[2] || "out";
+const isFixtureBuild = process.env.NEXT_PUBLIC_FIXTURES === "1";
 
 function listHtmlFiles(dir) {
     const files = [];
@@ -53,9 +54,14 @@ for (const target of targets) {
     const csp = extractCspValue(updated);
     cspValues.push(csp);
     const longest = Math.max(...updated.split("\n").map((l) => l.length));
-    if (longest > MAX_HEADER_LINE) {
+    // The limit stops a real build; a fixture build (NEXT_PUBLIC_FIXTURES=1) holds the dev routes, adds hashes and is never deployed
+    const verdict = headerLineVerdict(longest, MAX_HEADER_LINE, isFixtureBuild);
+    if (verdict === "fail") {
         console.error(`generate-csp-hashes: a line in ${target} is ${longest} characters, above the ${MAX_HEADER_LINE} limit`);
         process.exit(1);
+    }
+    if (verdict === "warn") {
+        console.warn(`generate-csp-hashes: a line in ${target} is ${longest} characters, above the ${MAX_HEADER_LINE} limit; this is a fixture build, which is never deployed`);
     }
     console.log(`generate-csp-hashes: wrote ${target}`);
 }

@@ -140,7 +140,7 @@ export function ExportDialog({ isOpen, onClose, input, meta, counting: initialCo
 
     const workloads: { key: keyof ExportOptions["counting"]; label: string; hint?: string; available: boolean }[] = [
         { key: "directoryRoles", label: "Directory roles", hint: `${availability.directoryRoles.count} roles`, available: availability.directoryRoles.available },
-        { key: "pimGroups", label: "PIM for Groups", hint: availability.pimGroups.available ? `${availability.pimGroups.count} groups` : "Not granted yet", available: availability.pimGroups.available },
+        { key: "pimGroups", label: "PIM for Groups", hint: !availability.pimGroups.available ? "Not granted yet" : input.isGroupsUnavailable ? "Not loaded, so groups are missing from this export" : `${availability.pimGroups.count} groups`, available: availability.pimGroups.available },
         { key: "unmanagedGroups", label: "Groups outside PIM", available: availability.unmanagedGroups.available && counting.pimGroups },
         { key: "securityAlerts", label: "Security alerts", hint: availability.securityAlerts.available ? undefined : "Not granted yet", available: availability.securityAlerts.available },
     ];

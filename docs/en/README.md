@@ -6,6 +6,7 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 
 | Document | Description |
 |----------|-------------|
+| [Architecture](./00-architecture.md) | Architecture and design decisions in one document |
 | [Introduction](./01-introduction.md) | What is PIM Manager and what problems does it solve? |
 | [Folder Structure](./02-folder-structure.md) | Overview of the codebase organization |
 | [Data Flow](./03-data-flow.md) | How data is fetched and processed |
@@ -15,8 +16,10 @@ Welcome to the PIM Manager technical documentation. This guide is designed for *
 | [Dashboard Page](./07-dashboard-page.md) | Visual overview and security insights |
 | [Report Page](./08-report-page.md) | Detailed role configuration view |
 | [Configure Page](./09-configure-page.md) | Edit, Guided, Import and Access model, with review and Undo |
+| [Deployment](./10-deployment.md) | The hosted version at pimmanager.com or your own copy on Azure Static Web Apps, and the app registration |
 | [Settings](./11-settings.md) | Workloads and consent framework |
 | [Azure Dashboard](./12-azure-dashboard.md) | Privileged access on Azure resources |
+| [Audit Page](./13-audit-page.md) | Activations and changes in Entra roles and groups and on Azure resources, with export |
 
 ---
 

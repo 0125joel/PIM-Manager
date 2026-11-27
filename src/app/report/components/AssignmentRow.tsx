@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { PortalLink } from "@/components/ui/PortalLink";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBox } from "@/components/ui/StatusBox";
 import { Tag } from "@/components/ui/Tag";
 import { REPORT_TERMS, type ReportTermKey } from "@/config/help/reportTerms";
 import { useIsDetailed } from "@/contexts/DetailsContext";
 import { formatDate } from "@/utils/dateFormat";
+import { getPrincipalUrl } from "@/utils/portalLinks";
 import { isTagShown, type RowTagKind } from "@/utils/calmTags";
 import { buildMembershipRows, describeScopeTag, type AssignmentRowModel, type RowKind } from "@/utils/reportRows";
 import { useMembershipHook } from "./MembershipContext";
@@ -75,7 +77,7 @@ export function AssignmentRow({ row, isMarking, emergencyAccountIds, depth = 0 }
         <li className={depth > 0 ? "ml-4" : ""}>
             <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded border border-line bg-surface px-3 py-2.5 ${marked ? "border-l-2 border-l-accent" : ""}`}>
                 <div className={`min-w-0 ${dimmed ? "text-muted" : ""}`}>
-                    <p className={`truncate text-sm leading-5 font-medium ${dimmed ? "text-muted" : "text-ink"}`}>{row.name}</p>
+                    <p className={`truncate text-sm leading-5 font-medium ${dimmed ? "text-muted" : "text-ink"}`}><PortalLink portal="Entra admin center" className={dimmed ? "text-muted" : "text-ink"} isMuted={dimmed} href={row.isUnknownPrincipal ? null : getPrincipalUrl({ kind: row.kind, id: row.principalId, appId: row.principalAppId })}>{row.name}</PortalLink></p>
                     {row.secondary && <p className="truncate text-xs leading-4 text-muted">{row.secondary}</p>}
                 </div>
                 <RowTags row={row} />

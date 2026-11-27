@@ -67,19 +67,20 @@ describe("filter controls", () => {
         expect(readControlValue(emergency, {})).toBe("include");
     });
 
-    it("the Groups view offers no Apps and Applies to defaults to Member without writing it", () => {
+    it("Applies to defaults to Member without writing it", () => {
         const groups = getFilterControls("groups");
-        expect(groups.find((c) => c.key === "principalType")!.options.map((o) => o.value)).not.toContain("servicePrincipal");
         const applies = groups.find((c) => c.key === "appliesTo")!;
         expect(readControlValue(applies, {})).toBe("member");
         expect(writeControlValue(applies, { appliesTo: "owner" }, "member")).toEqual({});
     });
 
-    it("offers Agents after Apps in roles and before Groups in both views", () => {
+    it("offers Apps and Agents in the same order in both views", () => {
         const roleOptions = getFilterControls("roles").find((c) => c.key === "principalType")!.options;
         const groupOptions = getFilterControls("groups").find((c) => c.key === "principalType")!.options;
-        expect(roleOptions.map((option) => option.value)).toEqual(["all", "user", "guest", "servicePrincipal", "agent", "group"]);
-        expect(groupOptions.map((option) => option.value)).toEqual(["all", "user", "guest", "agent", "group"]);
+        expect(roleOptions.map((option) => option.value)).toEqual(["all", "user", "guest", "app", "agent", "group"]);
+        expect(groupOptions.map((option) => option.value)).toEqual(["all", "user", "guest", "app", "agent", "group"]);
+        expect(roleOptions.find((option) => option.value === "app")?.label).toBe("Apps");
+        expect(groupOptions.find((option) => option.value === "app")?.label).toBe("Apps");
         expect(roleOptions.find((option) => option.value === "agent")?.label).toBe("Agents");
         expect(groupOptions.find((option) => option.value === "agent")?.label).toBe("Agents");
     });

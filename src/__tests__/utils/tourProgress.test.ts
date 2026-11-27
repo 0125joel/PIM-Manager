@@ -11,6 +11,7 @@ import {
     readDemoTourAnswer,
     readSeenTours,
     readTourSetting,
+    shouldAlignTargetToTop,
     shownPosition,
     tourSections,
     toursToMarkSeen,
@@ -51,6 +52,7 @@ const tours: TourDefinition[] = [
     { id: "entra-dashboard-basic", product: "entra", section: "Dashboard", label: "Basic", page: "/dashboard", view: "basic", steps: [s("cards"), s("export")] },
     { id: "entra-dashboard-advanced", product: "entra", section: "Dashboard", label: "Advanced", page: "/dashboard", view: "advanced", steps: [] },
     { id: "entra-report", product: "entra", section: "Report", label: "Report", page: "/report", steps: [s("filters")] },
+    { id: "entra-audit", product: "entra", section: "Audit", label: "Audit", page: "/audit", steps: [s("timeline")] },
     { id: "entra-configure-edit", product: "entra", section: "Configure", label: "Edit", page: "/configure", onlyInPlace: true, steps: [s("list")] },
     { id: "azure-scope", product: "azure", section: "Scopes", label: "Scopes", page: null, steps: [s("bar")] },
     { id: "azure-dashboard-basic", product: "azure", section: "Dashboard", label: "Basic", page: "/azure", view: "basic", steps: [s("cards")] },
@@ -198,7 +200,7 @@ describe("planAutoRun", () => {
 
 describe("planAllRun", () => {
     it("runs every Entra tour with steps, without the app tour", () => {
-        expect(planAllRun("entra", tours)).toEqual(["entra-dashboard-basic", "entra-report"]);
+        expect(planAllRun("entra", tours)).toEqual(["entra-dashboard-basic", "entra-report", "entra-audit"]);
     });
 
     it("runs every Azure tour with steps, without the app tour", () => {
@@ -209,8 +211,8 @@ describe("planAllRun", () => {
 describe("tourSections", () => {
     it("groups the Entra tours with steps per page, without the Advanced tour", () => {
         const sections = tourSections("entra", tours);
-        expect(sections.map((x) => x.section)).toEqual(["Dashboard", "Report"]);
-        expect(sections.map((x) => x.tours.map((t) => t.id))).toEqual([["entra-dashboard-basic"], ["entra-report"]]);
+        expect(sections.map((x) => x.section)).toEqual(["Dashboard", "Report", "Audit"]);
+        expect(sections.map((x) => x.tours.map((t) => t.id))).toEqual([["entra-dashboard-basic"], ["entra-report"], ["entra-audit"]]);
     });
 
     it("has the Scopes and Dashboard sections for Azure, and the app tour in neither", () => {
@@ -266,5 +268,35 @@ describe("toursToMarkSeen", () => {
 
     it("marks only the tours that showed a step on complete", () => {
         expect(toursToMarkSeen(run, new Set(["entra-dashboard-basic:export"]), "complete")).toEqual(["entra-dashboard-basic"]);
+    });
+});
+
+describe("shouldAlignTargetToTop", () => {
+    // A phone: 844 high, a 64 high sticky header, a 40 high target, a card of 420
+    const base = { position: "bottom" as const, targetHeight: 40, cardHeight: 420, viewportHeight: 844, headerHeight: 64 };
+
+    it("leaves a target alone when the card fits below it", () => {
+        expect(shouldAlignTargetToTop({ ...base, targetTop: 100 })).toBe(false);
+        expect(shouldAlignTargetToTop({ ...base, position: "top", targetTop: 100 })).toBe(false);
+    });
+
+    it("leaves a target alone when the card fits above it", () => {
+        expect(shouldAlignTargetToTop({ ...base, targetTop: 600 })).toBe(false);
+        expect(shouldAlignTargetToTop({ ...base, position: "top", targetTop: 600 })).toBe(false);
+    });
+
+    it("moves a target to the top when the card fits on neither side but fits together", () => {
+        expect(shouldAlignTargetToTop({ ...base, targetTop: 400 })).toBe(true);
+        expect(shouldAlignTargetToTop({ ...base, position: "top", targetTop: 400 })).toBe(true);
+    });
+
+    it("leaves all as it is when target and card do not fit together", () => {
+        expect(shouldAlignTargetToTop({ ...base, cardHeight: 720, targetTop: 400 })).toBe(false);
+        expect(shouldAlignTargetToTop({ ...base, targetHeight: 400, cardHeight: 380, targetTop: 222 })).toBe(false);
+    });
+
+    it("never moves a target for a card at its left or right", () => {
+        expect(shouldAlignTargetToTop({ ...base, position: "left", targetTop: 400 })).toBe(false);
+        expect(shouldAlignTargetToTop({ ...base, position: "right", targetTop: 400 })).toBe(false);
     });
 });

@@ -179,3 +179,28 @@ export function toursToMarkSeen(run: readonly RunStep[], shownKeys: ReadonlySet<
     if (endedBy === "stop") return ids;
     return ids.filter((id) => run.some((s) => s.tour === id && shownKeys.has(s.key)));
 }
+
+/**
+ * Whether a target should be scrolled to the top of the screen so its card fits beside it. Only for a card above or
+ * below the target: when it fits on neither side where the target is now, but target and card fit together below the
+ * sticky header, the target moves to the top and the card goes below it. The gaps are those of the card placement.
+ */
+export function shouldAlignTargetToTop(input: {
+    position: "top" | "bottom" | "left" | "right";
+    targetTop: number;
+    targetHeight: number;
+    cardHeight: number;
+    viewportHeight: number;
+    /** The space the sticky header takes at the top of the screen (the scroll padding) */
+    headerHeight: number;
+}): boolean {
+    if (input.position !== "top" && input.position !== "bottom") return false;
+    const spotlightPadding = 8;
+    const cardGap = 12;
+    const margin = 16;
+    const beside = spotlightPadding + cardGap;
+    const fitsAbove = input.targetTop - beside - input.cardHeight >= margin;
+    const fitsBelow = input.targetTop + input.targetHeight + beside + input.cardHeight <= input.viewportHeight - margin;
+    if (fitsAbove || fitsBelow) return false;
+    return input.headerHeight + input.targetHeight + beside + input.cardHeight <= input.viewportHeight - margin;
+}

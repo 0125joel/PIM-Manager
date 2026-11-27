@@ -13,7 +13,7 @@ export const SITE_NAME = "PIM Manager";
 export const REPO_URL = "https://github.com/0125joel/PIM-Manager";
 export const AUTHOR = { name: "Joël Prins", url: "https://www.linkedin.com/in/jo%C3%ABl-prins/" };
 export const OG_IMAGE_PATH = "/og-image.png";
-export const OG_IMAGE_ALT = "PIM Manager dashboard: who has privileged access in an Entra ID tenant, and on which terms";
+export const OG_IMAGE_ALT = "PIM Manager dashboard: who has privileged access in a tenant, and on which terms";
 
 export type CoverageStatus = "available" | "planned";
 
@@ -57,7 +57,12 @@ export const AZURE_AVAILABLE = azureItem.status === "available";
 /** Who and what can hold an Entra role, as the dashboard and the report show them (the principal types of the app) */
 export const PRINCIPALS = ["users", "guests", "apps and managed identities", "groups", "AI agents (Microsoft Entra Agent ID)"];
 
-export const SITE_TITLE = "PIM Manager: who holds admin roles in Microsoft Entra, and on what terms";
+/** What PIM Manager is, in one line. Every place that introduces the product uses these words; `seo.test.ts` checks that. */
+export const SITE_TAGLINE = AZURE_AVAILABLE ? "Admin role management for Microsoft Entra and Azure" : "Admin role management for Microsoft Entra";
+
+export const SITE_TITLE = AZURE_AVAILABLE
+  ? "PIM Manager: who holds admin roles in Microsoft Entra and Azure, and on what terms"
+  : "PIM Manager: who holds admin roles in Microsoft Entra, and on what terms";
 
 const BASE_DESCRIPTION =
   "See who holds Microsoft Entra admin roles, from users and guests to apps and AI agents, and change PIM policies in bulk. Open source, runs in your browser.";
@@ -89,14 +94,14 @@ export interface FaqItem {
 }
 
 const azureAnswer = AZURE_AVAILABLE
-  ? "Yes, to read. Besides Entra directory roles and PIM for Groups, PIM Manager shows PIM for Azure resources in an Azure Report and an Azure dashboard: role eligibility and assignments on management groups, subscriptions, resource groups and resources. They come from Azure Resource Manager, a separate API from Microsoft Graph. Changing PIM in bulk is for Entra for now; Configure for Azure comes in a later version."
+  ? "Yes, to read. Besides Entra directory roles and PIM for Groups, PIM Manager shows PIM for Azure resources in an Azure Report, an Azure dashboard and Azure Audit: role eligibility and assignments on management groups, subscriptions, resource groups and resources, and who activated or changed what there. They come from Azure Resource Manager, a separate API from Microsoft Graph. Changing PIM in bulk is for Entra for now; Configure for Azure comes in a later version."
   : "Not yet. Azure resource roles (Azure RBAC through PIM, on management groups, subscriptions, resource groups and resources) are in development. Today PIM Manager covers Entra directory roles and PIM for Groups. Azure resources come from Azure Resource Manager, a separate API from Microsoft Graph, and are built on the same report and configuration model.";
 
 export const FAQ: FaqItem[] = [
   {
     question: "What is PIM Manager?",
     answer:
-      "An open-source (GPLv3) web app that shows who holds which Microsoft Entra admin role, and under which Privileged Identity Management (PIM) policy: eligible, active or permanent. It also applies policy and assignment changes in bulk, after a review.",
+      `${SITE_TAGLINE}: an open-source (GPLv3) web app that shows who holds which admin role, and under which Privileged Identity Management (PIM) policy: eligible, active or permanent. For Entra it also applies policy and assignment changes in bulk, after a review, and shows who activated and changed what.${AZURE_AVAILABLE ? " Azure is read only for now." : ""}`,
   },
   {
     question: "Who and what does it show holding admin roles?",
@@ -123,7 +128,7 @@ export const FAQ: FaqItem[] = [
   {
     question: "Which permissions does it need?",
     answer:
-      "Read permissions on sign-in. Write permissions are only requested when you choose to grant them in Configure, per workload. An admin consents once per tenant. Azure asks for one extra read permission, for Azure Resource Manager, when you choose Turn on Azure; users can consent to that one themselves if the tenant allows it.",
+      "Read permissions on sign-in. Write permissions are only requested when you choose to grant them in Configure, per workload. The Audit page asks for one optional read permission, AuditLog.Read.All, when you choose to grant it, and one more for Log Analytics if you choose a workspace. An admin consents once per tenant. Azure asks for one extra read permission, for Azure Resource Manager, when you choose Turn on Azure; users can consent to that one themselves if the tenant allows it.",
   },
   {
     question: "How is it different from the Entra admin center?",

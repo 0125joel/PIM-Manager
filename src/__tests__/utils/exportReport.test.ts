@@ -121,6 +121,41 @@ describe("settings not readable with the current access (FIX-11, FIX-12)", () =>
     });
 });
 
+describe("settings that failed to load", () => {
+    const notes = (report: ReturnType<typeof buildExportReport>) => report.notes.join(" ");
+    const failed = (n: number) => ({ ...input, rolesData: buildFixtureRoles().map((r, i) => (i < n ? { ...r, policy: null, configError: "Too many requests" } : r)) });
+
+    it("names the roles, apart from the ones that are not readable", () => {
+        expect(notes(buildExportReport(failed(2), options()))).toContain("The settings of 2 roles failed to load: they are left out of the settings numbers and charts.");
+        expect(notes(buildExportReport(failed(1), options()))).toContain("The settings of 1 role failed to load: it is left out");
+        expect(notes(buildExportReport(failed(2), options()))).not.toContain("not readable");
+        expect(notes(buildExportReport(input, options()))).not.toContain("failed to load");
+    });
+
+    it("still names the roles when a policy filter took them out of the view", () => {
+        expect(notes(buildExportReport({ ...failed(2), filter: { approval: "required" } }, options()))).toContain("The settings of 2 roles failed to load");
+    });
+});
+
+describe("PIM for Groups that was not loaded", () => {
+    const missing = { ...input, groupsData: [], isGroupsUnavailable: true };
+
+    it("is named in the header and the notes, and is not counted as zero groups", () => {
+        const report = buildExportReport(missing, options());
+        expect(report.header.counted).toEqual(["Directory roles", "PIM for Groups (not loaded)", "Groups outside PIM (not loaded)"]);
+        expect(report.notes.join(" ")).toContain("PIM for Groups was not loaded, so groups are missing from every number and table in this report.");
+        expect(report.numbers?.find((n) => n.label === "Groups under PIM")).toMatchObject({ value: "-", note: "PIM for Groups not loaded" });
+        expect(report.numbers?.find((n) => n.label === "Roles and groups")?.note).toContain("groups not loaded");
+    });
+
+    it("says nothing when groups are not counted, or when they were loaded", () => {
+        const off = buildExportReport(missing, options({ counting: { directoryRoles: true, pimGroups: false, unmanagedGroups: false, agents: true, securityAlerts: false } }));
+        expect(off.notes.join(" ")).not.toContain("PIM for Groups");
+        expect(off.header.counted).toEqual(["Directory roles"]);
+        expect(buildExportReport(input, options()).notes.join(" ")).not.toContain("was not loaded");
+    });
+});
+
 describe("csv", () => {
     it("has a row per assignment with the object id, or without it when anonymised", () => {
         const rows = buildExportRows(input, options());

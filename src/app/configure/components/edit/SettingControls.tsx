@@ -103,7 +103,7 @@ export function ExtensionSelect({ label, value, disabled, extensions, onChange }
     const id = value?.customExtensionId ?? "";
     const attributes = value?.customAttributes ?? [];
     // Without the list the select would offer nothing to choose (spec 5.5: a 403 hides the list-dependent parts only)
-    if (extensions === null) return <p className="text-[13px] text-body">{id ? value?.displayName || id : "None"}</p>;
+    if (extensions === null) return <p className="text-[13px] text-body">{id ? `${value?.displayName || id}${value?.isEnabled === false ? " (off)" : ""}` : "None"}</p>;
     const isMissing = id !== "" && !extensions.some((e) => e.id === id);
     return (
         <div className="flex flex-col gap-1.5">
@@ -111,14 +111,15 @@ export function ExtensionSelect({ label, value, disabled, extensions, onChange }
                 aria-label={label}
                 disabled={disabled}
                 value={id}
-                onChange={(event) => onChange(event.target.value ? { isEnabled: true, customExtensionId: event.target.value, customAttributes: attributes } : NONE_LINK)}
+                // The same extension chosen again keeps its on/off state; only another extension is switched on (audit run-4)
+                onChange={(event) => onChange(event.target.value ? { isEnabled: event.target.value === id && value ? value.isEnabled : true, customExtensionId: event.target.value, customAttributes: attributes } : NONE_LINK)}
                 className="h-[34px] w-full rounded border border-line bg-surface px-2 text-sm text-ink disabled:opacity-50 max-sm:h-11"
             >
                 <option value="">None</option>
                 {isMissing && <option value={id}>Missing extension</option>}
                 {extensions.map((e) => <option key={e.id} value={e.id}>{e.displayName}</option>)}
             </select>
-            {id && <AttributesInput attributes={attributes} disabled={disabled} onChange={(next) => onChange({ ...(value ?? NONE_LINK), isEnabled: true, customExtensionId: id, customAttributes: next })} />}
+            {id && <AttributesInput attributes={attributes} disabled={disabled} onChange={(next) => onChange({ ...(value ?? NONE_LINK), isEnabled: value?.customExtensionId === id ? value.isEnabled : true, customExtensionId: id, customAttributes: next })} />}
         </div>
     );
 }

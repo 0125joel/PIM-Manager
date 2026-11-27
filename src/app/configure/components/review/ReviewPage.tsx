@@ -84,7 +84,7 @@ export function ReviewPage({ data }: { data: ReviewData }) {
             <>
                 <div className="mb-6">
                     <p role="status" aria-live="polite" className="flex items-center gap-2 rounded border border-line bg-surface px-4 py-4 text-sm text-body">
-                        <Icon name="spinner" size={16} className="shrink-0 animate-spin" />
+                        <Icon name="spinner" size={16} className="shrink-0" />
                         Checking your changes…
                     </p>
                 </div>
@@ -108,7 +108,7 @@ export function ReviewPage({ data }: { data: ReviewData }) {
             <div className="mb-6">
                 {isChecking && (
                     <p role="status" aria-live="polite" className="mb-3 flex items-center gap-2 text-xs text-body">
-                        <Icon name="spinner" size={16} className="shrink-0 animate-spin" />
+                        <Icon name="spinner" size={16} className="shrink-0" />
                         Checking your changes again…
                     </p>
                 )}

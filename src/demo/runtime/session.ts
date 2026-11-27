@@ -10,7 +10,7 @@ export const DEMO_FLAG_KEY = "pim-demo";
 /** Every key the demo writes to the real sessionStorage starts with this */
 export const DEMO_STORAGE_PREFIX = "pim-demo:";
 /** Pages the demo may open first; anything else opens the dashboard */
-const DEMO_START_PAGES = ["/dashboard", "/report", "/configure", "/settings", "/help"];
+const DEMO_START_PAGES = ["/dashboard", "/report", "/configure", "/audit", "/settings", "/help"];
 
 /** A same-origin path to one of the demo's start pages, with an optional query or hash; `//host` and other pages are refused */
 export function isDemoStartPath(to: string): boolean {

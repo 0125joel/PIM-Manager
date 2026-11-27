@@ -1,7 +1,7 @@
 import type { ArmClient, ArmQuery } from "@/utils/armClient";
 import { armRateLimiter } from "@/utils/rateLimiter";
 import { withRetry } from "@/utils/retryUtils";
-import type { ArmRoleScheduleInstance } from "@/types/azureResource.types";
+import type { ArmRoleAssignment, ArmRoleScheduleInstance } from "@/types/azureResource.types";
 
 /**
  * PIM role assignments on Azure resources (implementation spec section 4 and 8): the active schedule instances and the
@@ -58,6 +58,22 @@ export function listAssignmentInstancesAt(client: ArmClient, scopeId: string, si
 /** Eligible role assignments seen from a resource group or resource, as schedules; the same rules as `listAssignmentInstancesAt` */
 export function listEligibilitySchedulesAt(client: ArmClient, scopeId: string, signal?: AbortSignal): Promise<ArmRoleScheduleInstance[]> {
     return listInstances(client, scopeId, "roleEligibilitySchedules", undefined, signal);
+}
+
+/** Role Assignments - List For Scope (Learn, `2022-04-01`) */
+export const ROLE_ASSIGNMENTS_API_VERSION = "2022-04-01";
+
+/**
+ * The classic role assignments seen from a resource group or resource, unfiltered, all pages. Below a subscription the
+ * user cannot read, the instance list there can hold an inherited instance of a removed assignment and leave out a real
+ * direct one, while this list answers both right (tenant test AU-17); `utils/azureStaleInstances.ts` reconciles them.
+ * Reader at the scope is enough. A failed read throws.
+ */
+export function listRoleAssignments(client: ArmClient, scopeId: string, signal?: AbortSignal): Promise<ArmRoleAssignment[]> {
+    return withRetry(
+        () => client.getAll<ArmRoleAssignment>(`${scopeId}${PROVIDER}/roleAssignments`, ROLE_ASSIGNMENTS_API_VERSION, undefined, { signal }),
+        3, 1000, "azureAssignment roleAssignments", armRateLimiter
+    );
 }
 
 /**

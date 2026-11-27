@@ -7,7 +7,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatusBox } from "@/components/ui/StatusBox";
 import { writeCsv } from "@/utils/exportSchema";
 import { AZURE_ASSIGNMENT_COLUMNS } from "@/utils/azureExportRows";
-import { AZURE_EXPORT_BLOCKS, azureExportFileStem, buildAzureDashboardCsvRows, buildAzureDashboardExportReport, defaultAzureBlocks, type AzureDashboardExportInput, type AzureExportBlockKey, type AzureExportOptions } from "@/utils/azureDashboardExport";
+import { AZURE_EXPORT_BLOCKS, azureExportCoverage, azureExportFileStem, buildAzureDashboardCsvRows, buildAzureDashboardExportReport, defaultAzureBlocks, type AzureDashboardExportInput, type AzureExportBlockKey, type AzureExportOptions } from "@/utils/azureDashboardExport";
 import type { ChartStyle, ExportAudience } from "@/utils/exportReport";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { Logger } from "@/utils/logger";
@@ -80,6 +80,7 @@ export function AzureDashboardExportDialog({ isOpen, onClose, input, meta }: Azu
     const effectiveDetail: Detail = isManagement && detail === "appendix" ? "full" : detail;
     const options: AzureExportOptions = useMemo(() => ({ detail: effectiveDetail, audience, chartStyle, anonymise, applyFilter, blocks }), [effectiveDetail, audience, chartStyle, anonymise, applyFilter, blocks]);
     const hasFilter = input.filterSentence !== "";
+    const coverage = azureExportCoverage(input);
     const isNothingCounted = input.statsWithoutFilter.assignments.length === 0;
 
     const chooseDetail = (value: Detail) => {
@@ -169,6 +170,8 @@ export function AzureDashboardExportDialog({ isOpen, onClose, input, meta }: Azu
                     <div className="mt-3">
                         <Check checked={applyFilter && hasFilter} disabled={!hasFilter} onChange={setApplyFilter} label="Apply the current filter" hint={hasFilter ? input.filterSentence : "No filter is active."} />
                     </div>
+                    {/* Not a setting of the scope bar: what the numbers leave out because it was not read */}
+                    {coverage.length > 0 && <div className="mt-3 flex flex-col gap-1 text-xs text-body">{coverage.map((note) => <p key={note}>{note}</p>)}</div>}
                 </Group>
 
                 {format === "pdf" && (

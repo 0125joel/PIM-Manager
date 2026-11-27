@@ -4,6 +4,7 @@
  * ARM ids are case-insensitive, so every id comparison lowercases. The name of a scope always comes from the stored
  * scope in the tree, never from the id of an assignment.
  */
+import { HOLDER_LABELS } from "@/utils/holderKinds";
 import type { MaxDurationBucket } from "@/types/dashboardFilter.types";
 import type { PimPolicyRule } from "@/types/directoryRole.types";
 import type { ArmRoleDefinition, AzureAssignment, AzureScope } from "@/types/azureResource.types";
@@ -160,15 +161,16 @@ export function principalTypeLabelFor(principalType: string): string {
 
 /** The label of the principal kind: guest, agent and managed identity apart, as the dashboard counts them */
 export function principalKindLabel(assignment: AzureAssignment, spTypes?: ReadonlyMap<string, string> | null): string {
-    switch (principalKindOf(assignment, spTypes ?? null)) {
-        case "user": return "User";
-        case "guest": return "Guest";
-        case "group": return assignment.principalType === "ForeignGroup" ? "Foreign group" : "Group";
+    const kind = principalKindOf(assignment, spTypes ?? null);
+    switch (kind) {
+        case "group": return HOLDER_LABELS[assignment.principalType === "ForeignGroup" ? "foreignGroup" : "group"].one;
+        case "servicePrincipal": return HOLDER_LABELS.app.one;
+        case "user":
+        case "guest":
         case "app":
-        case "servicePrincipal": return "App";
-        case "managedIdentity": return "Managed identity";
-        case "agent": return "Agent";
-        case "deleted": return "Deleted";
+        case "managedIdentity":
+        case "agent":
+        case "deleted": return HOLDER_LABELS[kind].one;
         default: return assignment.principalType === "Device" ? "Device" : "Unknown";
     }
 }
@@ -185,6 +187,8 @@ export interface AzureFilterContext {
     definitions?: ReadonlyMap<string, ArmRoleDefinition> | null;
     /** Graph servicePrincipalType by lowercase object id: apps apart from managed identities */
     spTypes?: ReadonlyMap<string, string> | null;
+    /** Graph appId by lowercase service principal object id: the Entra link of an app */
+    spAppIds?: ReadonlyMap<string, string> | null;
     /** Settings per `azurePolicyKey`: the policy keys */
     settings?: ReadonlyMap<string, AzureSettingsOutcome>;
     emergencyIds?: ReadonlySet<string>;

@@ -1,7 +1,9 @@
 import { AZURE_ALERT_DEFINITIONS } from "@/demo/contoso/azureAlerts";
 import { AZURE_CUSTOM_ROLES, AZURE_ROLES, type DemoAzure, type DemoAzureAlertState, type DemoAzureInstance, type DemoAzureRole, type DemoAzurePolicy, type DemoAzureScope } from "@/demo/contoso/azure";
 import { DEMO_ACCOUNT } from "@/demo/contoso/account";
+import type { DemoActivityRow } from "@/demo/contoso/azureAudit";
 import { demoGuid } from "@/demo/contoso/ids";
+import { DEMO_ACTIVITY_SUBSCRIPTIONS, DEMO_WORKSPACES, DEMO_WORKSPACE_FAILING_SUBSCRIPTION } from "@/demo/contoso/workspaces";
 import { DEMO_WRITE_ERROR_CODE, DEMO_WRITE_MESSAGE } from "@/demo/graph/server";
 
 /**
@@ -10,7 +12,12 @@ import { DEMO_WRITE_ERROR_CODE, DEMO_WRITE_MESSAGE } from "@/demo/graph/server";
  * spike fixtures in `docs/Assets/azure/spike-fixtures/`), so the demo runs the app's real ARM client and services.
  * It also serves the reads of the Azure dashboard (`docs/Assets/azure/dashboard/implementation-spec.md` section 3.2):
  * role definition lists with their actions and the PIM alerts per subscription.
- * Every write is refused with 403 `DemoEnvironment`. An unknown read, or a known path with another api-version or
+ * It serves the reads of the Azure Audit page: the role assignment and eligibility schedule requests per scope and the
+ * Activity Log at a subscription, a management group and the tenant, with the filters the app sends and no others, and the
+ * user's own requests with `asTarget()` at the root. Below a subscription read only below its own level it serves the
+ * classic role assignment list of a resource group or resource, which the Report checks the instances against.
+ * It serves the Resource Graph read of the workspace list (`auditWorkspaceService`), the one POST that only reads besides getEntities.
+ * Every other write is refused with 403 `DemoEnvironment`. An unknown read, or a known path with another api-version or
  * filter, answers 404 and is reported through `onUnhandled`, so `src/__tests__/demo/fakeArm.test.ts` fails on a new
  * ARM call until this serves it too.
  */
@@ -42,9 +49,21 @@ export const ARM_API_VERSIONS = {
     authorization: "2020-10-01",
     resources: "2021-04-01",
     roleDefinitions: "2022-04-01",
+    roleAssignments: "2022-04-01",
     alerts: "2022-08-01-preview",
     managementGroups: "2020-05-01",
+    workspaces: "2023-09-01",
+    diagnosticSettings: "2017-04-01-preview",
+    subscriptionDiagnosticSettings: "2021-05-01-preview",
+    activityLog: "2015-04-01",
+    managementGroupLog: "2017-03-01-preview",
+    resourceGraph: "2022-10-01",
 } as const;
+
+/** Resource Graph is a POST that only reads (Learn, Resources - Resources): the workspace list asks it for the subscriptions that failed */
+const RESOURCE_GRAPH_PATH = "/providers/Microsoft.ResourceGraph/resources";
+/** The query shape `auditWorkspaceService` sends: the Log Analytics workspaces, with the columns it reads */
+const RESOURCE_GRAPH_WORKSPACE_QUERY = /^\s*Resources\s*\|\s*where\s+type\s*=~\s*'microsoft\.operationalinsights\/workspaces'\s*\|/i;
 
 type Item = Record<string, unknown>;
 
@@ -69,6 +88,17 @@ const INSTANCE_LISTS = {
 
 type InstanceListName = keyof typeof INSTANCE_LISTS;
 
+const REQUEST_LISTS = {
+    roleassignmentschedulerequests: "assignment",
+    roleeligibilityschedulerequests: "eligibility",
+} as const;
+
+const LOG_PATH = "/providers/Microsoft.Insights/eventtypes/management/values";
+/** The Activity Log filter the app sends: the period, and for a subscription and the tenant the authorization provider */
+const LOG_FILTER = /^eventTimestamp ge '([^']+)' and eventTimestamp le '([^']+)'( and resourceProvider eq 'Microsoft\.Authorization')?$/;
+/** This subscription's log answers an empty page with a `nextLink` first, so the app's paging is served */
+const EMPTY_PAGE_SUBSCRIPTION = demoGuid("azure:sub:test");
+
 /** Stable GUIDs for the names ARM gives (instances, schedules, policies); the `azure:` seed keeps them apart from Entra ids */
 const demoArmGuid = (seed: string) => demoGuid(`azure:${seed}`);
 
@@ -82,6 +112,31 @@ function splitAuthorizationPath(path: string): { scope: string; resource: string
     const resource = path.slice(at + PROVIDER.length + 1);
     if (resource.includes("/")) return null;
     return { scope: path.slice(0, at) || "/", resource };
+}
+
+/**
+ * The Resource Graph read of the workspace list: the workspaces of the subscriptions the request names, from the demo's
+ * workspace list. A subscription without a workspace answers no row, so it stays failed, as the Settings list shows it.
+ * Any other query, api-version or body is not this read and returns null: the caller then refuses it as a write.
+ */
+function resourceGraphWorkspaces(url: URL, body: unknown): ArmResponse | null {
+    if (url.searchParams.get("api-version") !== ARM_API_VERSIONS.resourceGraph || [...url.searchParams.keys()].some((k) => k !== "api-version")) return null;
+    if (typeof body !== "object" || body === null) return null;
+    const { query, subscriptions } = body as { query?: unknown; subscriptions?: unknown };
+    if (typeof query !== "string" || !RESOURCE_GRAPH_WORKSPACE_QUERY.test(query)) return null;
+    if (!Array.isArray(subscriptions) || !subscriptions.every((s): s is string => typeof s === "string")) return null;
+    const asked = new Set(subscriptions.map((s) => s.toLowerCase()));
+    const rows = DEMO_WORKSPACES.map((w) => ({ w, subscriptionId: demoGuid(`azure:sub:${w.subscription}`) }))
+        .filter(({ subscriptionId }) => asked.has(subscriptionId))
+        .map(({ w, subscriptionId }) => ({
+            id: `/subscriptions/${subscriptionId}/resourceGroups/rg-logs/providers/Microsoft.OperationalInsights/workspaces/${w.name}`,
+            name: w.name,
+            location: w.location,
+            subscriptionId,
+            customerId: w.customerId,
+            retention: w.retentionInDays,
+        }));
+    return json(200, { data: rows });
 }
 
 export function createFakeArm(azure: DemoAzure, options: FakeArmOptions = {}): FakeArm {
@@ -199,6 +254,113 @@ export function createFakeArm(azure: DemoAzure, options: FakeArmOptions = {}): F
                 return [];
             });
         return list(items);
+    };
+
+    /**
+     * The classic role assignments seen from a resource group or resource the demo account reads (`roleAssignments`,
+     * `2022-04-01`): the active items at it, below it and above it, each named as the `originRoleAssignmentId` of its
+     * instance names it. A removed item is not in it, though the instance lists still return it (tenant test AU-17).
+     */
+    const roleAssignmentList = (scope: DemoAzureScope, filter: string | null): ArmResponse => {
+        if (filter !== null || (scope.level !== "resourcegroup" && scope.level !== "resource") || !isReadable(scope.id)) throw new Unhandled();
+        const above = new Set(ancestry(scope).slice(1));
+        const items = azure.instances
+            .filter((i) => i.kind === "active" && !i.removed)
+            .filter((i) => (isAtOrBelow(i.scope, scope.id) && isReadable(i.scope)) || above.has(i.scope.toLowerCase()))
+            .map((i): Item => {
+                const name = demoArmGuid(`instance:${i.key}`);
+                return {
+                    id: `${prefix(i.scope)}${PROVIDER}/roleAssignments/${name}`,
+                    name,
+                    properties: {
+                        createdOn: i.createdOn,
+                        principalId: i.principal.id,
+                        principalType: i.principal.type,
+                        roleDefinitionId: roleDefinitionId(i.role.id, scope.id),
+                        scope: i.scope,
+                    },
+                    type: "Microsoft.Authorization/roleAssignments",
+                };
+            });
+        return list(items);
+    };
+
+    // The Azure Audit page ------------------------------------------------------------------------------------------------------
+
+    /**
+     * The role assignment or eligibility schedule requests at a scope. At a subscription the rows at and below it; a
+     * subscription the user holds a role below but not on answers 400 `InsufficientPermissions`, and then only the
+     * scopes the user reads answer; a management group answers its own rows; the root answers 400 `InsufficientPermissions`
+     * (measured 2026-11-07).
+     */
+    const requestList = (kind: "assignment" | "eligibility", scope: DemoAzureScope, filter: string | null): ArmResponse => {
+        const rows = kind === "assignment" ? azure.audit.assignmentRequests : azure.audit.eligibilityRequests;
+        // `asTarget()` at the root: the signed-in user's own requests, at every scope (measured 2026-11-11)
+        if (filter === "asTarget()" && scope.id === "/") return list(rows.filter((r) => String(r.properties.principalId ?? "").toLowerCase() === DEMO_ACCOUNT.id.toLowerCase()));
+        if (filter !== null) throw new Unhandled();
+        if (scope.id === "/" || !isReadable(scope.id)) {
+            throw new ArmHttpError(400, "InsufficientPermissions", "The user does not have permissions for this request. Please use $filter=asTarget() to see the role assignments on which the user is a principal.");
+        }
+        const own = scope.level === "managementgroup";
+        return list(rows.filter((r) => (own ? r.properties.scope.toLowerCase() === scope.id.toLowerCase() : isAtOrBelow(r.properties.scope, scope.id))));
+    };
+
+    /** The scope an Activity Log row is about: the part of its resource id in front of `/providers/Microsoft.Authorization/`, else the resource itself */
+    const rowScope = (row: DemoActivityRow): string => {
+        const at = row.resourceId.toLowerCase().lastIndexOf(`${PROVIDER.toLowerCase()}/`);
+        return at < 0 ? row.resourceId : row.resourceId.slice(0, at) || "/";
+    };
+    const isAuthorizationRow = (row: DemoActivityRow) => row.operationName.value.toLowerCase().startsWith("microsoft.authorization/");
+    const isAboveSubscriptions = (scope: string) => scope === "/" || findScope(scope)?.level === "managementgroup";
+
+    /** The period of the filter, and whether it names the authorization provider; any other filter is not one the app sends */
+    const parseLogFilter = (params: URLSearchParams): { from: number; to: number; provider: boolean } => {
+        const match = params.get("$filter")?.match(LOG_FILTER);
+        if (!match || [...params.keys()].some((k) => k !== "api-version" && k !== "$filter" && k !== "$skiptoken")) throw new Unhandled();
+        return { from: Date.parse(match[1]), to: Date.parse(match[2]), provider: match[3] !== undefined };
+    };
+    const inWindow = (row: DemoActivityRow, window: { from: number; to: number }) => {
+        const at = Date.parse(row.eventTimestamp);
+        return at >= window.from && at <= window.to;
+    };
+
+    /** A subscription's log: the authorization rows of that subscription; below a subscription read only below its own level, silently only what is readable (measured) */
+    const subscriptionLog = (subscriptionId: string, path: string, params: URLSearchParams): ArmResponse => {
+        const window = parseLogFilter(params);
+        if (!window.provider) throw new Unhandled();
+        const subscription = azure.subscriptions.find((s) => s.subscriptionId.toLowerCase() === subscriptionId.toLowerCase());
+        if (!subscription) throw new Unhandled();
+        if (subscription.subscriptionId === EMPTY_PAGE_SUBSCRIPTION && params.get("$skiptoken") === null) {
+            const next = new URLSearchParams(params);
+            next.set("$skiptoken", "1");
+            return json(200, { value: [], nextLink: `https://management.azure.com${encodeURI(path)}?${next.toString()}` });
+        }
+        return list(azure.audit.activity.filter((row) => {
+            const scope = rowScope(row);
+            return inWindow(row, window) && isAuthorizationRow(row) && subscriptionOf(scope)?.toLowerCase() === subscription.subscriptionId.toLowerCase() && isReadable(scope);
+        }));
+    };
+
+    /** A management group's log: the rows at it and at the groups below it, above the subscriptions. `resourceProvider` is a 400 here (measured). */
+    const managementGroupLog = (groupId: string, params: URLSearchParams): ArmResponse => {
+        if (params.get("$filter")?.includes("resourceProvider")) {
+            throw new ArmHttpError(400, "BadRequest", "The filter 'resourceProvider' is not supported at a management group.");
+        }
+        const group = findScope(groupId);
+        if (!group || group.level !== "managementgroup") throw new Unhandled();
+        const window = parseLogFilter(params);
+        if (window.provider) throw new Unhandled();
+        return list(azure.audit.activity.filter((row) => {
+            const scope = rowScope(row);
+            const target = findScope(scope);
+            return inWindow(row, window) && target?.level === "managementgroup" && ancestry(target).includes(group.id.toLowerCase());
+        }));
+    };
+
+    /** The tenant's log: the rows above the subscriptions. With only a time filter also the other providers' rows, as a real one has. */
+    const tenantLog = (params: URLSearchParams): ArmResponse => {
+        const window = parseLogFilter(params);
+        return list(azure.audit.activity.filter((row) => inWindow(row, window) && isAboveSubscriptions(rowScope(row)) && (!window.provider || isAuthorizationRow(row))));
     };
 
     const policyRules = (policy: DemoAzurePolicy): Item[] => {
@@ -421,6 +583,72 @@ export function createFakeArm(azure: DemoAzure, options: FakeArmOptions = {}): F
             if (apiVersion !== ARM_API_VERSIONS.subscriptions || filter !== null) throw new Unhandled();
             return list(azure.subscriptions.map(subscriptionItem));
         }
+        // Log Analytics workspaces per subscription (AU-9); the failing subscription answers 403, as one can in a real tenant
+        const workspaces = path.match(/^\/subscriptions\/([^/]+)\/providers\/Microsoft\.OperationalInsights\/workspaces$/i);
+        if (workspaces) {
+            if (apiVersion !== ARM_API_VERSIONS.workspaces || filter !== null) throw new Unhandled();
+            const subscription = azure.subscriptions.find((s) => s.subscriptionId.toLowerCase() === workspaces[1].toLowerCase());
+            if (!subscription) throw new Unhandled();
+            if (subscription.subscriptionId === demoGuid(`azure:sub:${DEMO_WORKSPACE_FAILING_SUBSCRIPTION}`)) {
+                throw new ArmHttpError(403, "AuthorizationFailed", `The client does not have authorization to perform action 'Microsoft.OperationalInsights/workspaces/read' over scope '/subscriptions/${subscription.subscriptionId}'.`);
+            }
+            return list(DEMO_WORKSPACES.filter((w) => demoGuid(`azure:sub:${w.subscription}`) === subscription.subscriptionId).map((w) => ({
+                id: `/subscriptions/${subscription.subscriptionId}/resourceGroups/rg-logs/providers/Microsoft.OperationalInsights/workspaces/${w.name}`,
+                name: w.name,
+                type: "Microsoft.OperationalInsights/workspaces",
+                location: w.location,
+                properties: { customerId: w.customerId, retentionInDays: w.retentionInDays, provisioningState: "Succeeded" },
+            })));
+        }
+        // The diagnostic settings of a subscription (AU-18): the Azure activity log goes to the activity workspace from the subscriptions
+        // that send it; the failing subscription answers 403, the others hold no setting
+        const subscriptionSettings = path.match(/^\/subscriptions\/([^/]+)\/providers\/Microsoft\.Insights\/diagnosticSettings$/i);
+        if (subscriptionSettings) {
+            if (apiVersion !== ARM_API_VERSIONS.subscriptionDiagnosticSettings || filter !== null) throw new Unhandled();
+            const subscription = azure.subscriptions.find((s) => s.subscriptionId.toLowerCase() === subscriptionSettings[1].toLowerCase());
+            if (!subscription) throw new Unhandled();
+            if (subscription.subscriptionId === demoGuid(`azure:sub:${DEMO_WORKSPACE_FAILING_SUBSCRIPTION}`)) {
+                throw new ArmHttpError(403, "AuthorizationFailed", `The client does not have authorization to perform action 'Microsoft.Insights/diagnosticSettings/read' over scope '/subscriptions/${subscription.subscriptionId}'.`);
+            }
+            const activity = DEMO_WORKSPACES.find((w) => w.behavior === "activity");
+            const sends = DEMO_ACTIVITY_SUBSCRIPTIONS.some((key) => demoGuid(`azure:sub:${key}`) === subscription.subscriptionId);
+            if (!activity || !sends) return list([]);
+            return list([{
+                id: `/subscriptions/${subscription.subscriptionId}/providers/microsoft.insights/diagnosticSettings/activity-to-${activity.name}`,
+                name: `activity-to-${activity.name}`,
+                properties: {
+                    workspaceId: `/subscriptions/${demoGuid(`azure:sub:${activity.subscription}`)}/resourceGroups/rg-logs/providers/Microsoft.OperationalInsights/workspaces/${activity.name}`,
+                    logs: [{ category: "Administrative", enabled: true }, { category: "Security", enabled: false }],
+                },
+            }]);
+        }
+        // The Entra diagnostic settings: where the audit log is sent (measured shape: `properties.workspaceId`, `properties.logs`)
+        if (path.toLowerCase() === "/providers/microsoft.aadiam/diagnosticsettings") {
+            if (apiVersion !== ARM_API_VERSIONS.diagnosticSettings || filter !== null) throw new Unhandled();
+            return list(DEMO_WORKSPACES.filter((w) => w.receivesEntra).map((w) => ({
+                id: `/providers/microsoft.aadiam/diagnosticSettings/entra-to-${w.name}`,
+                name: `entra-to-${w.name}`,
+                properties: {
+                    workspaceId: `/subscriptions/${demoGuid(`azure:sub:${w.subscription}`)}/resourceGroups/rg-logs/providers/Microsoft.OperationalInsights/workspaces/${w.name}`,
+                    logs: [{ category: "AuditLogs", enabled: true }, { category: "SignInLogs", enabled: false }],
+                },
+            })));
+        }
+        // The Activity Log (Azure Audit): the api-version decides the route as much as the path does
+        const subscriptionLogPath = path.match(/^\/subscriptions\/([^/]+)\/providers\/Microsoft\.Insights\/eventtypes\/management\/values$/i);
+        if (subscriptionLogPath) {
+            if (apiVersion !== ARM_API_VERSIONS.activityLog) throw new Unhandled();
+            return subscriptionLog(subscriptionLogPath[1], path, params);
+        }
+        const groupLogPath = path.match(/^(\/providers\/Microsoft\.Management\/managementGroups\/[^/]+)\/providers\/Microsoft\.Insights\/eventtypes\/management\/values$/i);
+        if (groupLogPath) {
+            if (apiVersion !== ARM_API_VERSIONS.managementGroupLog) throw new Unhandled();
+            return managementGroupLog(groupLogPath[1], params);
+        }
+        if (path.toLowerCase() === LOG_PATH.toLowerCase()) {
+            if (apiVersion !== ARM_API_VERSIONS.activityLog) throw new Unhandled();
+            return tenantLog(params);
+        }
         const resources = path.match(/^\/subscriptions\/([^/]+)\/(resourcegroups|resources)$/i);
         if (resources) {
             if (apiVersion !== ARM_API_VERSIONS.resources || filter !== null) throw new Unhandled();
@@ -430,9 +658,12 @@ export function createFakeArm(azure: DemoAzure, options: FakeArmOptions = {}): F
         const target = splitAuthorizationPath(path);
         const scope = target && findScope(target.scope);
         if (target && scope && target.resource.toLowerCase() === "rolemanagementalerts" && apiVersion === ARM_API_VERSIONS.alerts) return alertList(scope, filter);
+        if (target && scope && target.resource.toLowerCase() === "roleassignments" && apiVersion === ARM_API_VERSIONS.roleAssignments) return roleAssignmentList(scope, filter);
         if (!target || !scope || apiVersion !== ARM_API_VERSIONS.authorization) throw new Unhandled();
         const listName = (Object.keys(INSTANCE_LISTS) as InstanceListName[]).find((name) => name.toLowerCase() === target.resource.toLowerCase());
         if (listName) return instanceList(listName, scope, filter);
+        const requestKind = REQUEST_LISTS[target.resource.toLowerCase() as keyof typeof REQUEST_LISTS];
+        if (requestKind) return requestList(requestKind, scope, filter);
         if (target.resource.toLowerCase() === "rolemanagementpolicies") return policyList(scope, filter);
         throw new Unhandled();
     };
@@ -446,6 +677,10 @@ export function createFakeArm(azure: DemoAzure, options: FakeArmOptions = {}): F
                 if (url.searchParams.get("api-version") !== ARM_API_VERSIONS.managementGroups || [...url.searchParams.keys()].some((k) => k !== "api-version")) throw new Unhandled();
                 return entityList();
             }
+            // The Resource Graph read of the workspace list is a POST that only reads; every other POST stays a refused write
+            const isResourceGraph = request.method.toUpperCase() === "POST" && decodeURIComponent(url.pathname).replace(/\/+$/, "").toLowerCase() === RESOURCE_GRAPH_PATH.toLowerCase();
+            const graphRead = isResourceGraph ? resourceGraphWorkspaces(url, request.body) : null;
+            if (graphRead) return graphRead;
             if (request.method.toUpperCase() !== "GET") throw new ArmHttpError(403, DEMO_WRITE_ERROR_CODE, DEMO_WRITE_MESSAGE);
             return route(decodeURIComponent(url.pathname).replace(/\/+$/, "") || "/", url.searchParams);
         } catch (error) {

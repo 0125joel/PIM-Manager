@@ -32,4 +32,14 @@ describe("buildExportChartData", () => {
         expect(data.durationData.reduce((s, d) => s + d.value, 0)).toBe(120);
         expect(data.assignmentData.find((d) => d.name === "Eligible")?.value).toBe(86);
     });
+
+    it("leaves a role whose policy failed to load out of the settings charts, and keeps a role without a policy in", () => {
+        const rolesData = buildFixtureRoles().map((r, i) => (i < 10 ? { ...r, policy: null, configError: "Too many requests" } : i < 12 ? { ...r, policy: null } : r));
+        const data = buildExportChartData({ ...base, rolesData, isPimGroupsCounted: false });
+        expect(data.roleSettingsNotReadable).toBe(0);
+        expect(data.mfaData.reduce((s, d) => s + d.value, 0)).toBe(120);
+        expect(data.approvalData.reduce((s, d) => s + d.value, 0)).toBe(120);
+        expect(data.durationData.reduce((s, d) => s + d.value, 0)).toBe(120);
+        expect(data.assignmentData.find((d) => d.name === "Eligible")?.value).toBe(86);
+    });
 });

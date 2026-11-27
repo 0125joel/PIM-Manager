@@ -8,6 +8,8 @@ import {
     AZURE_ASSIGNMENT_COLUMNS, AZURE_ROLE_SETTINGS_COLUMNS, anonymiseAzure, buildAzureAssignmentRows, buildAzureRoleSettingsRows, rolePairsOf,
     type AzurePolicyOutcome, type AzureRolePair,
 } from "@/utils/azureExportRows";
+import { subscriptionsInView } from "@/utils/azureDashboardView";
+import { coverageNotes } from "@/utils/azureReadability";
 import { isRootScope } from "@/utils/azureScopes";
 import { formatDateTime } from "@/utils/dateFormat";
 import type { PlannedFile } from "@/utils/reportExportPlan";
@@ -127,6 +129,8 @@ export function azurePreamble(data: AzureExportData, filtered: boolean, anonymis
         `# Scope: ${filtered ? scopeLineFor(view.scope?.name ?? "", view.filters.origin) : "All scopes you can read"}`,
         `# Filter: ${filtered && described !== "None" ? described : "none"}`,
         "# Partial view: only the scopes your Azure roles let you read",
+        // What was not read in the rows of this file: an unread subscription is not one without assignments
+        ...coverageNotes(subscriptionsInView(data.scopes, filtered ? view.scope?.id ?? null : null, true, data.homeTenantId)).map((note) => `# ${note}`),
         // Replacing names leaves the exporter out too
         `# Exported ${formatDateTime(meta.exportedAt)}${meta.exporter && !anonymise ? ` by ${meta.exporter}` : ""}`,
     ];
